@@ -12,17 +12,38 @@ export const AseoRutLogin = ({ onLogin }: Props) => {
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState('');
 
+    const formatRut = (value: string) => {
+        // Remove non-numeric characters except K
+        const cleaned = value.toUpperCase().replace(/[^0-9K]/g, '');
+        setRut(cleaned);
+    };
+
+    const formatRutWithHyphen = (rut: string): string => {
+        // Remove all non-alphanumeric characters
+        const cleaned = rut.toUpperCase().replace(/[^0-9K]/g, '');
+
+        if (cleaned.length < 2) return cleaned;
+
+        // Add hyphen before last character (verifier digit)
+        const body = cleaned.slice(0, -1);
+        const verifier = cleaned.slice(-1);
+        return `${body}-${verifier}`;
+    };
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setError('');
         setIsLoading(true);
 
         try {
+            // Format RUT with hyphen for database search
+            const formattedRut = formatRutWithHyphen(rut);
+
             // 1. Buscar en staff_2026 por RUT para obtener nombre completo
             const { data: staffData, error: staffError } = await supabase
                 .from('staff_2026')
                 .select('nombre, rut')
-                .eq('rut', rut)
+                .eq('rut', formattedRut)
                 .single();
 
             if (staffError || !staffData) {
@@ -62,19 +83,13 @@ export const AseoRutLogin = ({ onLogin }: Props) => {
                 .eq('id', cleanerData.id);
 
             // 4. Login exitoso
-            onLogin(rut, staffData.nombre, cleanerData.id);
+            onLogin(formattedRut, staffData.nombre, cleanerData.id);
         } catch (err) {
             setError('Error al conectar con el servidor');
             console.error(err);
         } finally {
             setIsLoading(false);
         }
-    };
-
-    const formatRut = (value: string) => {
-        // Remove non-numeric characters except K
-        const cleaned = value.toUpperCase().replace(/[^0-9K]/g, '');
-        setRut(cleaned);
     };
 
     return (
