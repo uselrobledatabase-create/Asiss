@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Icon } from '../../../shared/components/common/Icon';
 import { useCreateAseoRecord } from '../hooks';
+import { searchVehiclesByPpu, type FleetVehicle } from '../api/fleetApi';
 import type { CleaningType } from '../types';
 
 interface Props {
@@ -24,7 +25,53 @@ export const AseoForm = ({ cleanerId, cleanerName }: Props) => {
     const [photo, setPhoto] = useState<File | null>(null);
     const [photoPreview, setPhotoPreview] = useState<string | null>(null);
 
+    // Autocomplete states
+    const [searchTerm, setSearchTerm] = useState('');
+    const [suggestions, setSuggestions] = useState<FleetVehicle[]>([]);
+    const [showSuggestions, setShowSuggestions] = useState(false);
+    const [selectedVehicle, setSelectedVehicle] = useState<FleetVehicle | null>(null);
+    const [isSearching, setIsSearching] = useState(false);
+
     const createMutation = useCreateAseoRecord();
+
+    // Autocomplete search
+    useEffect(() => {
+        const searchVehicles = async () => {
+            if (searchTerm.length < 2) {
+                setSuggestions([]);
+                return;
+            }
+
+            setIsSearching(true);
+            try {
+                const results = await searchVehiclesByPpu(searchTerm, terminal);
+                setSuggestions(results);
+                setShowSuggestions(true);
+            } catch (error) {
+                console.error('Error searching vehicles:', error);
+                setSuggestions([]);
+            } finally {
+                setIsSearching(false);
+            }
+        };
+
+        const debounce = setTimeout(searchVehicles, 300);
+        return () => clearTimeout(debounce);
+    }, [searchTerm, terminal]);
+
+    const handleSelectVehicle = (vehicle: FleetVehicle) => {
+        setSelectedVehicle(vehicle);
+        setBusNumber(vehicle.ppu);
+        setSearchTerm(vehicle.ppu);
+        setTerminal(vehicle.terminal);
+        setShowSuggestions(false);
+    };
+
+    const handleSearchChange = (value: string) => {
+        setSearchTerm(value.toUpperCase());
+        setBusNumber(value.toUpperCase());
+        setSelectedVehicle(null);
+    };
 
     const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
@@ -64,6 +111,8 @@ export const AseoForm = ({ cleanerId, cleanerName }: Props) => {
 
             // Reset form
             setBusNumber('');
+            setSearchTerm('');
+            setSelectedVehicle(null);
             setGraffitiRemoved(false);
             setStickersRemoved(false);
             setPhoto(null);
@@ -82,18 +131,66 @@ export const AseoForm = ({ cleanerId, cleanerName }: Props) => {
                 <h2 className="text-xl font-bold text-slate-900 mb-4">Nuevo Registro</h2>
 
                 <form onSubmit={handleSubmit} className="space-y-4">
-                    {/* Bus Number */}
-                    <div>
+                    {/* Bus Number with Autocomplete */}
+                    <div className="relative">
                         <label className="block text-sm font-semibold text-slate-700 mb-2">
                             Patente del Bus
                         </label>
-                        <input
-                            type="text"
-                            className="w-full px-4 py-3 border-2 border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-lg uppercase"
-                            placeholder="Ej: ABCD12"
-                            value={busNumber}
-                            onChange={e => setBusNumber(e.target.value)}
-                        />
+                        <div className="relative">
+                            <input
+                                type="text"
+                                className="w-full px-4 py-3 border-2 border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-lg uppercase"
+                                placeholder="Buscar PPU..."
+                                value={searchTerm}
+                                onChange={e => handleSearchChange(e.target.value)}
+                                onFocus={() => setShowSuggestions(true)}
+                                autoComplete="off"
+                            />
+                            {isSearching && (
+                                <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                                    <Icon name="loader" size={20} className="animate-spin text-blue-500" />
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Autocomplete Dropdown */}
+                        {showSuggestions && suggestions.length > 0 && (
+                            <div className="absolute z-10 w-full mt-2 bg-white border-2 border-slate-300 rounded-xl shadow-xl max-h-60 overflow-y-auto">
+                                {suggestions.map((vehicle) => (
+                                    <button
+                                        key={vehicle.ppu}
+                                        type="button"
+                                        onClick={() => handleSelectVehicle(vehicle)}
+                                        className="w-full px-4 py-3 text-left hover:bg-blue-50 transition-colors border-b border-slate-200 last:border-0"
+                                    >
+                                        <div className="flex items-center justify-between">
+                                            <div>
+                                                <div className="font-bold text-slate-900">{vehicle.ppu}</div>
+                                                <div className="text-sm text-slate-600">
+                                                    {vehicle.marca_modelo} • Nº{vehicle.numero_interno}
+                                                </div>
+                                            </div>
+                                            <div className="text-xs px-2 py-1 bg-blue-100 text-blue-700 rounded-lg font-semibold">
+                                                {vehicle.terminal.replace(/_/g, ' ')}
+                                            </div>
+                                        </div>
+                                    </button>
+                                ))}
+                            </div>
+                        )}
+
+                        {/* Selected Vehicle Info */}
+                        {selectedVehicle && (
+                            <div className="mt-2 p-3 bg-emerald-50 border-2 border-emerald-200 rounded-xl">
+                                <div className="flex items-center gap-2">
+                                    <Icon name="check-circle" size={20} className="text-emerald-600" />
+                                    <div className="text-sm">
+                                        <span className="font-bold text-emerald-900">{selectedVehicle.marca_modelo}</span>
+                                        <span className="text-emerald-700"> • Interno #{selectedVehicle.numero_interno}</span>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
                     </div>
 
                     {/* Terminal */}

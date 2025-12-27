@@ -7,10 +7,11 @@ import { Tasks } from '../components/Tasks';
 import { Stats } from '../components/Stats';
 import { Notifications } from '../components/Notifications';
 import { AseoInfoSection } from '../components/AseoInfoSection';
+import { AseoPendingBusesSection } from '../components/AseoPendingBusesSection';
 import { useFetchNotifications } from '../hooks';
 import { Icon } from '../../../shared/components/common/Icon';
 
-type Tab = 'form' | 'records' | 'tasks' | 'stats' | 'notifications' | 'info';
+type Tab = 'form' | 'records' | 'tasks' | 'stats' | 'notifications' | 'info' | 'pending';
 
 export const AseoMobilePage = () => {
     const [rut, setRut] = useState<string | null>(null);
@@ -73,11 +74,12 @@ export const AseoMobilePage = () => {
                 {activeTab === 'stats' && <Stats cleanerId={cleanerId} />}
                 {activeTab === 'notifications' && <Notifications cleanerId={cleanerId} />}
                 {activeTab === 'info' && <AseoInfoSection rut={rut} />}
+                {activeTab === 'pending' && <AseoPendingBusesSection />}
             </main>
 
             {/* Bottom Navigation */}
             <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 shadow-2xl z-20">
-                <div className="grid grid-cols-6 gap-0.5">
+                <div className="grid grid-cols-7 gap-0.5">
                     <button
                         onClick={() => setActiveTab('form')}
                         className={`flex flex-col items-center justify-center py-2 px-1 transition-all ${activeTab === 'form'
@@ -142,6 +144,16 @@ export const AseoMobilePage = () => {
                         )}
                         <Icon name="bell" size={20} />
                         <span className="text-[10px] font-bold mt-0.5">Avisos</span>
+                    </button>
+                    <button
+                        onClick={() => setActiveTab('pending')}
+                        className={`flex flex-col items-center justify-center py-2 px-1 transition-all ${activeTab === 'pending'
+                            ? 'text-red-600 bg-red-50'
+                            : 'text-slate-600 hover:bg-slate-50'
+                            }`}
+                    >
+                        <Icon name="truck" size={20} />
+                        <span className="text-[10px] font-bold mt-0.5">Pendientes</span>
                     </button>
                 </div>
             </nav>
