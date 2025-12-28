@@ -193,19 +193,35 @@ export const AseoInfoSection = ({ rut }: Props) => {
                 </h3>
                 <div className="grid grid-cols-7 gap-2">
                     {weekDates.map((date) => {
-                        const dayName = new Date(date).toLocaleDateString('es-CL', { weekday: 'short' });
-                        const dayNum = new Date(date).getDate();
-                        const dayOfWeek = new Date(date).toLocaleDateString('es-CL', { weekday: 'long' });
+                        const dateObj = new Date(date + 'T12:00:00');
+                        const dayName = dateObj.toLocaleDateString('es-CL', { weekday: 'short' });
+                        const dayNum = dateObj.getDate();
+                        const dayOfWeekNum = dateObj.getDay(); // 0=Sunday, 1=Monday, etc.
+
                         const mark = marks.find(m => m.mark_date === date);
                         const hasLicense = licenses.some(l => date >= l.start_date && date <= l.end_date);
                         const hasPermission = permissions.some(p => date >= p.start_date && date <= p.end_date);
                         const hasDayChange = dayChanges.some(dc => dc.date === date);
                         const isToday = date === new Date().toISOString().split('T')[0];
-                        const isFreeDay = staff.dia_libre && dayOfWeek.toLowerCase().includes(staff.dia_libre.toLowerCase());
+
+                        // Check if it's a free day - weekends by default
+                        let isFreeDay = dayOfWeekNum === 0 || dayOfWeekNum === 6; // Sunday or Saturday
+
+                        // Override with staff.dia_libre if specified
+                        if (staff.dia_libre) {
+                            const diaLibreLower = staff.dia_libre.toLowerCase();
+                            const dayNameLower = dateObj.toLocaleDateString('es-CL', { weekday: 'long' }).toLowerCase();
+                            isFreeDay = dayNameLower.includes(diaLibreLower) || diaLibreLower.includes(dayNameLower);
+                        }
 
                         // Parse horario (e.g., "10:00-20:00")
                         const horario = staff.horario || '08:00-17:00';
                         const [startTime, endTime] = horario.split('-');
+
+                        // Check for early departure for THIS specific day
+                        // Note: staff.horario_salida is global, we'd need a per-day override table for this
+                        // For now, we'll show it on all work days if it exists
+                        const hasEarlyDeparture = staff.horario_salida && !isFreeDay && !hasLicense && !hasPermission && !hasDayChange;
 
                         return (
                             <div
@@ -250,21 +266,21 @@ export const AseoInfoSection = ({ rut }: Props) => {
                                             </div>
                                             <div className="text-[8px] text-slate-400">-</div>
                                             <div className="text-[11px] font-bold text-slate-900">
-                                                {endTime}
+                                                {hasEarlyDeparture ? staff.horario_salida : endTime}
                                             </div>
                                         </div>
 
-                                        {/* Early departure if exists */}
-                                        {staff.horario_salida && (
+                                        {/* Early departure indicator */}
+                                        {hasEarlyDeparture && (
                                             <div className="mt-1 bg-orange-100 text-orange-700 rounded-md py-0.5 px-1 text-[9px] font-bold text-center">
-                                                Sale: {staff.horario_salida}
+                                                Temprano
                                             </div>
                                         )}
                                     </>
                                 )}
 
                                 {/* Attendance mark */}
-                                {mark && (
+                                {mark && !isFreeDay && (
                                     <div className={`mt-1 rounded-md py-0.5 text-center text-[9px] font-bold ${mark.mark === 'P' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
                                         }`}>
                                         {mark.mark === 'P' ? '✓' : '✗'}
