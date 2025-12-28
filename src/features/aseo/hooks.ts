@@ -47,7 +47,8 @@ export function useCreateAseoRecord() {
 export function useFetchAseoRecords(cleanerId?: string) {
     return useQuery({
         queryKey: ['aseo-records', cleanerId],
-        queryFn: () => aseoApi.fetchAseoRecords(cleanerId)
+        queryFn: () => aseoApi.fetchAseoRecords(cleanerId),
+        refetchInterval: 5000 // Auto-refresh every 5 seconds
     });
 }
 
@@ -59,7 +60,8 @@ export function useFetchTasks(cleanerId: string | undefined) {
     return useQuery({
         queryKey: ['aseo-tasks', cleanerId],
         queryFn: () => cleanerId ? aseoApi.fetchTasks(cleanerId) : [],
-        enabled: !!cleanerId
+        enabled: !!cleanerId,
+        refetchInterval: 5000 // Auto-refresh every 5 seconds
     });
 }
 
@@ -81,7 +83,8 @@ export function useUpdateTaskStatus() {
 export function useFetchAllTasks() {
     return useQuery({
         queryKey: ['aseo', 'all-tasks'],
-        queryFn: () => aseoApi.fetchAllTasks()
+        queryFn: () => aseoApi.fetchAllTasks(),
+        refetchInterval: 5000 // Auto-refresh every 5 seconds
     });
 }
 
@@ -131,7 +134,8 @@ export function useMarkNotificationRead() {
 export function useFetchAllCleaners() {
     return useQuery({
         queryKey: ['aseo-cleaners'],
-        queryFn: () => aseoApi.fetchAllCleaners()
+        queryFn: () => aseoApi.fetchAllCleaners(),
+        refetchInterval: 10000 // Auto-refresh every 10 seconds (less frequent for cleaners)
     });
 }
 
@@ -139,6 +143,6 @@ export function useFetchAseoStats() {
     return useQuery({
         queryKey: ['aseo-stats'],
         queryFn: () => aseoApi.fetchAseoStats(),
-        refetchInterval: 30000 // Refresh every 30 seconds
+        refetchInterval: 10000 // Auto-refresh every 10 seconds
     });
 }

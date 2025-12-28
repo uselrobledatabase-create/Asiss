@@ -29,16 +29,19 @@ export const AseoAdminDashboard = () => {
     const { data: records = [] } = useQuery({
         queryKey: ['aseo', 'records'],
         queryFn: () => fetchAseoRecords(),
+        refetchInterval: 5000 // Auto-refresh every 5 seconds
     });
 
     const { data: cleaners = [] } = useQuery({
         queryKey: ['aseo', 'cleaners'],
         queryFn: fetchAllCleaners,
+        refetchInterval: 10000 // Auto-refresh every 10 seconds
     });
 
     const { data: tasks = [] } = useQuery({
         queryKey: ['aseo', 'all-tasks'],
         queryFn: () => fetchAllTasks(),
+        refetchInterval: 5000 // Auto-refresh every 5 seconds
     });
 
     const today = new Date();
@@ -144,7 +147,7 @@ export const AseoAdminDashboard = () => {
                 <div className="bg-white rounded-2xl shadow-lg p-6 border border-slate-200">
                     <h3 className="text-lg font-black text-slate-900 mb-4 flex items-center gap-3">
                         <div className="w-9 h-9 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center">
-                            <Icon name="trending-up" size={18} className="text-white" />
+                            <Icon name="bar-chart" size={18} className="text-white" />
                         </div>
                         Tendencia Semanal
                     </h3>
@@ -166,7 +169,7 @@ export const AseoAdminDashboard = () => {
                 <div className="bg-white rounded-2xl shadow-lg p-6 border border-slate-200">
                     <h3 className="text-lg font-black text-slate-900 mb-4 flex items-center gap-3">
                         <div className="w-9 h-9 bg-gradient-to-br from-purple-500 to-pink-600 rounded-xl flex items-center justify-center">
-                            <Icon name="map-pin" size={18} className="text-white" />
+                            <Icon name="users" size={18} className="text-white" />
                         </div>
                         Por Terminal
                     </h3>

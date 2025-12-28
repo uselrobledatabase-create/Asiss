@@ -19,6 +19,7 @@ export const AseoTaskManager = () => {
     const { data: cleaners = [] } = useQuery({
         queryKey: ['aseo', 'cleaners'],
         queryFn: fetchAllCleaners,
+        refetchInterval: 10000 // Auto-refresh every 10 seconds
     });
 
     const createTaskMutation = useMutation({
