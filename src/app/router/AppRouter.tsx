@@ -26,6 +26,7 @@ import { SolicitudesInsumosPage } from '../../features/solicitudes_insumos/Solic
 import { SrlPage } from '../../features/srl/pages/SrlPage';
 import { AseoMobilePage } from '../../features/aseo/pages/AseoMobilePage';
 import { AseoAdminPage } from '../../features/aseo/pages/AseoAdminPage';
+import { MyInfoPage } from '../../features/asistencia2026/pages/MyInfoPage';
 
 const RequireSession = () => {
   const session = useSessionStore((state) => state.session);
@@ -58,6 +59,7 @@ export const AppRouter = () => (
           <Route path="/tareas" element={<TareasPage />} />
           <Route path="/informativos" element={<InformativosPage />} />
           <Route path="/asistencia" element={<AsistenciaPage />} />
+          <Route path="/mi-info" element={<MyInfoPage />} />
           {/* Old aseo sections - disabled for new mobile portal
           <Route path="/aseo/interior" element={<AseoInteriorPage />} />
           <Route path="/aseo/exterior" element={<AseoExteriorPage />} />

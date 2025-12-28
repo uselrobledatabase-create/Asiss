@@ -29,6 +29,7 @@ const NAVIGATION: NavSection[] = [
       { label: 'Tareas', to: '/tareas', icon: 'clipboard' },
       { label: 'Informativos', to: '/informativos', icon: 'megaphone' },
       { label: 'Asistencia', to: '/asistencia', icon: 'clock' },
+      { label: 'Mi Info', to: '/mi-info', icon: 'user' },
       { label: 'Credenciales', to: '/credenciales', icon: 'key' },
       { label: 'Solicitudes', to: '/solicitudes', icon: 'inbox' },
       { label: 'SRL', to: '/srl', icon: 'wrench' },
