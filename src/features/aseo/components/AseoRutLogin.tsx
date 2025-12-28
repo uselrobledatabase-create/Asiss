@@ -52,7 +52,7 @@ export const AseoRutLogin = ({ onLogin }: Props) => {
 
             // Fetch ALL staff and filter client-side (works without SQL function)
             const { data: allStaff, error: fetchError } = await supabase
-                .from('staff_2026')
+                .from('staff')
                 .select('nombre, rut');
 
             if (fetchError) {

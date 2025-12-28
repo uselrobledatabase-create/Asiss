@@ -13,7 +13,7 @@ export const AseoInfoSection = ({ rut }: Props) => {
         queryFn: async () => {
             // Get staff info
             const { data: staff } = await supabase
-                .from('staff_2026')
+                .from('staff')
                 .select('*')
                 .eq('rut', rut)
                 .single();
