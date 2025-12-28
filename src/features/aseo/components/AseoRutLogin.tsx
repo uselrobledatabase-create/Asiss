@@ -51,38 +51,34 @@ export const AseoRutLogin = ({ onLogin }: Props) => {
         setIsLoading(true);
 
         try {
-            // Clean RUT: remove ALL non-alphanumeric characters for search
+            // Clean RUT: remove ALL non-alphanumeric characters
             const cleanedRut = rut.toUpperCase().replace(/[^0-9K]/g, '');
 
-            // Search in staff_2026 using SQL to clean the database RUT as well
-            // This way we compare: 18866264-1 vs 18.866.264-1 → both become 188662641
-            const { data: staffData, error: staffError } = await supabase
+            // Fetch ALL staff and filter client-side (works without SQL function)
+            const { data: allStaff, error: fetchError } = await supabase
                 .from('staff_2026')
-                .select('nombre, rut')
-                .or(`rut.eq.${rut},rut.eq.${cleanedRut}`)
-                .limit(1);
+                .select('nombre, rut');
 
-            // If not found with exact match, try with SQL REPLACE to clean database RUT
-            if (!staffData || staffData.length === 0) {
-                const { data: staffDataCleaned, error: cleanedError } = await supabase
-                    .rpc('find_staff_by_cleaned_rut', { search_rut: cleanedRut });
-
-                if (cleanedError || !staffDataCleaned || staffDataCleaned.length === 0) {
-                    setError('RUT no encontrado en el sistema de asistencia');
-                    setIsLoading(false);
-                    return;
-                }
-
-                // Use the first result
-                const staff = staffDataCleaned[0];
-
-                // Continue with cleaner creation
-                await processStaffLogin(staff.nombre, staff.rut);
+            if (fetchError) {
+                setError('Error al conectar con el sistema');
+                setIsLoading(false);
                 return;
             }
 
-            const staff = staffData[0];
-            await processStaffLogin(staff.nombre, staff.rut);
+            // Find staff by cleaning both RUTs and comparing
+            const foundStaff = allStaff?.find(staff => {
+                const dbRutCleaned = staff.rut.replace(/[^0-9K]/g, '').toUpperCase();
+                return dbRutCleaned === cleanedRut;
+            });
+
+            if (!foundStaff) {
+                setError('RUT no encontrado en el sistema de asistencia');
+                setIsLoading(false);
+                return;
+            }
+
+            // Continue with cleaner creation
+            await processStaffLogin(foundStaff.nombre, foundStaff.rut);
 
         } catch (err) {
             setError('Error al conectar con el servidor');
