@@ -7,6 +7,7 @@ import { useFetchAllTasks } from '../../hooks';
 export const AseoTaskManager = () => {
     const queryClient = useQueryClient();
     const [showForm, setShowForm] = useState(false);
+    const [photoModal, setPhotoModal] = useState<string | null>(null);
     const [formData, setFormData] = useState({
         cleaner_id: '',
         title: '',
@@ -175,6 +176,14 @@ export const AseoTaskManager = () => {
                                             <Icon name="check" size={16} className="text-amber-600" />
                                         </button>
                                     </div>
+                                    {task.evidence_url && (
+                                        <img
+                                            src={task.evidence_url}
+                                            alt="Evidencia"
+                                            className="w-full h-28 object-cover rounded-lg mb-3 cursor-pointer hover:opacity-90 transition-opacity"
+                                            onClick={() => setPhotoModal(task.evidence_url)}
+                                        />
+                                    )}
                                     <div className="flex items-center gap-3 text-xs">
                                         <span className="px-2 py-1 bg-indigo-100 text-indigo-700 font-bold rounded-lg">
                                             {cleaner?.name || 'Sin asignar'}
@@ -221,6 +230,14 @@ export const AseoTaskManager = () => {
                                             <Icon name="x" size={16} className="text-green-600" />
                                         </button>
                                     </div>
+                                    {task.evidence_url && (
+                                        <img
+                                            src={task.evidence_url}
+                                            alt="Evidencia"
+                                            className="w-full h-28 object-cover rounded-lg mb-3 cursor-pointer hover:opacity-90 transition-opacity"
+                                            onClick={() => setPhotoModal(task.evidence_url)}
+                                        />
+                                    )}
                                     <div className="flex items-center gap-3 text-xs">
                                         <span className="px-2 py-1 bg-green-100 text-green-700 font-bold rounded-lg">
                                             {cleaner?.name || 'Sin asignar'}
@@ -241,6 +258,29 @@ export const AseoTaskManager = () => {
                     </div>
                 </div>
             </div>
+
+            {/* Photo Modal */}
+            {photoModal && (
+                <div
+                    className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4"
+                    onClick={() => setPhotoModal(null)}
+                >
+                    <div className="relative max-w-4xl max-h-[90vh]">
+                        <button
+                            onClick={() => setPhotoModal(null)}
+                            className="absolute -top-12 right-0 w-10 h-10 bg-white rounded-full flex items-center justify-center hover:bg-slate-100 transition-colors"
+                        >
+                            <Icon name="x" size={24} className="text-slate-900" />
+                        </button>
+                        <img
+                            src={photoModal}
+                            alt="Evidencia completa"
+                            className="max-w-full max-h-[90vh] rounded-xl shadow-2xl"
+                            onClick={(e) => e.stopPropagation()}
+                        />
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

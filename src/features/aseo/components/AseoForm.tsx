@@ -2,7 +2,8 @@ import { useState, useEffect } from 'react';
 import { Icon } from '../../../shared/components/common/Icon';
 import { useCreateAseoRecord } from '../hooks';
 import { searchVehiclesByPpu, type FleetVehicle } from '../api/fleetApi';
-import type { CleaningType } from '../types';
+import { checkBusCleanedThisWeek } from '../api/aseoApi';
+import type { CleaningType, AseoRecord } from '../types';
 
 interface Props {
     cleanerId: string;
@@ -32,6 +33,11 @@ export const AseoForm = ({ cleanerId, cleanerName }: Props) => {
     const [selectedVehicle, setSelectedVehicle] = useState<FleetVehicle | null>(null);
     const [isSearching, setIsSearching] = useState(false);
 
+    // Duplicate checking
+    const [isDuplicate, setIsDuplicate] = useState(false);
+    const [lastCleaning, setLastCleaning] = useState<AseoRecord | null>(null);
+    const [checkingDuplicate, setCheckingDuplicate] = useState(false);
+
     const createMutation = useCreateAseoRecord();
 
     // Autocomplete search
@@ -58,6 +64,33 @@ export const AseoForm = ({ cleanerId, cleanerName }: Props) => {
         const debounce = setTimeout(searchVehicles, 300);
         return () => clearTimeout(debounce);
     }, [searchTerm, terminal]);
+
+    // Check for duplicate bus cleaning
+    useEffect(() => {
+        const checkDuplicate = async () => {
+            if (busNumber.length < 4) {
+                setIsDuplicate(false);
+                setLastCleaning(null);
+                return;
+            }
+
+            setCheckingDuplicate(true);
+            try {
+                const result = await checkBusCleanedThisWeek(busNumber);
+                setIsDuplicate(result.cleaned);
+                setLastCleaning(result.lastCleaning || null);
+            } catch (error) {
+                console.error('Error checking duplicate:', error);
+                setIsDuplicate(false);
+                setLastCleaning(null);
+            } finally {
+                setCheckingDuplicate(false);
+            }
+        };
+
+        const debounce = setTimeout(checkDuplicate, 500);
+        return () => clearTimeout(debounce);
+    }, [busNumber]);
 
     const handleSelectVehicle = (vehicle: FleetVehicle) => {
         setSelectedVehicle(vehicle);
@@ -154,6 +187,30 @@ export const AseoForm = ({ cleanerId, cleanerName }: Props) => {
                 <h2 className="text-xl font-bold text-slate-900 mb-4">Nuevo Registro</h2>
 
                 <form onSubmit={handleSubmit} className="space-y-4">
+                    {/* Duplicate Warning */}
+                    {isDuplicate && lastCleaning && (
+                        <div className="mb-4 p-4 bg-amber-50 border-2 border-amber-400 rounded-xl">
+                            <div className="flex items-start gap-3">
+                                <Icon name="alert-triangle" size={24} className="text-amber-600 flex-shrink-0 mt-0.5" />
+                                <div className="flex-1">
+                                    <h3 className="font-bold text-amber-900 mb-1">⚠️ Bus ya limpiado esta semana</h3>
+                                    <p className="text-sm text-amber-800 mb-2">
+                                        El bus <strong>{busNumber}</strong> ya fue limpiado el{' '}
+                                        <strong>{new Date(lastCleaning.created_at).toLocaleDateString('es-CL', {
+                                            weekday: 'long',
+                                            day: 'numeric',
+                                            month: 'long'
+                                        })}</strong>
+                                        {' '}por <strong>{lastCleaning.cleaner_name}</strong>
+                                    </p>
+                                    <p className="text-xs text-amber-700">
+                                        Tipo: {lastCleaning.cleaning_type}
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
                     {/* Bus Number with Autocomplete */}
                     <div className="relative">
                         <label className="block text-sm font-semibold text-slate-700 mb-2">

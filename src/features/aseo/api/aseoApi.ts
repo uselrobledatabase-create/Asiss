@@ -137,6 +137,28 @@ export async function fetchAllTasks(): Promise<AseoTask[]> {
     return data || [];
 }
 
+/**
+ * Extract bus code from task title
+ * Examples: "Limpiar bus SKPK18" -> "SKPK18"
+ */
+function extractBusCode(title: string): string {
+    const match = title.match(/bus\s+([A-Z0-9]+)/i);
+    return match ? match[1].toUpperCase() : '';
+}
+
+/**
+ * Get cleaner name from cleaner_id
+ */
+async function getCleanerName(cleanerId: string): Promise<string> {
+    const { data } = await supabase
+        .from('aseo_cleaners')
+        .select('name')
+        .eq('id', cleanerId)
+        .single();
+
+    return data?.name || 'Desconocido';
+}
+
 export async function updateTaskStatus(
     taskId: string,
     status: 'PENDIENTE' | 'TERMINADA',
@@ -160,6 +182,33 @@ export async function updateTaskStatus(
         .single();
 
     if (error) throw error;
+
+    // If task is completed, create aseo_record automatically
+    if (status === 'TERMINADA' && data) {
+        const busCode = extractBusCode(data.title);
+        const cleanerName = await getCleanerName(data.cleaner_id);
+
+        if (busCode && updates.evidence_url) {
+            try {
+                await supabase.from('aseo_records').insert({
+                    cleaner_id: data.cleaner_id,
+                    cleaner_name: cleanerName,
+                    bus_code: busCode,
+                    terminal_code: 'TAREA',
+                    cleaning_type: 'FULL',
+                    photo_url: updates.evidence_url,
+                    task_id: taskId,
+                    created_at: new Date().toISOString()
+                });
+
+                console.log('✅ Created aseo_record from task:', taskId);
+            } catch (recordError) {
+                console.error('❌ Failed to create record from task:', recordError);
+                // Don't throw - task update should succeed even if record creation fails
+            }
+        }
+    }
+
     return data;
 }
 
@@ -226,6 +275,41 @@ export async function createNotification(
             message,
             related_id: relatedId || null
         });
+}
+
+// ==========================================
+// DUPLICATE PREVENTION
+// ==========================================
+
+/**
+ * Check if a bus has been cleaned this week
+ */
+export async function checkBusCleanedThisWeek(
+    busCode: string
+): Promise<{ cleaned: boolean; lastCleaning?: AseoRecord }> {
+    const now = new Date();
+    const dayOfWeek = now.getDay();
+    const diff = now.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1); // Monday
+    const startOfWeek = new Date(now.setDate(diff));
+    startOfWeek.setHours(0, 0, 0, 0);
+
+    const { data, error } = await supabase
+        .from('aseo_records')
+        .select('*')
+        .eq('bus_code', busCode.toUpperCase())
+        .gte('created_at', startOfWeek.toISOString())
+        .order('created_at', { ascending: false })
+        .limit(1);
+
+    if (error) {
+        console.error('Error checking bus:', error);
+        return { cleaned: false };
+    }
+
+    return {
+        cleaned: !!data && data.length > 0,
+        lastCleaning: data?.[0]
+    };
 }
 
 // ==========================================
