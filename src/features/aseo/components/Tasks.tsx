@@ -7,11 +7,14 @@ interface Props {
 }
 
 export const Tasks = ({ cleanerId }: Props) => {
+    console.log('📋 Tasks component - cleanerId:', cleanerId);
+
     const { data: tasks = [], isLoading } = useFetchTasks(cleanerId);
     const updateMutation = useUpdateTaskStatus();
     const [evidenceFile, setEvidenceFile] = useState<File | null>(null);
     const [evidencePreview, setEvidencePreview] = useState<string | null>(null);
     const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
+    const [showCompleted, setShowCompleted] = useState(false);
 
     const handleToggleStatus = async (taskId: string, currentStatus: string) => {
         const newStatus = currentStatus === 'PENDIENTE' ? 'TERMINADA' : 'PENDIENTE';
@@ -127,11 +130,21 @@ export const Tasks = ({ cleanerId }: Props) => {
             {/* Completed Tasks */}
             {completedTasks.length > 0 && (
                 <div className="space-y-3">
-                    <h3 className="font-semibold text-emerald-600 flex items-center gap-2">
-                        <Icon name="check-circle" size={18} />
-                        Completadas ({completedTasks.length})
-                    </h3>
-                    {completedTasks.map(task => (
+                    <button
+                        onClick={() => setShowCompleted(!showCompleted)}
+                        className="w-full font-semibold text-emerald-600 flex items-center justify-between gap-2 py-2 px-3 bg-emerald-50 rounded-lg hover:bg-emerald-100 transition-colors"
+                    >
+                        <div className="flex items-center gap-2">
+                            <Icon name="check-circle" size={18} />
+                            Completadas ({completedTasks.length})
+                        </div>
+                        <Icon
+                            name="chevron-down"
+                            size={18}
+                            className={`transition-transform ${showCompleted ? 'rotate-180' : ''}`}
+                        />
+                    </button>
+                    {showCompleted && completedTasks.map(task => (
                         <div key={task.id} className="bg-emerald-50 border border-emerald-200 rounded-xl p-4">
                             <h4 className="font-bold text-slate-900">{task.title}</h4>
                             {task.description && (

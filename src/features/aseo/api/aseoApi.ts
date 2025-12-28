@@ -105,13 +105,20 @@ export async function fetchAseoRecords(cleanerId?: string): Promise<AseoRecord[]
 // ==========================================
 
 export async function fetchTasks(cleanerId: string): Promise<AseoTask[]> {
+    console.log('🔍 Fetching tasks for cleanerId:', cleanerId);
+
     const { data, error } = await supabase
         .from('aseo_tasks')
         .select('*')
         .eq('cleaner_id', cleanerId)
         .order('created_at', { ascending: false });
 
-    if (error) throw error;
+    if (error) {
+        console.error('❌ Error fetching tasks:', error);
+        throw error;
+    }
+
+    console.log('✅ Tasks found:', data?.length || 0, data);
     return data || [];
 }
 

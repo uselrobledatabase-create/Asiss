@@ -20,8 +20,8 @@ export const AseoForm = ({ cleanerId, cleanerName }: Props) => {
     const [busNumber, setBusNumber] = useState('');
     const [terminal, setTerminal] = useState(TERMINALS[0]);
     const [cleaningType, setCleaningType] = useState<CleaningType>('BARRIDO');
-    const [graffitiRemoved, setGraffitiRemoved] = useState(false);
-    const [stickersRemoved, setStickersRemoved] = useState(false);
+    const [graffitiRemoved, setGraffitiRemoved] = useState<boolean | null>(null);
+    const [stickersRemoved, setStickersRemoved] = useState<boolean | null>(null);
     const [photo, setPhoto] = useState<File | null>(null);
     const [photoPreview, setPhotoPreview] = useState<string | null>(null);
 
@@ -87,15 +87,33 @@ export const AseoForm = ({ cleanerId, cleanerName }: Props) => {
         e.preventDefault();
 
         if (!busNumber.trim()) {
-            alert('Ingresa el número de patente');
+            alert('❌ Ingresa el número de patente');
             return;
         }
         if (!photo) {
-            alert('Debes tomar una foto');
+            alert('❌ Debes tomar una foto');
+            return;
+        }
+        if (graffitiRemoved === null) {
+            alert('❌ Debes indicar si removiste graffitis (Sí/No)');
+            return;
+        }
+        if (stickersRemoved === null) {
+            alert('❌ Debes indicar si removiste stickers (Sí/No)');
             return;
         }
 
         try {
+            console.log('Enviando registro:', {
+                cleanerId,
+                cleanerName,
+                bus_ppu: busNumber.trim().toUpperCase(),
+                terminal_code: terminal,
+                cleaning_type: cleaningType,
+                graffiti_removed: graffitiRemoved,
+                stickers_removed: stickersRemoved
+            });
+
             await createMutation.mutateAsync({
                 cleanerId,
                 cleanerName,
@@ -109,12 +127,14 @@ export const AseoForm = ({ cleanerId, cleanerName }: Props) => {
                 photo
             });
 
+            console.log('✅ Registro guardado exitosamente');
+
             // Reset form
             setBusNumber('');
             setSearchTerm('');
             setSelectedVehicle(null);
-            setGraffitiRemoved(false);
-            setStickersRemoved(false);
+            setGraffitiRemoved(null);
+            setStickersRemoved(null);
             setPhoto(null);
             setPhotoPreview(null);
 
@@ -123,8 +143,8 @@ export const AseoForm = ({ cleanerId, cleanerName }: Props) => {
 
             alert('✅ ¡Registro guardado exitosamente!');
         } catch (error) {
-            console.error(error);
-            alert('❌ Error al guardar. Intenta nuevamente.');
+            console.error('❌ Error al guardar:', error);
+            alert('❌ Error al guardar. Intenta nuevamente.\n\nDetalle: ' + (error instanceof Error ? error.message : 'Error desconocido'));
         }
     };
 

@@ -8,7 +8,7 @@ import { Stats } from '../components/Stats';
 import { Notifications } from '../components/Notifications';
 import { AseoInfoSection } from '../components/AseoInfoSection';
 import { AseoPendingBusesSection } from '../components/AseoPendingBusesSection';
-import { useFetchNotifications } from '../hooks';
+import { useFetchNotifications, useFetchTasks } from '../hooks';
 import { Icon } from '../../../shared/components/common/Icon';
 
 type Tab = 'form' | 'records' | 'tasks' | 'stats' | 'info' | 'pending';
@@ -21,6 +21,9 @@ export const AseoMobilePage = () => {
 
     const { data: notifications = [] } = useFetchNotifications(cleanerId || undefined);
     const unreadCount = notifications.filter(n => !n.read).length;
+
+    const { data: tasks = [] } = useFetchTasks(cleanerId || '');
+    const pendingTasksCount = tasks.filter(t => t.status === 'PENDIENTE').length;
 
     const handleLogin = (userRut: string, userName: string, userCleanerId: string) => {
         setRut(userRut);
@@ -116,9 +119,9 @@ export const AseoMobilePage = () => {
                             : 'text-slate-600 hover:bg-slate-50'
                             }`}
                     >
-                        {unreadCount > 0 && (
-                            <span className="absolute top-1 right-2 w-4 h-4 bg-red-500 text-white text-[8px] font-bold rounded-full flex items-center justify-center shadow-lg animate-pulse">
-                                {unreadCount}
+                        {pendingTasksCount > 0 && (
+                            <span className="absolute top-1 right-2 w-4 h-4 bg-amber-500 text-white text-[8px] font-bold rounded-full flex items-center justify-center shadow-lg">
+                                {pendingTasksCount}
                             </span>
                         )}
                         <Icon name="check-circle" size={20} />
