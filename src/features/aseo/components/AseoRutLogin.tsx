@@ -51,60 +51,79 @@ export const AseoRutLogin = ({ onLogin }: Props) => {
         setIsLoading(true);
 
         try {
-            // Format RUT with hyphen for database search
-            const formattedRut = formatRutWithHyphen(rut);
+            // Clean RUT: remove ALL non-alphanumeric characters for search
+            const cleanedRut = rut.toUpperCase().replace(/[^0-9K]/g, '');
 
-            // 1. Buscar en staff_2026 por RUT para obtener nombre completo
+            // Search in staff_2026 using SQL to clean the database RUT as well
+            // This way we compare: 18866264-1 vs 18.866.264-1 → both become 188662641
             const { data: staffData, error: staffError } = await supabase
                 .from('staff_2026')
                 .select('nombre, rut')
-                .eq('rut', formattedRut)
-                .single();
+                .or(`rut.eq.${rut},rut.eq.${cleanedRut}`)
+                .limit(1);
 
-            if (staffError || !staffData) {
-                setError('RUT no encontrado en el sistema de asistencia');
-                setIsLoading(false);
-                return;
-            }
+            // If not found with exact match, try with SQL REPLACE to clean database RUT
+            if (!staffData || staffData.length === 0) {
+                const { data: staffDataCleaned, error: cleanedError } = await supabase
+                    .rpc('find_staff_by_cleaned_rut', { search_rut: cleanedRut });
 
-            // 2. Buscar o crear cleaner en aseo_cleaners
-            let { data: cleanerData, error: cleanerError } = await supabase
-                .from('aseo_cleaners')
-                .select('*')
-                .eq('name', staffData.nombre)
-                .single();
-
-            if (cleanerError || !cleanerData) {
-                // Crear nuevo cleaner
-                const { data: newCleaner, error: createError } = await supabase
-                    .from('aseo_cleaners')
-                    .insert({ name: staffData.nombre })
-                    .select()
-                    .single();
-
-                if (createError || !newCleaner) {
-                    setError('Error al registrar limpiador');
+                if (cleanedError || !staffDataCleaned || staffDataCleaned.length === 0) {
+                    setError('RUT no encontrado en el sistema de asistencia');
                     setIsLoading(false);
                     return;
                 }
 
-                cleanerData = newCleaner;
+                // Use the first result
+                const staff = staffDataCleaned[0];
+
+                // Continue with cleaner creation
+                await processStaffLogin(staff.nombre, staff.rut);
+                return;
             }
 
-            // 3. Actualizar last_active_at
-            await supabase
-                .from('aseo_cleaners')
-                .update({ last_active_at: new Date().toISOString() })
-                .eq('id', cleanerData.id);
+            const staff = staffData[0];
+            await processStaffLogin(staff.nombre, staff.rut);
 
-            // 4. Login exitoso
-            onLogin(formattedRut, staffData.nombre, cleanerData.id);
         } catch (err) {
             setError('Error al conectar con el servidor');
             console.error(err);
         } finally {
             setIsLoading(false);
         }
+    };
+
+    const processStaffLogin = async (nombre: string, rutOriginal: string) => {
+        // 2. Buscar o crear cleaner en aseo_cleaners
+        let { data: cleanerData, error: cleanerError } = await supabase
+            .from('aseo_cleaners')
+            .select('*')
+            .eq('name', nombre)
+            .single();
+
+        if (cleanerError || !cleanerData) {
+            // Crear nuevo cleaner
+            const { data: newCleaner, error: createError } = await supabase
+                .from('aseo_cleaners')
+                .insert({ name: nombre })
+                .select()
+                .single();
+
+            if (createError || !newCleaner) {
+                setError('Error al registrar limpiador');
+                return;
+            }
+
+            cleanerData = newCleaner;
+        }
+
+        // 3. Actualizar last_active_at
+        await supabase
+            .from('aseo_cleaners')
+            .update({ last_active_at: new Date().toISOString() })
+            .eq('id', cleanerData.id);
+
+        // 4. Login exitoso
+        onLogin(rutOriginal, nombre, cleanerData.id);
     };
 
     return (
