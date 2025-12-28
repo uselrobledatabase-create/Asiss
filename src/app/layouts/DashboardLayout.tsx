@@ -6,15 +6,21 @@ import { AsisCommand } from '../../features/asis_command/components/AsisCommand'
 
 export const DashboardLayout = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-slate-100 to-slate-50">
       <div className="flex">
         {/* Sidebar */}
-        <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+        <Sidebar
+          isOpen={sidebarOpen}
+          isCollapsed={sidebarCollapsed}
+          onClose={() => setSidebarOpen(false)}
+          onToggleCollapse={() => setSidebarCollapsed(prev => !prev)}
+        />
 
         {/* Main Content */}
-        <div className="flex min-h-screen flex-1 flex-col md:ml-72">
+        <div className={`flex min-h-screen flex-1 flex-col transition-all duration-300 ${sidebarCollapsed ? 'md:ml-20' : 'md:ml-72'}`}>
           {/* Header */}
           <AppHeader onMenuToggle={() => setSidebarOpen((prev) => !prev)} />
 

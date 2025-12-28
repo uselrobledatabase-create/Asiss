@@ -4,7 +4,9 @@ import { Icon, IconName } from '../common/Icon';
 
 interface Props {
   isOpen: boolean;
+  isCollapsed: boolean;
   onClose: () => void;
+  onToggleCollapse: () => void;
 }
 
 interface NavItem {
@@ -52,11 +54,8 @@ const NAVIGATION: NavSection[] = [
   },
   {
     label: 'MiniCheck',
-    icon: 'check-circle',
+    icon: 'clipboard-check',
     items: [
-      { label: 'Extintor', to: '/minicheck/extintor', icon: 'check-circle' },
-      { label: 'Tag', to: '/minicheck/tag', icon: 'tag' },
-      { label: 'Mobileye', to: '/minicheck/mobileye', icon: 'eye' },
       { label: 'Odómetro', to: '/minicheck/odometro', icon: 'gauge' },
       { label: 'Publicidad', to: '/minicheck/publicidad', icon: 'image' },
     ],
@@ -68,7 +67,7 @@ const NAVIGATION: NavSection[] = [
   },
 ];
 
-export const Sidebar = ({ isOpen, onClose }: Props) => {
+export const Sidebar = ({ isOpen, isCollapsed, onClose, onToggleCollapse }: Props) => {
   const location = useLocation();
   const [expandedSections, setExpandedSections] = useState<string[]>(() => {
     // Expand section that contains current route
@@ -98,7 +97,8 @@ export const Sidebar = ({ isOpen, onClose }: Props) => {
       {/* Sidebar */}
       <aside
         className={`${isOpen ? 'translate-x-0' : '-translate-x-full'
-          } fixed inset-y-0 left-0 z-50 w-72 transform transition-transform duration-300 ease-out md:translate-x-0`}
+          } fixed inset-y-0 left-0 z-50 transform transition-all duration-300 ease-out md:translate-x-0 ${isCollapsed ? 'md:w-20' : 'md:w-72'
+          } w-72`}
       >
         <div className="flex h-full flex-col bg-gradient-to-b from-dark-800 to-dark-900">
           {/* Logo */}
@@ -106,16 +106,27 @@ export const Sidebar = ({ isOpen, onClose }: Props) => {
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-brand-500 to-brand-700 shadow-brand">
               <span className="text-lg font-bold text-white">A</span>
             </div>
-            <div className="flex flex-col">
-              <span className="text-sm font-bold text-white">Asiss</span>
-              <span className="text-xs text-slate-400">Dashboard Logística</span>
-            </div>
+            {!isCollapsed && (
+              <div className="flex flex-col flex-1">
+                <span className="text-sm font-bold text-white">Asiss</span>
+                <span className="text-xs text-slate-400">Dashboard Logística</span>
+              </div>
+            )}
+            {/* Toggle Button - Desktop: collapse, Mobile: close */}
             <button
-              onClick={onClose}
+              onClick={() => {
+                // On mobile: close sidebar
+                // On desktop: toggle collapse
+                if (window.innerWidth < 768) {
+                  onClose();
+                } else {
+                  onToggleCollapse();
+                }
+              }}
               className="ml-auto rounded-lg p-1.5 text-slate-400 hover:bg-white/10 hover:text-white transition-colors"
-              title="Ocultar menú"
+              title={isCollapsed ? "Expandir menú" : "Colapsar menú"}
             >
-              <Icon name="x" size={20} />
+              <Icon name={isCollapsed ? "chevron-right" : "chevron-left"} size={20} />
             </button>
           </div>
 
@@ -131,50 +142,56 @@ export const Sidebar = ({ isOpen, onClose }: Props) => {
                   <button
                     onClick={() => toggleSection(section.label)}
                     className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 group ${isActive
-                      ? 'bg-white/10 text-white'
-                      : 'text-slate-400 hover:bg-white/5 hover:text-slate-200'
+                        ? 'bg-white/10 text-white'
+                        : 'text-slate-400 hover:bg-white/5 hover:text-slate-200'
                       }`}
                   >
                     <div
                       className={`flex h-8 w-8 items-center justify-center rounded-lg transition-all duration-200 ${isActive
-                        ? 'bg-gradient-to-br from-brand-500 to-brand-600 text-white shadow-brand'
-                        : 'bg-white/5 text-slate-400 group-hover:bg-white/10 group-hover:text-slate-200'
+                          ? 'bg-gradient-to-br from-brand-500 to-brand-600 text-white shadow-brand'
+                          : 'bg-white/5 text-slate-400 group-hover:bg-white/10 group-hover:text-slate-200'
                         }`}
                     >
                       <Icon name={section.icon} size={18} />
                     </div>
-                    <span className="flex-1 text-left text-sm font-semibold">{section.label}</span>
-                    <Icon
-                      name="chevron-down"
-                      size={16}
-                      className={`transition-transform duration-200 ${isExpanded ? 'rotate-0' : '-rotate-90'}`}
-                    />
+                    {!isCollapsed && (
+                      <>
+                        <span className="flex-1 text-left text-sm font-semibold">{section.label}</span>
+                        <Icon
+                          name="chevron-down"
+                          size={16}
+                          className={`transition-transform duration-200 ${isExpanded ? 'rotate-0' : '-rotate-90'}`}
+                        />
+                      </>
+                    )}
                   </button>
 
                   {/* Section Items */}
-                  <div
-                    className={`overflow-hidden transition-all duration-300 ease-out ${isExpanded ? 'max-h-96 opacity-100' : 'max-h-0 opacity-0'
-                      }`}
-                  >
-                    <div className="mt-1 ml-4 pl-4 border-l border-white/10 space-y-0.5">
-                      {section.items.map((item) => (
-                        <NavLink
-                          key={item.to}
-                          to={item.to}
-                          onClick={onClose}
-                          className={({ isActive }) =>
-                            `flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all duration-200 ${isActive
-                              ? 'bg-brand-500/20 text-brand-300 font-medium'
-                              : 'text-slate-400 hover:bg-white/5 hover:text-slate-200'
-                            }`
-                          }
-                        >
-                          <Icon name={item.icon} size={16} />
-                          <span>{item.label}</span>
-                        </NavLink>
-                      ))}
+                  {!isCollapsed && (
+                    <div
+                      className={`overflow-hidden transition-all duration-300 ease-out ${isExpanded ? 'max-h-96 opacity-100' : 'max-h-0 opacity-0'
+                        }`}
+                    >
+                      <div className="mt-1 ml-4 pl-4 border-l border-white/10 space-y-0.5">
+                        {section.items.map((item) => (
+                          <NavLink
+                            key={item.to}
+                            to={item.to}
+                            onClick={onClose}
+                            className={({ isActive }) =>
+                              `flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all duration-200 ${isActive
+                                ? 'bg-brand-500/20 text-brand-300 font-medium'
+                                : 'text-slate-400 hover:bg-white/5 hover:text-slate-200'
+                              }`
+                            }
+                          >
+                            <Icon name={item.icon} size={16} />
+                            <span>{item.label}</span>
+                          </NavLink>
+                        ))}
+                      </div>
                     </div>
-                  </div>
+                  )}
                 </div>
               );
             })}
@@ -186,10 +203,12 @@ export const Sidebar = ({ isOpen, onClose }: Props) => {
               <div className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-accent-400 to-accent-600 text-white text-sm font-bold">
                 S
               </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-white truncate">Supervisor</p>
-                <p className="text-xs text-slate-400">Terminal Activo</p>
-              </div>
+              {!isCollapsed && (
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-white truncate">Supervisor</p>
+                  <p className="text-xs text-slate-400">Terminal Activo</p>
+                </div>
+              )}
             </div>
           </div>
         </div>
