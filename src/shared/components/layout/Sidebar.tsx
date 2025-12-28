@@ -112,7 +112,8 @@ export const Sidebar = ({ isOpen, onClose }: Props) => {
             </div>
             <button
               onClick={onClose}
-              className="ml-auto rounded-lg p-1.5 text-slate-400 hover:bg-white/10 hover:text-white md:hidden"
+              className="ml-auto rounded-lg p-1.5 text-slate-400 hover:bg-white/10 hover:text-white transition-colors"
+              title="Ocultar menú"
             >
               <Icon name="x" size={20} />
             </button>
