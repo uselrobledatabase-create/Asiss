@@ -13,36 +13,32 @@ export const AseoRutLogin = ({ onLogin }: Props) => {
     const [error, setError] = useState('');
 
     const formatRut = (value: string) => {
-        // Remove all non-alphanumeric except hyphen temporarily
-        const cleaned = value.toUpperCase().replace(/[^0-9K-]/g, '');
-
-        // Remove any existing hyphens to reformat
-        const withoutHyphen = cleaned.replace(/-/g, '');
+        // Remove all non-alphanumeric characters
+        const cleaned = value.toUpperCase().replace(/[^0-9K]/g, '');
 
         // If less than 2 characters, just show as is
-        if (withoutHyphen.length < 2) {
-            setRut(withoutHyphen);
+        if (cleaned.length < 2) {
+            setRut(cleaned);
             return;
         }
 
-        // Auto-format with hyphen before last character
-        const body = withoutHyphen.slice(0, -1);
-        const verifier = withoutHyphen.slice(-1);
-        const formatted = `${body}-${verifier}`;
-
-        setRut(formatted);
-    };
-
-    const formatRutWithHyphen = (rut: string): string => {
-        // Remove all non-alphanumeric characters
-        const cleaned = rut.toUpperCase().replace(/[^0-9K]/g, '');
-
-        if (cleaned.length < 2) return cleaned;
-
-        // Add hyphen before last character (verifier digit)
+        // Separate body and verifier
         const body = cleaned.slice(0, -1);
         const verifier = cleaned.slice(-1);
-        return `${body}-${verifier}`;
+
+        // Add dots to body (Chilean format: 18.866.264-1)
+        let formattedBody = '';
+        for (let i = 0; i < body.length; i++) {
+            if (i > 0 && (body.length - i) % 3 === 0) {
+                formattedBody += '.';
+            }
+            formattedBody += body[i];
+        }
+
+        // Format with dots and hyphen
+        const formatted = `${formattedBody}-${verifier}`;
+
+        setRut(formatted);
     };
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -149,7 +145,7 @@ export const AseoRutLogin = ({ onLogin }: Props) => {
                                     type="text"
                                     value={rut}
                                     onChange={(e) => formatRut(e.target.value)}
-                                    placeholder="12345678-9"
+                                    placeholder="18.866.264-1"
                                     className="w-full pl-12 pr-4 py-4 border-2 border-slate-200 rounded-2xl focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 outline-none text-lg font-semibold text-slate-900 placeholder:text-slate-400"
                                     required
                                     disabled={isLoading}
