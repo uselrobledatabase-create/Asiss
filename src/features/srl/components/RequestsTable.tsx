@@ -133,6 +133,7 @@ export const RequestsTable = ({ onCreate, onView }: Props) => {
                                     <th className="px-6 py-4 text-left text-xs font-black text-slate-600 uppercase tracking-wider">Estado</th>
                                     <th className="px-6 py-4 text-left text-xs font-black text-slate-600 uppercase tracking-wider">Criticidad</th>
                                     <th className="px-6 py-4 text-left text-xs font-black text-slate-600 uppercase tracking-wider">Buses</th>
+                                    <th className="px-6 py-4 text-center text-xs font-black text-slate-600 uppercase tracking-wider">Doc</th>
                                     <th className="px-6 py-4 text-left text-xs font-black text-slate-600 uppercase tracking-wider">Creación</th>
                                     <th className="px-6 py-4 text-right text-xs font-black text-slate-600 uppercase tracking-wider">Acción</th>
                                 </tr>
@@ -178,6 +179,17 @@ export const RequestsTable = ({ onCreate, onView }: Props) => {
                                                 )}
                                                 {(req.srl_request_buses?.length === 0) && <span className="text-slate-400 text-xs italic">Sin buses</span>}
                                             </div>
+                                        </td>
+                                        <td className="px-6 py-5 text-center">
+                                            {req.technician_document_url ? (
+                                                <div className="inline-flex items-center justify-center w-8 h-8 bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-lg shadow-sm" title="Documento técnico disponible">
+                                                    <Icon name="file-text" size={16} className="text-white" />
+                                                </div>
+                                            ) : (
+                                                <div className="inline-flex items-center justify-center w-8 h-8 bg-slate-100 rounded-lg" title="Sin documento">
+                                                    <Icon name="minus" size={16} className="text-slate-300" />
+                                                </div>
+                                            )}
                                         </td>
                                         <td className="px-6 py-5 text-sm text-slate-600 font-medium">
                                             {new Intl.DateTimeFormat('es-CL', {
