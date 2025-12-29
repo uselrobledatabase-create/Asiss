@@ -94,8 +94,17 @@ export async function createSrlRequest(
     // 3. Send Email Notification
     try {
         await sendSrlEmailNotification(reqData.id, 'CREADA');
-    } catch (emailError) {
-        console.error('Failed to send email notification', emailError);
+        console.log('✅ Email notification sent successfully for request:', reqData.id);
+    } catch (emailError: any) {
+        console.error('❌ Failed to send email notification:', emailError);
+        console.error('Email error details:', {
+            message: emailError?.message,
+            code: emailError?.code,
+            details: emailError
+        });
+        // Don't throw - email failure shouldn't block request creation
+        // But alert user that email failed
+        alert('⚠️ Solicitud creada correctamente, pero el correo NO se envió. Verifica la configuración de email en SRL.');
     }
 
     return reqData;
@@ -220,7 +229,10 @@ export async function updateSrlEmailSettings(settings: Partial<SrlEmailSetting>)
 // ==========================================
 
 export async function sendSrlEmailNotification(requestId: string, trigger: 'CREADA' | 'STATUS_CHANGE') {
+    console.log('📧 Starting email notification for request:', requestId, 'trigger:', trigger);
+
     // 1. Fetch Request Details with Relations
+    console.log('📋 Fetching request details...');
     const { data: request, error } = await supabase
         .from('srl_requests')
         .select(`
@@ -236,11 +248,33 @@ export async function sendSrlEmailNotification(requestId: string, trigger: 'CREA
         .eq('id', requestId)
         .single();
 
-    if (error || !request) throw new Error('Could not fetch request for email');
+    if (error || !request) {
+        console.error('❌ Could not fetch request:', error);
+        throw new Error('Could not fetch request for email');
+    }
+    console.log('✅ Request fetched:', request.terminal_code, request.srl_request_buses.length, 'buses');
 
     // 2. Fetch Settings
+    console.log('⚙️ Fetching email settings...');
     const settings = await fetchSrlEmailSettings();
-    if (!settings || !settings.enabled) return;
+    console.log('📧 Email settings:', settings);
+
+    if (!settings) {
+        console.warn('⚠️ No email settings found in database');
+        throw new Error('No hay configuración de email. Ve a SRL → Configuración para configurar los emails.');
+    }
+
+    if (!settings.enabled) {
+        console.warn('⚠️ Email notifications are DISABLED in settings');
+        throw new Error('Las notificaciones por email están DESHABILITADAS. Ve a SRL → Configuración para habilitarlas.');
+    }
+
+    if (!settings.recipients || settings.recipients.trim() === '') {
+        console.error('❌ No recipients configured');
+        throw new Error('No hay destinatarios configurados. Ve a SRL → Configuración para agregar emails.');
+    }
+
+    console.log('✅ Email settings valid. Recipients:', settings.recipients);
 
     // 3. Fetch Images for ALL buses
     const busesWithImages = await Promise.all(
@@ -357,6 +391,7 @@ export async function sendSrlEmailNotification(requestId: string, trigger: 'CREA
     `;
 
     // 6. Send via Shared Service
+    console.log('📤 Preparing email payload...');
     const payload: any = {
         audience: 'manual',
         manualRecipients: settings.recipients.split(',').map(e => e.trim()).filter(Boolean),
@@ -368,7 +403,16 @@ export async function sendSrlEmailNotification(requestId: string, trigger: 'CREA
         payload.cc = settings.cc_emails.split(',').map(e => e.trim()).filter(Boolean);
     }
 
-    return await emailService.sendEmail(payload as EmailPayload);
+    console.log('📧 Email payload:', {
+        to: payload.manualRecipients,
+        cc: payload.cc,
+        subject: payload.subject
+    });
+
+    console.log('🚀 Sending email via emailService...');
+    const result = await emailService.sendEmail(payload as EmailPayload);
+    console.log('✅ Email sent successfully:', result);
+    return result;
 }
 
 // ==========================================
