@@ -187,7 +187,7 @@ export const RequestsTable = ({ onCreate, onView }: Props) => {
                                                 </div>
                                             ) : (
                                                 <div className="inline-flex items-center justify-center w-8 h-8 bg-slate-100 rounded-lg" title="Sin documento">
-                                                    <Icon name="minus" size={16} className="text-slate-300" />
+                                                    <Icon name="x" size={12} className="text-slate-300" />
                                                 </div>
                                             )}
                                         </td>
