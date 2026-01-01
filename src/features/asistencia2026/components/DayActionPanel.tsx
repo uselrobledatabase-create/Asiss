@@ -111,7 +111,8 @@ export const DayActionPanel = ({
                             <h4 className="text-sm font-medium text-slate-700">Marcar asistencia</h4>
                             <div className="flex gap-2">
                                 <button
-                                    onClick={onMarkPresent}
+                                    type="button"
+                                    onClick={() => onMarkPresent()}
                                     className={`flex-1 py-2 rounded-lg font-medium transition-colors ${BUTTON_VARIANTS.success}`}
                                 >
                                     <Icon name="check" size={16} className="inline mr-1" />
