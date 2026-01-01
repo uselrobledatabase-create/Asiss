@@ -453,7 +453,7 @@ export const LoanFormModal = ({ isOpen, onClose, onSubmit, isLoading, supervisor
         <div class="concept-row">
             <strong>POR CONCEPTO DE:</strong> &nbsp; ${form.reason === 'PERDIDA' ? 'Pérdida Credencial' : 'Deterioro Credencial'}
         </div>
-        <div class="desc-small">Descripción : Tarjeta de acceso vehicular</div>
+
 
         <div class="details-right">
             <div class="detail-item">
