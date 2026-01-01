@@ -1,6 +1,7 @@
 import { EmailPayload, EmailService } from '../types/email';
 
-const EMAIL_API_URL = import.meta.env.VITE_EMAIL_API_URL ?? '/functions/v1/send-email';
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL ?? '';
+const EMAIL_API_URL = import.meta.env.VITE_EMAIL_API_URL ?? (SUPABASE_URL ? `${SUPABASE_URL}/functions/v1/send-email` : '/functions/v1/send-email');
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY ?? '';
 
 export const emailService: EmailService = {
