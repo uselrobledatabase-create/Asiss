@@ -3,7 +3,7 @@
  * With proper error handling and success feedback
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Icon } from '../../../shared/components/common/Icon';
 import { useShiftTypes, useStaffShift, useUpsertStaffShift, useSpecialTemplate, useUpsertSpecialTemplate } from '../hooks';
 import { StaffWithShift, ShiftTypeCode, VariantCode, ShiftType, SpecialTemplateSettings } from '../types';
@@ -83,8 +83,26 @@ export const ShiftConfigModal = ({ isOpen, onClose, staff, onSuccess }: ShiftCon
     const { data: currentShift } = useStaffShift(staff?.id ?? null);
     const { data: currentTemplate } = useSpecialTemplate(staff?.id ?? null);
 
-    // Use DB types if available, otherwise fallback
-    const shiftTypes = dbShiftTypes.length > 0 ? dbShiftTypes : FALLBACK_SHIFT_TYPES;
+    // Ensure ESPECIAL is always available, even if not in DB
+    const shiftTypes = useMemo(() => {
+        const types = dbShiftTypes.length > 0 ? [...dbShiftTypes] : [...FALLBACK_SHIFT_TYPES];
+
+        // Check if ESPECIAL exists
+        if (!types.some(t => t.code === 'ESPECIAL')) {
+            types.push({
+                id: 'special-auto',
+                code: 'ESPECIAL',
+                name: 'Especial (Manual)',
+                pattern_json: {
+                    type: 'manual',
+                    description: 'Plantilla de 28 días definida manualmente',
+                    cycleDays: 28,
+                },
+                created_at: new Date().toISOString(),
+            });
+        }
+        return types;
+    }, [dbShiftTypes]);
 
     const upsertShiftMutation = useUpsertStaffShift();
     const upsertTemplateMutation = useUpsertSpecialTemplate();
