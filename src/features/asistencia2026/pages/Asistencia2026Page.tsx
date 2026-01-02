@@ -40,7 +40,6 @@ import {
     getLocalTodayStr,
     isOffDay,
     getReducedHourDays,
-    getReducedHourDays,
     getFallbackShiftType,
     getSpecialShiftDetails,
 } from '../utils/shiftEngine';
