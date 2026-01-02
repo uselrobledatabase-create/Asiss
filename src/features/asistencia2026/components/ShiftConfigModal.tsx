@@ -115,6 +115,10 @@ export const ShiftConfigModal = ({ isOpen, onClose, staff, onSuccess }: ShiftCon
     const [earlyExitDays, setEarlyExitDays] = useState<number[]>([]); // Array for multiple days
     const [earlyExitTime, setEarlyExitTime] = useState<string>('14:00');
 
+    // [NEW] Custom schedule times
+    const [customDiaTime, setCustomDiaTime] = useState<string>('');
+    const [customNocheTime, setCustomNocheTime] = useState<string>('');
+
     const [activeTab, setActiveTab] = useState<ConfigTab>('OFF_DAYS');
 
     const [error, setError] = useState<string | null>(null);
@@ -159,12 +163,23 @@ export const ShiftConfigModal = ({ isOpen, onClose, staff, onSuccess }: ShiftCon
                 setEarlyExitEnabled(false);
                 setEarlyExitDays([5]);
             }
+
+            // Load custom schedules
+            if (settings && settings.custom_schedules) {
+                setCustomDiaTime(settings.custom_schedules.dia || '');
+                setCustomNocheTime(settings.custom_schedules.noche || '');
+            } else {
+                setCustomDiaTime('');
+                setCustomNocheTime('');
+            }
         } else {
             setSpecialOffDays([]);
             setDailyShifts({});
             setEarlyExitEnabled(false);
             setEarlyExitDays([5]);
             setEarlyExitTime('14:00');
+            setCustomDiaTime('');
+            setCustomNocheTime('');
         }
 
         setError(null);
@@ -200,6 +215,11 @@ export const ShiftConfigModal = ({ isOpen, onClose, staff, onSuccess }: ShiftCon
                         enabled: earlyExitEnabled,
                         days: earlyExitDays, // Save array
                         time: earlyExitTime
+                    },
+                    // [NEW] Save custom schedules
+                    custom_schedules: {
+                        dia: customDiaTime || undefined,
+                        noche: customNocheTime || undefined,
                     }
                 };
 
@@ -440,7 +460,36 @@ export const ShiftConfigModal = ({ isOpen, onClose, staff, onSuccess }: ShiftCon
 
                                 {/* TAB: SHIFT D/N */}
                                 {activeTab === 'SHIFT_TYPE' && (
-                                    <div className="space-y-3">
+                                    <div className="space-y-4">
+                                        <div className="bg-white rounded-lg p-3 border shadow-sm space-y-3">
+                                            <div className="flex items-center gap-2 mb-2">
+                                                <Icon name="clock" size={16} className="text-slate-400" />
+                                                <span className="text-xs font-semibold uppercase text-slate-500 tracking-wider">Configurar Horarios</span>
+                                            </div>
+                                            <div className="grid grid-cols-2 gap-4">
+                                                <div>
+                                                    <label className="block text-xs font-medium text-slate-600 mb-1">Horario Día</label>
+                                                    <input
+                                                        type="text"
+                                                        value={customDiaTime}
+                                                        onChange={(e) => setCustomDiaTime(e.target.value)}
+                                                        placeholder="ej: 08:00-18:00"
+                                                        className="w-full p-2 border rounded-md text-sm focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500"
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label className="block text-xs font-medium text-slate-600 mb-1">Horario Noche</label>
+                                                    <input
+                                                        type="text"
+                                                        value={customNocheTime}
+                                                        onChange={(e) => setCustomNocheTime(e.target.value)}
+                                                        placeholder="ej: 20:00-08:00"
+                                                        className="w-full p-2 border rounded-md text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+                                                    />
+                                                </div>
+                                            </div>
+                                        </div>
+
                                         <p className="text-sm text-slate-600">
                                             Configura si es <strong>Día</strong> o <strong>Noche</strong> (solo días de trabajo):
                                         </p>

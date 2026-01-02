@@ -53,6 +53,11 @@ export interface SpecialTemplateSettings {
         day_of_week?: number; // Deprecated, kept for backward compat
         time: string; // "14:00"
     };
+    // Custom schedule times (e.g. DIA="08:00-18:00")
+    custom_schedules?: {
+        dia?: string;   // e.g. "08:00-18:00"
+        noche?: string; // e.g. "22:00-06:00"
+    };
 }
 
 export interface StaffShiftOverride {

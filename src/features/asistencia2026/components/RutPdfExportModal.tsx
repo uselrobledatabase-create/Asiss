@@ -251,8 +251,19 @@ export const RutPdfExportModal = ({
                             const specialTemplate = specialTemplatesMap.get(selectedStaff.id);
                             if (specialTemplate) {
                                 const details = getSpecialShiftDetails(dateStr, specialTemplate);
+
+                                // Apply custom Day/Night times
+                                const schedules = specialTemplate.settings_json?.custom_schedules;
+                                if (details.type && schedules) {
+                                    if (details.type === 'DIA' && schedules.dia) {
+                                        displayHorario = schedules.dia;
+                                    } else if (details.type === 'NOCHE' && schedules.noche) {
+                                        displayHorario = schedules.noche;
+                                    }
+                                }
+
                                 if (details.earlyExit) {
-                                    const match = selectedStaff.horario?.match(/^(\d{1,2}:\d{2})/);
+                                    const match = displayHorario?.match(/^(\d{1,2}:\d{2})/); // Use current displayHorario to respect custom start time
                                     const startTime = match ? match[1] : '08:00';
                                     displayHorario = `${startTime}-${details.earlyExit}`;
                                 }

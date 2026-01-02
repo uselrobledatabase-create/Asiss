@@ -285,6 +285,16 @@ export const AttendanceGrid = ({
                     const details = getSpecialShiftDetails(date, specialTemplate);
                     if (details.type) {
                         turno = details.type;
+
+                        // [NEW] Apply custom schedule times
+                        const schedules = specialTemplate.settings_json?.custom_schedules;
+                        if (schedules) {
+                            if (turno === 'DIA' && schedules.dia) {
+                                horario = schedules.dia;
+                            } else if (turno === 'NOCHE' && schedules.noche) {
+                                horario = schedules.noche;
+                            }
+                        }
                     }
 
                     // Apply Early Exit
