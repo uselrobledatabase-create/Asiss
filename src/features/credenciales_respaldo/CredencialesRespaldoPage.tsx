@@ -302,84 +302,92 @@ export const CredencialesRespaldoPage = () => {
             )}
 
             {/* Compact Filters */}
-            <div className="bg-white px-3 py-2 rounded-lg border border-slate-200 shadow-sm flex flex-wrap items-center gap-2">
-                <Filter className="w-4 h-4 text-slate-400 flex-shrink-0" />
-
-                <input
-                    type="text"
-                    className="h-8 px-2 text-sm border border-slate-200 rounded-md w-32 focus:outline-none focus:ring-1 focus:ring-blue-400"
-                    placeholder="RUT/Nombre..."
-                    value={filters.search || ''}
-                    onChange={(e) => setFilters((prev) => ({ ...prev, search: e.target.value }))}
-                />
-
-                <select
-                    className="h-8 px-2 text-sm border border-slate-200 rounded-md bg-white focus:outline-none focus:ring-1 focus:ring-blue-400"
-                    value={terminalContext.value || ''}
-                    onChange={(e) => {
-                        if (e.target.value) {
-                            setTerminalContext({ mode: 'TERMINAL', value: e.target.value as any });
-                        } else {
-                            setTerminalContext({ mode: 'ALL' });
-                        }
-                    }}
-                >
-                    <option value="">Terminal</option>
-                    {terminalOptions.map((t) => (
-                        <option key={t.value} value={t.value}>{t.label}</option>
-                    ))}
-                </select>
-
-                <select
-                    className="h-8 px-2 text-sm border border-slate-200 rounded-md bg-white focus:outline-none focus:ring-1 focus:ring-blue-400"
-                    value={filters.status || 'TODAS'}
-                    onChange={(e) => setFilters((prev) => ({ ...prev, status: e.target.value as any }))}
-                >
-                    <option value="TODAS">Estado</option>
-                    {STATUS_OPTIONS.map((s) => (
-                        <option key={s.value} value={s.value}>{s.label}</option>
-                    ))}
-                </select>
-
-                <select
-                    className="h-8 px-2 text-sm border border-slate-200 rounded-md bg-white focus:outline-none focus:ring-1 focus:ring-blue-400"
-                    value={filters.reason || 'TODAS'}
-                    onChange={(e) => setFilters((prev) => ({ ...prev, reason: e.target.value as any }))}
-                >
-                    <option value="TODAS">Motivo</option>
-                    {REASON_OPTIONS.map((r) => (
-                        <option key={r.value} value={r.value}>{r.label}</option>
-                    ))}
-                </select>
-
-                <label className="flex items-center gap-1 cursor-pointer text-xs text-slate-600 whitespace-nowrap">
+            <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-sm flex flex-col md:flex-row md:items-center gap-3">
+                <div className="flex items-center gap-2 w-full md:w-auto">
+                    <Filter className="w-4 h-4 text-slate-400 flex-shrink-0 hidden md:block" />
                     <input
-                        type="checkbox"
-                        checked={filters.alertsOnly || false}
-                        onChange={(e) => setFilters((prev) => ({ ...prev, alertsOnly: e.target.checked }))}
-                        className="w-3.5 h-3.5 rounded border-slate-300"
+                        type="text"
+                        className="h-9 md:h-8 px-3 text-sm border border-slate-200 rounded-lg w-full md:w-40 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-all"
+                        placeholder="Buscar RUT o Nombre..."
+                        value={filters.search || ''}
+                        onChange={(e) => setFilters((prev) => ({ ...prev, search: e.target.value }))}
                     />
-                    <AlertTriangle className="w-3.5 h-3.5 text-amber-500" />
-                    Atrasados
-                </label>
+                </div>
 
-                <div className="h-4 w-px bg-slate-200 hidden sm:block" />
+                <div className="grid grid-cols-2 md:flex items-center gap-2 w-full md:w-auto">
+                    <select
+                        className="h-9 md:h-8 px-2 text-sm border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 w-full md:w-auto transition-all"
+                        value={terminalContext.value || ''}
+                        onChange={(e) => {
+                            if (e.target.value) {
+                                setTerminalContext({ mode: 'TERMINAL', value: e.target.value as any });
+                            } else {
+                                setTerminalContext({ mode: 'ALL' });
+                            }
+                        }}
+                    >
+                        <option value="">Todo Terminal</option>
+                        {terminalOptions.map((t) => (
+                            <option key={t.value} value={t.value}>{t.label}</option>
+                        ))}
+                    </select>
 
-                <input
-                    type="date"
-                    className="h-8 px-2 text-sm border border-slate-200 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-400"
-                    value={filters.dateFrom || ''}
-                    onChange={(e) => setFilters((prev) => ({ ...prev, dateFrom: e.target.value }))}
-                    title="Desde"
-                />
-                <span className="text-slate-400 text-xs">-</span>
-                <input
-                    type="date"
-                    className="h-8 px-2 text-sm border border-slate-200 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-400"
-                    value={filters.dateTo || ''}
-                    onChange={(e) => setFilters((prev) => ({ ...prev, dateTo: e.target.value }))}
-                    title="Hasta"
-                />
+                    <select
+                        className="h-9 md:h-8 px-2 text-sm border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 w-full md:w-auto transition-all"
+                        value={filters.status || 'TODAS'}
+                        onChange={(e) => setFilters((prev) => ({ ...prev, status: e.target.value as any }))}
+                    >
+                        <option value="TODAS">Todo Estado</option>
+                        {STATUS_OPTIONS.map((s) => (
+                            <option key={s.value} value={s.value}>{s.label}</option>
+                        ))}
+                    </select>
+                </div>
+
+                <div className="flex items-center gap-2 w-full md:w-auto">
+                    <select
+                        className="h-9 md:h-8 px-2 text-sm border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 w-full md:w-auto flex-grow md:flex-grow-0 transition-all"
+                        value={filters.reason || 'TODAS'}
+                        onChange={(e) => setFilters((prev) => ({ ...prev, reason: e.target.value as any }))}
+                    >
+                        <option value="TODAS">Todo Motivo</option>
+                        {REASON_OPTIONS.map((r) => (
+                            <option key={r.value} value={r.value}>{r.label}</option>
+                        ))}
+                    </select>
+
+                    <label className="flex items-center gap-2 cursor-pointer px-3 py-1.5 rounded-lg border border-slate-200 hover:bg-slate-50 transition-colors select-none h-9 md:h-8">
+                        <input
+                            type="checkbox"
+                            checked={filters.alertsOnly || false}
+                            onChange={(e) => setFilters((prev) => ({ ...prev, alertsOnly: e.target.checked }))}
+                            className="w-4 h-4 rounded border-slate-300 text-amber-500 focus:ring-amber-500"
+                        />
+                        <div className="flex items-center gap-1.5">
+                            <AlertTriangle className="w-3.5 h-3.5 text-amber-500" />
+                            <span className="text-xs font-medium text-slate-700">Atrasados</span>
+                        </div>
+                    </label>
+                </div>
+
+                <div className="hidden md:block h-4 w-px bg-slate-200" />
+
+                <div className="grid grid-cols-2 items-center gap-2 w-full md:w-auto">
+                    <input
+                        type="date"
+                        className="h-9 md:h-8 px-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 w-full transition-all"
+                        value={filters.dateFrom || ''}
+                        onChange={(e) => setFilters((prev) => ({ ...prev, dateFrom: e.target.value }))}
+                        title="Desde"
+                    />
+                    <input
+                        type="date"
+                        className="h-9 md:h-8 px-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 w-full transition-all"
+                        value={filters.dateTo || ''}
+                        onChange={(e) => setFilters((prev) => ({ ...prev, dateTo: e.target.value }))}
+                        title="Hasta"
+                    />
+                </div>
             </div>
 
             {/* Table */}

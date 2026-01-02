@@ -53,38 +53,39 @@ export const KpiCards = ({ kpis, isLoading }: Props) => {
         .join(' | ');
 
     return (
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
             <KpiCard
                 title="Disponibles"
                 value={totalAvailable}
                 subtitle={availableSubtitle}
                 icon={<CreditCard className="w-5 h-5" />}
-                colorClass="bg-emerald-50 text-emerald-600"
+                colorClass="bg-emerald-50 text-emerald-600 ring-1 ring-emerald-100"
             />
             <KpiCard
                 title="Prestamos Activos"
                 value={kpis.activeLoans}
                 icon={<Clock className="w-5 h-5" />}
-                colorClass="bg-blue-50 text-blue-600"
+                colorClass="bg-blue-50 text-blue-600 ring-1 ring-blue-100"
             />
             <KpiCard
                 title="Atrasados (+7d)"
                 value={kpis.overdueLoans}
                 icon={<AlertTriangle className="w-5 h-5" />}
-                colorClass={kpis.overdueLoans > 0 ? 'bg-amber-50 text-amber-600' : 'bg-slate-50 text-slate-400'}
+                colorClass={kpis.overdueLoans > 0 ? 'bg-amber-50 text-amber-600 ring-1 ring-amber-100' : 'bg-slate-50 text-slate-400 ring-1 ring-slate-100'}
             />
             <KpiCard
                 title="Tiempo Promedio"
                 value={`${kpis.avgReturnDays} dias`}
                 subtitle="Ultimos 30 dias"
                 icon={<TrendingUp className="w-5 h-5" />}
-                colorClass="bg-indigo-50 text-indigo-600"
+                colorClass="bg-indigo-50 text-indigo-600 ring-1 ring-indigo-100"
             />
             <KpiCard
                 title="Descuentos"
                 value={`$${kpis.totalDiscounts.toLocaleString('es-CL')}`}
                 icon={<DollarSign className="w-5 h-5" />}
-                colorClass="bg-violet-50 text-violet-600"
+                colorClass="bg-violet-50 text-violet-600 ring-1 ring-violet-100"
             />
         </div>
     );
