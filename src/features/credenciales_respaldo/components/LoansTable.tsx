@@ -203,6 +203,6 @@ export const LoansTable = ({
                 </tbody>
             </table>
         </div>
-        </div >
+
     );
 };
