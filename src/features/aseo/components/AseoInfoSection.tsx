@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Icon } from '../../../shared/components/common/Icon';
 import { supabase } from '../../../shared/lib/supabaseClient';
@@ -5,7 +6,11 @@ import {
     isOffDay,
     getSpecialShiftDetails,
     getFallbackShiftType,
-    getLocalTodayStr
+    getLocalTodayStr,
+    getWeekStart,
+    getPreviousWeek,
+    getNextWeek,
+    getWeekDates
 } from '../../asistencia2026/utils/shiftEngine';
 import { StaffShiftSpecialTemplate, StaffShiftOverride } from '../../asistencia2026/types';
 
@@ -14,9 +19,38 @@ interface Props {
 }
 
 export const AseoInfoSection = ({ rut }: Props) => {
-    // Fetch attendance data for this RUT
+    // Current week navigation state
+    const todayStr = getLocalTodayStr();
+    const realCurrentWeekStart = getWeekStart(todayStr); // The actual current week Monday
+    const [viewWeekStart, setViewWeekStart] = useState<string>(realCurrentWeekStart);
+
+    // Calculate restrictions ( +/- 1 week )
+    const minWeekStart = getPreviousWeek(realCurrentWeekStart);
+    const maxWeekStart = getNextWeek(realCurrentWeekStart);
+
+    const canGoPrev = viewWeekStart > minWeekStart;
+    const canGoNext = viewWeekStart < maxWeekStart;
+
+    const handlePrevWeek = () => {
+        if (canGoPrev) setViewWeekStart(prev => getPreviousWeek(prev));
+    };
+
+    const handleNextWeek = () => {
+        if (canGoNext) setViewWeekStart(prev => getNextWeek(prev));
+    };
+
+    const handleResetWeek = () => {
+        setViewWeekStart(realCurrentWeekStart);
+    };
+
+    // Derived dates for the view
+    const viewWeekDates = getWeekDates(viewWeekStart);
+    const viewStartStr = viewWeekStart;
+    const viewEndStr = viewWeekDates[6];
+
+    // Fetch attendance data for this RUT and selected week
     const { data: attendanceInfo, isLoading } = useQuery({
-        queryKey: ['aseo', 'attendanceInfo', rut],
+        queryKey: ['aseo', 'attendanceInfo', rut, viewWeekStart], // Include week in key
         queryFn: async () => {
             // Get staff info
             const { data: staff } = await supabase
@@ -54,27 +88,9 @@ export const AseoInfoSection = ({ rut }: Props) => {
                 .eq('staff_id', staff.id)
                 .maybeSingle();
 
-            // Get current week dates
-            const now = new Date();
-            const dayOfWeek = now.getDay(); // 0 is Sunday
-            // Calculate Monday
-            const monday = new Date(now);
-            const diff = dayOfWeek === 0 ? 6 : dayOfWeek - 1; // adjust when day is sunday
-            monday.setDate(now.getDate() - diff);
-
-            const sunday = new Date(monday);
-            sunday.setDate(monday.getDate() + 6);
-
-            const mondayStr = monday.toISOString().split('T')[0];
-            const sundayStr = sunday.toISOString().split('T')[0];
-
-            // Get week data
-            const dates = [];
-            for (let i = 0; i < 7; i++) {
-                const d = new Date(monday);
-                d.setDate(monday.getDate() + i);
-                dates.push(d.toISOString().split('T')[0]);
-            }
+            // Date range for query
+            const mondayStr = viewStartStr;
+            const sundayStr = viewEndStr;
 
             // Get marks for this week
             const { data: marks } = await supabase
@@ -135,7 +151,6 @@ export const AseoInfoSection = ({ rut }: Props) => {
                 staffShift,
                 shiftType,
                 specialTemplate: specialTemplate as StaffShiftSpecialTemplate | null,
-                weekDates: dates,
                 marks: marks || [],
                 licenses: licenses || [],
                 permissions: permissions || [],
@@ -170,7 +185,6 @@ export const AseoInfoSection = ({ rut }: Props) => {
         staffShift,
         shiftType,
         specialTemplate,
-        weekDates,
         marks,
         licenses,
         permissions,
@@ -243,17 +257,49 @@ export const AseoInfoSection = ({ rut }: Props) => {
             {/* Week Schedule Week View */}
             <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-4">
                 <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
-                        <Icon name="calendar" size={20} className="text-indigo-600" />
-                        Semana Actual
-                    </h3>
-                    <span className="text-xs font-semibold text-slate-400 bg-slate-100 px-2 py-1 rounded-md">
-                        {new Date(weekDates[0]).toLocaleDateString('es-CL', { day: 'numeric' })} - {new Date(weekDates[6]).toLocaleDateString('es-CL', { day: 'numeric', month: 'short' })}
-                    </span>
+                    <div className="flex items-center gap-2">
+                        <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+                            <Icon name="calendar" size={20} className="text-indigo-600" />
+                            Semana
+                        </h3>
+                    </div>
+
+                    <div className="flex items-center gap-1">
+                        <button
+                            onClick={handlePrevWeek}
+                            disabled={!canGoPrev}
+                            className={`p-1.5 rounded-lg transition-colors ${canGoPrev ? 'text-slate-600 hover:bg-slate-100' : 'text-slate-300 cursor-not-allowed'}`}
+                        >
+                            <Icon name="chevron-left" size={20} />
+                        </button>
+
+                        <div className="text-center w-20">
+                            <span className="text-xs font-semibold text-slate-500 block leading-tight">
+                                {new Date(viewWeekDates[0]).toLocaleDateString('es-CL', { day: 'numeric', month: 'short' })}
+                            </span>
+                        </div>
+
+                        <button
+                            onClick={handleNextWeek}
+                            disabled={!canGoNext}
+                            className={`p-1.5 rounded-lg transition-colors ${canGoNext ? 'text-slate-600 hover:bg-slate-100' : 'text-slate-300 cursor-not-allowed'}`}
+                        >
+                            <Icon name="chevron-right" size={20} />
+                        </button>
+
+                        {viewWeekStart !== realCurrentWeekStart && (
+                            <button
+                                onClick={handleResetWeek}
+                                className="ml-1 text-xs font-bold text-indigo-600 bg-indigo-50 px-2 py-1 rounded"
+                            >
+                                HOY
+                            </button>
+                        )}
+                    </div>
                 </div>
 
                 <div className="space-y-2">
-                    {weekDates.map((date) => {
+                    {viewWeekDates.map((date) => {
                         const dateObj = new Date(date + 'T12:00:00');
                         const dayName = dateObj.toLocaleDateString('es-CL', { weekday: 'long' });
                         const dayNum = dateObj.getDate();
