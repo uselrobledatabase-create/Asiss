@@ -343,7 +343,7 @@ export const RequestsTable = ({ onRefresh }: Props) => {
                                 </div>
                             </div>
 
-                            <div className="rounded-lg border border-slate-200 overflow-hidden">
+                            <div className="rounded-lg border border-slate-200 overflow-x-auto">
                                 <table className="w-full text-sm">
                                     <thead>
                                         <tr className="bg-slate-50 text-left text-xs font-medium uppercase tracking-wide text-slate-500">

@@ -81,129 +81,128 @@ export const LoansTable = ({
     }
 
     return (
-        <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-            <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-slate-200">
-                    <thead className="bg-slate-50">
-                        <tr>
-                            <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wide">
-                                Trabajador
-                            </th>
-                            <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wide">
-                                RUT
-                            </th>
-                            <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wide">
-                                Terminal
-                            </th>
-                            <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wide">
-                                Tarjeta
-                            </th>
-                            <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wide">
-                                Motivo
-                            </th>
-                            <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wide">
-                                Entrega
-                            </th>
-                            <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wide">
-                                Dias
-                            </th>
-                            <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wide">
-                                Estado
-                            </th>
-                            <th className="px-4 py-3 text-right text-xs font-semibold text-slate-600 uppercase tracking-wide">
-                                Acciones
-                            </th>
-                        </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                        {loansWithOverdue.map((loan) => (
-                            <tr
-                                key={loan.id}
-                                className={`hover:bg-slate-50 ${loan.isOverdue ? 'bg-amber-50/50' : ''}`}
-                            >
-                                <td className="px-4 py-3 whitespace-nowrap">
-                                    <p className="text-sm font-medium text-slate-900">{loan.person_name}</p>
-                                    <p className="text-xs text-slate-500">{loan.person_cargo || '-'}</p>
-                                </td>
-                                <td className="px-4 py-3 whitespace-nowrap text-sm text-slate-700">
-                                    {formatRut(loan.person_rut)}
-                                </td>
-                                <td className="px-4 py-3 whitespace-nowrap text-sm text-slate-700">
-                                    {loan.person_terminal}
-                                </td>
-                                <td className="px-4 py-3 whitespace-nowrap">
-                                    <p className="text-sm font-mono text-slate-900">
-                                        {loan.backup_cards?.card_number || '-'}
-                                    </p>
-                                    <p className="text-xs text-slate-500">
-                                        {loan.backup_cards?.inventory_terminal}
-                                    </p>
-                                </td>
-                                <td className="px-4 py-3 whitespace-nowrap">
-                                    <ReasonBadge reason={loan.reason} />
-                                </td>
-                                <td className="px-4 py-3 whitespace-nowrap text-sm text-slate-700">
-                                    {new Date(loan.issued_at).toLocaleDateString('es-CL')}
-                                </td>
-                                <td className="px-4 py-3 whitespace-nowrap">
-                                    <span
-                                        className={`text-sm font-medium ${loan.isOverdue ? 'text-amber-600' : 'text-slate-700'
-                                            }`}
+        <div className="table-container">
+            <table className="min-w-full divide-y divide-slate-200">
+                <thead className="bg-slate-50">
+                    <tr>
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wide">
+                            Trabajador
+                        </th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wide">
+                            RUT
+                        </th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wide">
+                            Terminal
+                        </th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wide">
+                            Tarjeta
+                        </th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wide">
+                            Motivo
+                        </th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wide">
+                            Entrega
+                        </th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wide">
+                            Dias
+                        </th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wide">
+                            Estado
+                        </th>
+                        <th className="px-4 py-3 text-right text-xs font-semibold text-slate-600 uppercase tracking-wide">
+                            Acciones
+                        </th>
+                    </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                    {loansWithOverdue.map((loan) => (
+                        <tr
+                            key={loan.id}
+                            className={`hover:bg-slate-50 ${loan.isOverdue ? 'bg-amber-50/50' : ''}`}
+                        >
+                            <td className="px-4 py-3 whitespace-nowrap">
+                                <p className="text-sm font-medium text-slate-900">{loan.person_name}</p>
+                                <p className="text-xs text-slate-500">{loan.person_cargo || '-'}</p>
+                            </td>
+                            <td className="px-4 py-3 whitespace-nowrap text-sm text-slate-700">
+                                {formatRut(loan.person_rut)}
+                            </td>
+                            <td className="px-4 py-3 whitespace-nowrap text-sm text-slate-700">
+                                {loan.person_terminal}
+                            </td>
+                            <td className="px-4 py-3 whitespace-nowrap">
+                                <p className="text-sm font-mono text-slate-900">
+                                    {loan.backup_cards?.card_number || '-'}
+                                </p>
+                                <p className="text-xs text-slate-500">
+                                    {loan.backup_cards?.inventory_terminal}
+                                </p>
+                            </td>
+                            <td className="px-4 py-3 whitespace-nowrap">
+                                <ReasonBadge reason={loan.reason} />
+                            </td>
+                            <td className="px-4 py-3 whitespace-nowrap text-sm text-slate-700">
+                                {new Date(loan.issued_at).toLocaleDateString('es-CL')}
+                            </td>
+                            <td className="px-4 py-3 whitespace-nowrap">
+                                <span
+                                    className={`text-sm font-medium ${loan.isOverdue ? 'text-amber-600' : 'text-slate-700'
+                                        }`}
+                                >
+                                    {loan.daysPassed}d
+                                </span>
+                            </td>
+                            <td className="px-4 py-3 whitespace-nowrap">
+                                <StatusBadge status={loan.status} isOverdue={loan.isOverdue} />
+                            </td>
+                            <td className="px-4 py-3 whitespace-nowrap text-right">
+                                <div className="flex items-center justify-end gap-1">
+                                    <button
+                                        onClick={() => onView(loan)}
+                                        className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded"
+                                        title="Ver detalle"
                                     >
-                                        {loan.daysPassed}d
-                                    </span>
-                                </td>
-                                <td className="px-4 py-3 whitespace-nowrap">
-                                    <StatusBadge status={loan.status} isOverdue={loan.isOverdue} />
-                                </td>
-                                <td className="px-4 py-3 whitespace-nowrap text-right">
-                                    <div className="flex items-center justify-end gap-1">
-                                        <button
-                                            onClick={() => onView(loan)}
-                                            className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded"
-                                            title="Ver detalle"
-                                        >
-                                            <Eye className="w-4 h-4" />
-                                        </button>
-                                        {loan.status === 'ASIGNADA' && (
-                                            <>
-                                                <button
-                                                    onClick={() => onEdit(loan)}
-                                                    className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded"
-                                                    title="Editar"
-                                                >
-                                                    <Edit className="w-4 h-4" />
-                                                </button>
-                                                <button
-                                                    onClick={() => onRecover(loan)}
-                                                    className="p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded"
-                                                    title="Marcar recuperada"
-                                                >
-                                                    <RotateCcw className="w-4 h-4" />
-                                                </button>
-                                                <button
-                                                    onClick={() => onCancel(loan)}
-                                                    className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded"
-                                                    title="Cancelar"
-                                                >
-                                                    <X className="w-4 h-4" />
-                                                </button>
-                                            </>
-                                        )}
-                                        <button
-                                            onClick={() => onResendEmails(loan)}
-                                            className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded"
-                                            title="Reenviar correos"
-                                        >
-                                            <Mail className="w-4 h-4" />
-                                        </button>
-                                    </div>
-                                </td>
-                            </tr>
-                        ))}
-                    </tbody>
-                </table>
-            </div>
+                                        <Eye className="w-4 h-4" />
+                                    </button>
+                                    {loan.status === 'ASIGNADA' && (
+                                        <>
+                                            <button
+                                                onClick={() => onEdit(loan)}
+                                                className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded"
+                                                title="Editar"
+                                            >
+                                                <Edit className="w-4 h-4" />
+                                            </button>
+                                            <button
+                                                onClick={() => onRecover(loan)}
+                                                className="p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded"
+                                                title="Marcar recuperada"
+                                            >
+                                                <RotateCcw className="w-4 h-4" />
+                                            </button>
+                                            <button
+                                                onClick={() => onCancel(loan)}
+                                                className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded"
+                                                title="Cancelar"
+                                            >
+                                                <X className="w-4 h-4" />
+                                            </button>
+                                        </>
+                                    )}
+                                    <button
+                                        onClick={() => onResendEmails(loan)}
+                                        className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded"
+                                        title="Reenviar correos"
+                                    >
+                                        <Mail className="w-4 h-4" />
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                    ))}
+                </tbody>
+            </table>
         </div>
+        </div >
     );
 };

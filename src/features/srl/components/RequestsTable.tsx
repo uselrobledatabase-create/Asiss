@@ -125,7 +125,7 @@ export const RequestsTable = ({ onCreate, onView }: Props) => {
                         <p className="text-slate-500 mt-2 max-w-md mx-auto">No se encontraron registros. Cree una nueva solicitud o ajuste los filtros.</p>
                     </div>
                 ) : (
-                    <div className="overflow-x-auto">
+                    <div className="table-container">
                         <table className="w-full">
                             <thead>
                                 <tr className="bg-gradient-to-r from-slate-50 to-slate-100 border-b-2 border-slate-200">

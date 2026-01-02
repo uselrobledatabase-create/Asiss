@@ -54,7 +54,7 @@ export const StaffCounters = ({ terminalContext }: Props) => {
                 <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wide mb-3">
                     Personal por Cargo {showErLr && '(ER-LR)'}
                 </h3>
-                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3">
                     {counts.byCargo.map((item) => {
                         const effectiveCount = item.effective_count;
                         const isOverQ = item.max_q && effectiveCount > item.max_q;
