@@ -11,7 +11,7 @@ export const DashboardLayout = () => {
   // Auto-collapse on smaller screens (12-inch laptops) to maximize space
   useEffect(() => {
     const handleResize = () => {
-      if (window.innerWidth < 1280) {
+      if (window.innerWidth >= 768 && window.innerWidth < 1280) {
         setSidebarCollapsed(true);
       }
     };
