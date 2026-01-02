@@ -99,7 +99,7 @@ export const MyInfoPage = () => {
 
         // Check absences
         const hasLicense = licenses.some((l: AttendanceLicense) => l.staff_id === myStaffRecord.id && date >= l.start_date && date <= l.end_date);
-        const hasVacation = vacations.some((v: AttendanceVacation) => v.staff_id === myStaffRecord.id && date >= v.start_date && date <= v.end_date);
+        const hasVacation = vacations.some((v: { staff_id: string; start_date: string; end_date: string }) => v.staff_id === myStaffRecord.id && date >= v.start_date && date <= v.end_date);
         const hasPermission = permissions.some((p: AttendancePermission) => p.staff_id === myStaffRecord.id && date >= p.start_date && date <= p.end_date);
 
         if (hasLicense || hasVacation || hasPermission) {

@@ -195,7 +195,7 @@ export const AseoInfoSection = ({ rut }: Props) => {
                         {staff.cargo}
                     </span>
                     <span className="px-3 py-1 bg-white/20 backdrop-blur-md rounded-full font-bold flex items-center">
-                        <Icon name="monitor" size={12} className="mr-1.5" />
+                        <Icon name="building" size={12} className="mr-1.5" />
                         {staff.terminal_code}
                     </span>
                     <span className="px-3 py-1 bg-white/20 backdrop-blur-md rounded-full font-bold flex items-center">
