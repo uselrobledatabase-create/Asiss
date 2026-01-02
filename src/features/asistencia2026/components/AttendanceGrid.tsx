@@ -249,7 +249,7 @@ export const AttendanceGrid = ({
         // Calculate off day based on shift pattern
         let isOff = false;
         const horario = s.horario;
-        const turno = getTurnoFromHorario(s.horario);
+        let turno = getTurnoFromHorario(s.horario);
         const dayOfWeek = new Date(date + 'T12:00:00').getDay();
 
         if (s.shift) {
