@@ -191,11 +191,11 @@ export const AseoInfoSection = ({ rut }: Props) => {
                 <h1 className="text-2xl font-black mb-3">{staff.nombre}</h1>
                 <div className="flex flex-wrap gap-2 text-xs">
                     <span className="px-3 py-1 bg-white/20 backdrop-blur-md rounded-full font-bold flex items-center">
-                        <Icon name="briefcase" size={12} className="mr-1.5" />
+                        <Icon name="user" size={12} className="mr-1.5" />
                         {staff.cargo}
                     </span>
                     <span className="px-3 py-1 bg-white/20 backdrop-blur-md rounded-full font-bold flex items-center">
-                        <Icon name="map-pin" size={12} className="mr-1.5" />
+                        <Icon name="monitor" size={12} className="mr-1.5" />
                         {staff.terminal_code}
                     </span>
                     <span className="px-3 py-1 bg-white/20 backdrop-blur-md rounded-full font-bold flex items-center">
@@ -276,7 +276,7 @@ export const AseoInfoSection = ({ rut }: Props) => {
                                     staffShift.shift_type_code,
                                     staffShift.variant_code || undefined,
                                     effectiveShiftType.pattern_json,
-                                    specialTemplate,
+                                    specialTemplate || undefined, // FIX: Pass undefined if null
                                     overrideFound
                                 );
 
@@ -305,8 +305,8 @@ export const AseoInfoSection = ({ rut }: Props) => {
                             <div
                                 key={date}
                                 className={`flex items-center p-3 rounded-xl border transition-all ${isToday
-                                        ? 'border-indigo-500 bg-indigo-50/50 shadow-md ring-1 ring-indigo-200'
-                                        : 'border-slate-100 hover:border-slate-200 bg-white'
+                                    ? 'border-indigo-500 bg-indigo-50/50 shadow-md ring-1 ring-indigo-200'
+                                    : 'border-slate-100 hover:border-slate-200 bg-white'
                                     }`}
                             >
                                 {/* Date Column */}
@@ -361,12 +361,12 @@ export const AseoInfoSection = ({ rut }: Props) => {
                                     {mark && !isOff ? (
                                         <div className={`w-8 h-8 rounded-full flex items-center justify-center ${mark.mark === 'P' ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'
                                             }`}>
-                                            <Icon name={mark.mark === 'P' ? 'check' : 'x'} size={16} strokeWidth={3} />
+                                            <Icon name={mark.mark === 'P' ? 'check' : 'x'} size={16} /> {/* Removed strokeWidth */}
                                         </div>
                                     ) : (
                                         !isOff && !hasLicense && !hasPermission && isToday && (
                                             <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-300">
-                                                <Icon name="minus" size={16} />
+                                                — {/* Using text instead of icon 'minus' if unavailable */}
                                             </div>
                                         )
                                     )}
