@@ -1,4 +1,3 @@
-```javascript
 import { useState, useEffect } from 'react';
 import { Icon } from '../../../shared/components/common/Icon';
 import { RutLookupInput } from '../../asistencia/components/RutLookupInput';
@@ -19,7 +18,7 @@ export const AmonestacionFormModal = ({ open, onClose, currentUserName, currentU
     const [selectedCodeId, setSelectedCodeId] = useState<string>('');
     const [worker, setWorker] = useState<Staff | null>(null);
     const [evidence, setEvidence] = useState('');
-    
+
     // Detailed State
     const [formData, setFormData] = useState<Partial<AmonestacionFormData>>({
         date: format(new Date(), 'dd/MM/yyyy'),
@@ -27,14 +26,14 @@ export const AmonestacionFormModal = ({ open, onClose, currentUserName, currentU
         responsible_name: currentUserName,
         responsible_cargo: currentUserCargo
     });
-    
+
     const handleWorkerFound = (s: Staff | null) => {
         setWorker(s);
         if (s) {
             setFormData(prev => ({
                 ...prev,
                 worker_rut: s.rut,
-                worker_name: `${ s.nombres } ${ s.apellidos } `,
+                worker_name: s.nombre,
                 worker_cargo: s.cargo,
                 worker_base: s.terminal_code // Assuming base = terminal
             }));
@@ -44,7 +43,7 @@ export const AmonestacionFormModal = ({ open, onClose, currentUserName, currentU
     // Smart Fill Logic
     useEffect(() => {
         if (!selectedCodeId || !worker) return;
-        
+
         const code = SANCTION_CODES.find(c => c.code.toString() === selectedCodeId);
         if (!code) return;
 
@@ -53,7 +52,7 @@ export const AmonestacionFormModal = ({ open, onClose, currentUserName, currentU
         // Auto-generate description if template exists, or use default
         let desc = code.template || '';
         if (!desc) {
-            desc = `EL TRABAJADOR[NOMBRE_TRABAJADOR], RUT[RUT_TRABAJADOR], INCURRIÓ EN LA FALTA TIPIFICADA EN EL CÓDIGO[CODIGO]: ${ code.description.toUpperCase() }.\n\nSE PROCEDE A LEVANTAR LA PRESENTE AMONESTACIÓN CONFORME AL REGLAMENTO INTERNO DE ORDEN, HIGIENE Y SEGURIDAD.`;
+            desc = `EL TRABAJADOR [NOMBRE_TRABAJADOR], RUT [RUT_TRABAJADOR], INCURRIÓ EN LA FALTA TIPIFICADA EN EL CÓDIGO [CODIGO]: ${code.description.toUpperCase()}. \n\nSE PROCEDE A LEVANTAR LA PRESENTE AMONESTACIÓN CONFORME AL REGLAMENTO INTERNO DE ORDEN, HIGIENE Y SEGURIDAD.`;
         }
 
         desc = desc
@@ -100,7 +99,7 @@ export const AmonestacionFormModal = ({ open, onClose, currentUserName, currentU
                                 />
                                 {worker && (
                                     <div className="mt-3 text-xs text-slate-600 bg-white p-2 rounded border border-slate-100">
-                                        <p><strong>Nombre:</strong> {worker.nombres} {worker.apellidos}</p>
+                                        <p><strong>Nombre:</strong> {worker.nombre}</p>
                                         <p><strong>Cargo:</strong> {worker.cargo}</p>
                                         <p><strong>Base:</strong> {worker.terminal_code}</p>
                                     </div>
@@ -110,9 +109,9 @@ export const AmonestacionFormModal = ({ open, onClose, currentUserName, currentU
                             <div className="p-4 bg-slate-50 rounded-lg border border-slate-200">
                                 <h3 className="font-bold mb-3 text-indigo-700 text-sm uppercase tracking-wide">2. Falta (Código)</h3>
                                 <label className="label">Seleccionar Falta</label>
-                                <select 
+                                <select
                                     className="input w-full"
-                                    onChange={(e) => setSelectedCodeId(e.target.value)} 
+                                    onChange={(e) => setSelectedCodeId(e.target.value)}
                                     value={selectedCodeId}
                                 >
                                     <option value="">Buscar código...</option>
@@ -134,20 +133,20 @@ export const AmonestacionFormModal = ({ open, onClose, currentUserName, currentU
                                 <div className="grid grid-cols-2 gap-2">
                                     <div>
                                         <label className="label">Fecha</label>
-                                        <input type="text" className="input" value={formData.date} onChange={e => setFormData({...formData, date: e.target.value})} />
+                                        <input type="text" className="input" value={formData.date} onChange={e => setFormData({ ...formData, date: e.target.value })} />
                                     </div>
                                     <div>
                                         <label className="label">Hora</label>
-                                        <input type="text" className="input" value={formData.time} onChange={e => setFormData({...formData, time: e.target.value})} />
+                                        <input type="text" className="input" value={formData.time} onChange={e => setFormData({ ...formData, time: e.target.value })} />
                                     </div>
                                 </div>
                                 <div className="mt-2">
                                     <label className="label">Terminal/Lugar</label>
-                                    <input className="input" value={formData.place_terminal} onChange={e => setFormData({...formData, place_terminal: e.target.value})} placeholder="Ej: Terminal El Roble" />
+                                    <input className="input" value={formData.place_terminal} onChange={e => setFormData({ ...formData, place_terminal: e.target.value })} placeholder="Ej: Terminal El Roble" />
                                 </div>
                                 <div className="mt-2">
                                     <label className="label">PPU / Vehículo</label>
-                                    <input className="input" value={formData.place_ppu} onChange={e => setFormData({...formData, place_ppu: e.target.value})} placeholder="Opcional" />
+                                    <input className="input" value={formData.place_ppu} onChange={e => setFormData({ ...formData, place_ppu: e.target.value })} placeholder="Opcional" />
                                 </div>
                             </div>
                         </div>
@@ -156,10 +155,10 @@ export const AmonestacionFormModal = ({ open, onClose, currentUserName, currentU
                         <div className="space-y-4">
                             <div className="p-4 bg-slate-50 rounded-lg border border-slate-200 h-full flex flex-col">
                                 <h3 className="font-bold mb-3 text-indigo-700 text-sm uppercase tracking-wide">4. Relato de los Hechos</h3>
-                                <textarea 
-                                    className="input flex-1 min-h-[200px] font-mono text-sm leading-relaxed p-3" 
-                                    value={formData.description} 
-                                    onChange={e => setFormData({...formData, description: e.target.value})} 
+                                <textarea
+                                    className="input flex-1 min-h-[200px] font-mono text-sm leading-relaxed p-3"
+                                    value={formData.description}
+                                    onChange={e => setFormData({ ...formData, description: e.target.value })}
                                 />
                                 <p className="text-[10px] text-slate-400 mt-2">* El texto se genera automáticamente, pero puedes editarlo.</p>
                             </div>
@@ -167,18 +166,18 @@ export const AmonestacionFormModal = ({ open, onClose, currentUserName, currentU
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
-                         <div className="p-4 bg-slate-50 rounded-lg border border-slate-200">
+                        <div className="p-4 bg-slate-50 rounded-lg border border-slate-200">
                             <h3 className="font-bold mb-3 text-indigo-700 text-sm uppercase tracking-wide">5. Involucrados</h3>
-                            <input className="input mb-2" placeholder="Jefatura" value={formData.involved_jefatura} onChange={e => setFormData({...formData, involved_jefatura: e.target.value})} />
-                             <input className="input mb-2" placeholder="Compañeros" value={formData.involved_companeros} onChange={e => setFormData({...formData, involved_companeros: e.target.value})} />
-                         </div>
-                         <div className="p-4 bg-slate-50 rounded-lg border border-slate-200">
+                            <input className="input mb-2" placeholder="Jefatura" value={formData.involved_jefatura} onChange={e => setFormData({ ...formData, involved_jefatura: e.target.value })} />
+                            <input className="input mb-2" placeholder="Compañeros" value={formData.involved_companeros} onChange={e => setFormData({ ...formData, involved_companeros: e.target.value })} />
+                        </div>
+                        <div className="p-4 bg-slate-50 rounded-lg border border-slate-200">
                             <h3 className="font-bold mb-3 text-indigo-700 text-sm uppercase tracking-wide">6. Testigos</h3>
                             <div className="grid grid-cols-2 gap-2">
-                                <input className="input" placeholder="Nombre Testigo 1" value={formData.witness1_name} onChange={e => setFormData({...formData, witness1_name: e.target.value})} />
-                                <input className="input" placeholder="RUT Testigo 1" value={formData.witness1_rut} onChange={e => setFormData({...formData, witness1_rut: e.target.value})} />
+                                <input className="input" placeholder="Nombre Testigo 1" value={formData.witness1_name} onChange={e => setFormData({ ...formData, witness1_name: e.target.value })} />
+                                <input className="input" placeholder="RUT Testigo 1" value={formData.witness1_rut} onChange={e => setFormData({ ...formData, witness1_rut: e.target.value })} />
                             </div>
-                         </div>
+                        </div>
                     </div>
                 </div>
 
@@ -186,9 +185,9 @@ export const AmonestacionFormModal = ({ open, onClose, currentUserName, currentU
                     <button onClick={onClose} className="px-4 py-2 text-slate-600 font-medium hover:bg-slate-200 rounded-lg transition-colors">
                         Cancelar
                     </button>
-                    <button 
-                        onClick={handleGenerate} 
-                        disabled={!worker || !selectedCodeId} 
+                    <button
+                        onClick={handleGenerate}
+                        disabled={!worker || !selectedCodeId}
                         className="px-4 py-2 bg-indigo-600 text-white font-bold rounded-lg hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-indigo-600/20 transition-all active:scale-95"
                     >
                         Generar PDF
@@ -198,4 +197,3 @@ export const AmonestacionFormModal = ({ open, onClose, currentUserName, currentU
         </div>
     );
 };
-```

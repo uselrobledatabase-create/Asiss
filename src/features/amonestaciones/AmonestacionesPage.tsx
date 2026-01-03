@@ -1,4 +1,3 @@
-```javascript
 import { useState } from 'react';
 import { AmonestacionFormModal } from './components/AmonestacionFormModal';
 import { Icon } from '../../shared/components/common/Icon';
@@ -13,8 +12,8 @@ export const AmonestacionesPage = () => {
                     <h1 className="text-2xl font-bold text-slate-800">Amonestaciones y Constataciones</h1>
                     <p className="text-slate-500">Gestión de faltas y actas disciplinarias</p>
                 </div>
-                <button 
-                    onClick={() => setIsModalOpen(true)} 
+                <button
+                    onClick={() => setIsModalOpen(true)}
                     className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white font-medium rounded-lg hover:bg-indigo-700 shadow-md transition-colors"
                 >
                     <Icon name="plus" size={18} />
@@ -31,14 +30,13 @@ export const AmonestacionesPage = () => {
                 </p>
             </div>
 
-            <AmonestacionFormModal 
-                open={isModalOpen} 
+            <AmonestacionFormModal
+                open={isModalOpen}
                 onClose={() => setIsModalOpen(false)}
                 // TODO: Connect to real auth context
-                currentUserName="SUPERVISOR ACTIVO" 
+                currentUserName="SUPERVISOR ACTIVO"
                 currentUserCargo="SUPERVISOR"
             />
         </div>
     );
 };
-```
