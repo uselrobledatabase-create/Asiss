@@ -5,220 +5,221 @@ export const generateAmonestacionPDF = (data: AmonestacionFormData) => {
     const doc = new jsPDF();
 
     // Constants for layout
-    const PAGE_WIDTH = doc.internal.pageSize.getWidth(); // 210mm approx
+    const PAGE_WIDTH = doc.internal.pageSize.getWidth(); // 210mm
+    const PAGE_HEIGHT = doc.internal.pageSize.getHeight(); // 297mm
     const MARGIN = 15;
     const CONTENT_WIDTH = PAGE_WIDTH - (MARGIN * 2);
 
-    // Helper to draw boxed text field
+    let currentY = 20;
+
+    // Helper: Move Y and check validation
+    const addY = (amount: number) => {
+        currentY += amount;
+        // Basic page check could go here if needed, but for single page form we assume it fits or user edits text.
+    };
+
+    // Helper: Draw Text with wrapping
+    const drawText = (text: string, x: number, y: number, fontSize: number = 10, font: string = 'normal', color: string = '#000000', align: 'left' | 'center' | 'right' = 'left') => {
+        doc.setFontSize(fontSize);
+        doc.setFont('helvetica', font);
+        doc.setTextColor(color);
+        doc.text(text, x, y, { align });
+    };
+
+    // Helper: Boxed Field
     const drawField = (label: string, value: string, x: number, y: number, w: number, h: number = 7) => {
-        doc.setFontSize(9);
+        // Label
+        doc.setFontSize(7);
         doc.setFont('helvetica', 'bold');
-        doc.text(label, x, y - 2);
+        doc.setTextColor(100);
+        doc.text(label.toUpperCase(), x, y - 1);
 
-        doc.setDrawColor(0);
-        doc.setLineWidth(0.5);
-        doc.rect(x, y, w, h);
+        // Box
+        doc.setDrawColor(200);
+        doc.setLineWidth(0.1);
+        doc.setFillColor(255, 255, 255);
+        doc.lines([[w, 0], [0, h], [-w, 0], [0, -h]], x, y, [1, 1], 'S', true);
 
+        // Value
+        doc.setFontSize(9);
         doc.setFont('helvetica', 'normal');
-        doc.setFontSize(10);
-        // Clean value to avoid undefined
-        const safeValue = value || '';
-        doc.text(safeValue, x + 2, y + 5);
+        doc.setTextColor(0);
+
+        // Truncate or fit? let's fit
+        const cleanValue = value || '';
+        doc.text(cleanValue, x + 2, y + 4.5);
     };
 
     // --- HEADER ---
-    doc.setFontSize(14);
-    doc.setFont('helvetica', 'bold');
-    doc.text('ACTA DE CONSTATACION DE HECHOS', PAGE_WIDTH / 2, 20, { align: 'center' });
+    drawText('ACTA DE CONSTATACION DE HECHOS', PAGE_WIDTH / 2, currentY, 14, 'bold', '#000000', 'center');
+    addY(6);
 
-    // Decorative lines
+    // Decoration lines
+    doc.setDrawColor(0, 50, 150);
     doc.setLineWidth(0.5);
-    doc.setDrawColor(0, 0, 150); // Blueish
-    doc.line(MARGIN, 25, PAGE_WIDTH - MARGIN, 25);
-    doc.circle(PAGE_WIDTH / 2, 25, 1, 'F'); // Little decoration dot logic from image
-    doc.line(MARGIN, 27, PAGE_WIDTH - MARGIN, 27); // Double line effect
+    doc.line(MARGIN, currentY, PAGE_WIDTH - MARGIN, currentY);
+    addY(2);
+    doc.setLineWidth(0.2);
+    doc.line(MARGIN, currentY, PAGE_WIDTH - MARGIN, currentY);
 
-    // Logo Placeholder (Top Right)
+    // Logo (Simulated)
     doc.setTextColor(200, 0, 0);
-    doc.setFontSize(22);
     doc.setFont('helvetica', 'bolditalic');
-    doc.text('RBU', PAGE_WIDTH - 35, 20);
-    doc.setFontSize(10);
-    doc.text('Buses', PAGE_WIDTH - 35, 24);
-    doc.setTextColor(0); // Reset black
+    doc.setFontSize(18);
+    doc.text('RBU', PAGE_WIDTH - MARGIN - 15, 20);
+    doc.setFontSize(8);
+    doc.setTextColor(100);
+    doc.text('Santiago', PAGE_WIDTH - MARGIN - 15, 24);
 
-    let currentY = 35;
+    addY(10);
 
-    // --- DATE & TIME ---
-    drawField('FECHA', data.date, MARGIN, currentY, 50);
-    drawField('HORA', data.time, PAGE_WIDTH - MARGIN - 50, currentY, 50);
+    // --- DATE / TIME / PLACE ROW ---
+    const thirdW = CONTENT_WIDTH / 3;
+    drawField('Fecha', data.date, MARGIN, currentY, thirdW - 2);
+    drawField('Hora', data.time, MARGIN + thirdW, currentY, thirdW - 2);
+    drawField('Base / Terminal', data.worker_base, MARGIN + (thirdW * 2), currentY, thirdW);
 
-    currentY += 15;
+    addY(12);
 
-    // --- I. ANTECEDENTES PERSONALES ---
+    // --- SECTION I: INFRACTOR ---
+    drawText('I. ANTECEDENTES DEL TRABAJADOR (INFRACTOR)', MARGIN, currentY, 10, 'bold', '#000080'); // Navy blue
+    addY(5);
+
+    const halfW = CONTENT_WIDTH / 2;
+    drawField('Nombre Completo', data.worker_name, MARGIN, currentY, CONTENT_WIDTH);
+    addY(10);
+    // Row 2: RUT | Cargo | Turno
+    const colW = CONTENT_WIDTH / 3;
+    drawField('RUT', data.worker_rut, MARGIN, currentY, colW - 2);
+    drawField('Cargo', data.worker_cargo, MARGIN + colW, currentY, colW - 2);
+    drawField('Turno', data.shift_schedule || '', MARGIN + (colW * 2), currentY, colW);
+
+    addY(14);
+
+    // --- SECTION II: FALTA ---
+    drawText('II. TIPIFICACIÓN DE LA FALTA', MARGIN, currentY, 10, 'bold', '#000080');
+    addY(5);
+
+    drawField('Código de Falta', `${data.sanction_code_id}`, MARGIN, currentY, 20);
+    drawField('Gravedad', 'GRAVE / MENOS GRAVE', MARGIN + 22, currentY, 60); // Could accept severity dynamic
+
+    // Custom Checkboxes row
+    const checkY = currentY + 3;
+    const checkX = MARGIN + 90;
+
+    // Simple visual indicators instead of full interactive checkboxes
+    doc.setFontSize(8);
+    doc.setTextColor(100);
+    doc.text(`[ ${data.sanction_code_id === 8 ? 'X' : ' '} ] Desobediencia`, checkX, checkY);
+    doc.text(`[ ${[4, 18].includes(data.sanction_code_id) ? 'X' : ' '} ] Atrasos`, checkX + 35, checkY);
+    doc.text(`[ ${data.sanction_code_id === 50 ? 'X' : ' '} ] Abandono`, checkX + 65, checkY);
+
+    addY(12);
+
+    // --- SECTION III: LUGAR DETALLADO ---
+    drawText('III. LUGAR DE LOS HECHOS', MARGIN, currentY, 10, 'bold', '#000080');
+    addY(5);
+
+    drawField('Terminal / Cabezal', data.place_terminal, MARGIN, currentY, halfW - 2);
+    drawField('Vía Pública (Calle/Lugar)', data.place_public_way, MARGIN + halfW, currentY, halfW);
+    addY(10);
+    drawField('PPU Bus (Opcional)', data.place_ppu, MARGIN, currentY, 30);
+    drawField('Detalle Específico', data.place_detail, MARGIN + 32, currentY, CONTENT_WIDTH - 32);
+
+    addY(14);
+
+    // --- SECTION IV: RELATO (The core part) ---
+    drawText('IV. RELATO CIRCUNSTANCIADO DE LOS HECHOS', MARGIN, currentY, 10, 'bold', '#000080');
+    addY(5);
+
+    // Measure text height
     doc.setFontSize(9);
-    doc.setFont('helvetica', 'bold');
-    doc.text('I. Antecedentes Personales del infractor', MARGIN, currentY);
-    currentY += 3;
-    drawField('Nombre', data.worker_name, MARGIN, currentY, CONTENT_WIDTH);
-    currentY += 9;
-    drawField('Rut', data.worker_rut, MARGIN, currentY, CONTENT_WIDTH);
-    currentY += 9;
-    drawField('Cargo', data.worker_cargo, MARGIN, currentY, CONTENT_WIDTH);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(0);
 
-    currentY += 15;
+    const textLines = doc.splitTextToSize(data.description.toUpperCase(), CONTENT_WIDTH - 6);
+    const textHeight = textLines.length * 4.5;
+    const boxHeight = Math.max(textHeight + 10, 60); // Min height 60mm
 
-    // --- II. ANTECEDENTES DE LA FALTA ---
-    doc.setFontSize(9);
-    doc.setFont('helvetica', 'bold');
-    doc.text('II. Antecedentes de la falta', MARGIN, currentY);
-    currentY += 3;
+    // Draw flexible box
+    doc.setDrawColor(200);
+    doc.setFillColor(250, 250, 255); // Very light blue bg
+    doc.rect(MARGIN, currentY, CONTENT_WIDTH, boxHeight, 'FD');
 
-    // Draw grid of checkboxes
-    // Row 1
-    const col1 = MARGIN;
-    const col2 = MARGIN + 65;
-    const col3 = MARGIN + 125;
+    doc.text(textLines, MARGIN + 3, currentY + 6);
 
-    // Helper for checkbox
-    const drawCheck = (label: string, checked: boolean, x: number, y: number) => {
-        doc.rect(x, y, 5, 5);
-        if (checked) {
-            doc.setFontSize(10);
-            doc.text('X', x + 1, y + 4);
-        }
+    addY(boxHeight + 8);
+
+    // --- SECTION V: TESTIGOS ---
+    drawText('V. TESTIGOS PRESENCIALES', MARGIN, currentY, 10, 'bold', '#000080');
+    addY(5);
+
+    // Determine how many witness boxes
+    const hasWitness2 = !!(data.witness2_name || data.witness2_rut);
+    const wBoxW = hasWitness2 ? (CONTENT_WIDTH / 2) - 3 : (CONTENT_WIDTH / 2); // Center single box?
+
+    // Witness 1
+    const drawWitnessBox = (wName: string, wRut: string, wCargo: string, x: number, y: number, w: number) => {
+        doc.setDrawColor(180);
+        doc.rect(x, y, w, 22);
+
         doc.setFontSize(7);
-        doc.text(label, x + 7, y + 4);
+        doc.setFont('helvetica', 'bold');
+        doc.text('NOMBRE:', x + 2, y + 5);
+        doc.setFont('helvetica', 'normal');
+        doc.text(wName || '', x + 15, y + 5);
+
+        doc.setFont('helvetica', 'bold');
+        doc.text('RUT:', x + 2, y + 10);
+        doc.setFont('helvetica', 'normal');
+        doc.text(wRut || '', x + 15, y + 10);
+
+        doc.setFont('helvetica', 'bold');
+        doc.text('CARGO:', x + 2, y + 15);
+        doc.setFont('helvetica', 'normal');
+        doc.text(wCargo || '', x + 15, y + 15);
+
+        doc.setFontSize(6);
+        doc.setTextColor(150);
+        doc.text('FIRMA TESTIGO', x + w - 30, y + 18);
+        doc.setTextColor(0);
     };
 
-    // We can't map all codes perfectly to checkboxes without a huge map, 
-    // so we will tick "Otros" if it's not a standard one, or try to guess.
-    // For now, let's leave checkboxes empty mostly unless specific.
-    // Or just putting the code in the "CODIGO" box is the most important part.
+    // If single witness, center it potentially, or just left align.
+    // User asked "testigos pueden ser uno". Let's place W1 left.
+    drawWitnessBox(data.witness1_name, data.witness1_rut, data.witness1_cargo, MARGIN, currentY, wBoxW);
 
-    drawCheck('Abandono de trabajo', data.sanction_code_id === 50, col1, currentY);
-    drawCheck('Agresión verbal', data.sanction_code_id === 32, col2, currentY);
-    drawCheck('Dia falta', false, col3, currentY); // Logic needed?
+    if (hasWitness2) {
+        drawWitnessBox(data.witness2_name, data.witness2_rut, data.witness2_cargo, MARGIN + wBoxW + 6, currentY, wBoxW);
+    }
 
-    currentY += 7;
-    drawCheck('Negativa a trabajar', data.sanction_code_id === 51, col1, currentY);
-    drawCheck('Agresión física', data.sanction_code_id === 47, col2, currentY);
-    drawCheck('Atrasos', [4, 18].includes(data.sanction_code_id), col3, currentY);
+    addY(30);
 
-    currentY += 7;
-    drawCheck('Desobedecer Instrucción', [8, 29].includes(data.sanction_code_id), col1, currentY);
-    drawCheck('Incumplimiento', true, col2, currentY); // Generic check usually
+    // --- FOOTER: RESPONSABLE / JEFE DE TERMINAL ---
+    // User wants this fixed at bottom
+    // We check space. If not enough, add page? usually fits.
 
-    // CODIGO BOX
-    doc.rect(col3, currentY - 2, 40, 8);
-    doc.setFontSize(12);
+    const footerY = PAGE_HEIGHT - 45; // Fixed position at bottom
+
+    // Draw line
+    doc.setDrawColor(0);
+    doc.setLineWidth(0.5);
+    doc.line(MARGIN, footerY, PAGE_WIDTH - MARGIN, footerY);
+
+    doc.setFontSize(8);
     doc.setFont('helvetica', 'bold');
-    doc.text(`CODIGO ${data.sanction_code_id}`, col3 + 5, currentY + 4);
+    doc.text('RESPONSABLE DE LA CONSTATACIÓN (JEFE DE TERMINAL / SUPERVISOR)', MARGIN, footerY + 5);
 
-    currentY += 15;
-
-    // --- III. ANTECEDENTES DEL LUGAR ---
-    doc.setFontSize(9);
-    doc.setFont('helvetica', 'bold');
-    doc.text('III. Antecedentes del lugar de la falta o incidente', MARGIN, currentY);
-    currentY += 3;
-
-    drawField('cabezal o terminal', data.place_terminal, MARGIN + 40, currentY, CONTENT_WIDTH - 40);
-    doc.setFontSize(8); doc.text('cabezal o terminal', MARGIN, currentY + 5);
-    currentY += 9;
-
-    drawField('via publica', data.place_public_way, MARGIN + 40, currentY, CONTENT_WIDTH - 40);
-    doc.setFontSize(8); doc.text('via publica', MARGIN, currentY + 5);
-    currentY += 9;
-
-    // Split row for Vehicle / PPU
-    drawField('vehiculo', data.place_vehicle, MARGIN + 40, currentY, 30);
-    drawField('PPU', data.place_ppu, MARGIN + 80, currentY, CONTENT_WIDTH - 80);
-    doc.setFontSize(8); doc.text('vehiculo / PPU', MARGIN, currentY + 5);
-    currentY += 9;
-
-    drawField('detalle del lugar', data.place_detail, MARGIN + 40, currentY, CONTENT_WIDTH - 40);
-    doc.setFontSize(8); doc.text('detalle del lugar', MARGIN, currentY + 5);
-
-    currentY += 15;
-
-    // --- IV. INVOLUCRADOS ---
-    doc.setFontSize(9);
-    doc.setFont('helvetica', 'bold');
-    doc.text('IV. Antecedentes de los involucrados en el incidente', MARGIN, currentY);
-    currentY += 3;
-
-    drawField('Jefatura', data.involved_jefatura, MARGIN + 40, currentY, CONTENT_WIDTH - 40);
-    doc.setFontSize(8); doc.text('Jefatura', MARGIN, currentY + 5);
-    currentY += 9;
-
-    drawField('Compañeros', data.involved_companeros, MARGIN + 40, currentY, CONTENT_WIDTH - 40);
-    doc.setFontSize(8); doc.text('Compañeros', MARGIN, currentY + 5);
-    currentY += 9;
-
-    drawField('Otro (esp)', data.involved_other, MARGIN + 40, currentY, CONTENT_WIDTH - 40);
-    doc.setFontSize(8); doc.text('Otro (esp)', MARGIN, currentY + 5);
-
-    currentY += 15;
-
-    // --- V. DESCRIPTION ---
-    doc.setFontSize(9);
-    doc.setFont('helvetica', 'bold');
-    doc.text('V. Descripcion detallada de los hechos', MARGIN, currentY);
-    currentY += 3;
-
-    // Large Box
-    const boxHeight = 60;
-    doc.rect(MARGIN, currentY, CONTENT_WIDTH, boxHeight);
-
+    doc.setFontSize(10);
     doc.setFont('helvetica', 'normal');
-    doc.setFontSize(9);
-    // Split text to fit
-    const splitText = doc.splitTextToSize(data.description.toUpperCase(), CONTENT_WIDTH - 4);
-    doc.text(splitText, MARGIN + 2, currentY + 5);
+    doc.text(`NOMBRE:  ${data.responsible_name.toUpperCase()}`, MARGIN, footerY + 12);
+    doc.text(`CARGO:    ${data.responsible_cargo.toUpperCase()}`, MARGIN, footerY + 18);
 
-    currentY += boxHeight + 10;
-
-    // --- VI. TESTIGOS ---
-    doc.setFontSize(9);
-    doc.setFont('helvetica', 'bold');
-    doc.text('VI. Testigos Presenciales', MARGIN, currentY);
-
-    const wHalf = CONTENT_WIDTH / 2 - 2;
-
-    // Witness 1 Box
-    const w1Y = currentY + 3;
-    doc.rect(MARGIN, w1Y, wHalf, 25);
+    // Signature space
     doc.setFontSize(8);
-    doc.text(`Nombre: ${data.witness1_name}`, MARGIN + 2, w1Y + 5);
-    doc.text(`Rut: ${data.witness1_rut}`, MARGIN + 2, w1Y + 10);
-    doc.text(`Cargo: ${data.witness1_cargo}`, MARGIN + 2, w1Y + 15);
-    doc.text('Firma:', MARGIN + 2, w1Y + 22);
-
-    // Witness 2 Box
-    doc.rect(MARGIN + wHalf + 4, w1Y, wHalf, 25);
-    doc.text(`Nombre: ${data.witness2_name}`, MARGIN + wHalf + 6, w1Y + 5);
-    doc.text(`Rut: ${data.witness2_rut}`, MARGIN + wHalf + 6, w1Y + 10);
-    doc.text(`Cargo: ${data.witness2_cargo}`, MARGIN + wHalf + 6, w1Y + 15);
-    doc.text('Firma:', MARGIN + wHalf + 6, w1Y + 22);
-
-    currentY = w1Y + 30;
-
-    // --- VII. RESPONSABLE ---
-    doc.setFontSize(9);
-    doc.setFont('helvetica', 'bold');
-    doc.text('VII. Responsable de la constatación', MARGIN, currentY);
-    currentY += 3;
-
-    doc.rect(MARGIN, currentY, CONTENT_WIDTH, 15);
-    doc.setFontSize(8);
-    doc.text(`Nombre: ${data.responsible_name}`, MARGIN + 2, currentY + 5);
-    doc.text(`Cargo: ${data.responsible_cargo}`, MARGIN + 2, currentY + 12);
-
-    // FINAL SIGNATURE LINE
-    currentY += 30;
-    doc.line(PAGE_WIDTH - 80, currentY, PAGE_WIDTH - 20, currentY);
-    doc.text('FIRMA', PAGE_WIDTH - 60, currentY + 5, { align: 'center' });
+    doc.text('FIRMA Y TIMBRE', PAGE_WIDTH - 50, footerY + 25);
+    doc.setDrawColor(150);
+    doc.rect(PAGE_WIDTH - 60, footerY + 5, 45, 25); // Signature box
 
     doc.save(`Amonestacion_${data.worker_rut}_${data.date}.pdf`);
 };

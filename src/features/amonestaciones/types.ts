@@ -13,6 +13,7 @@ export interface AmonestacionFormData {
     worker_name: string;
     worker_cargo: string;
     worker_base: string; // derived from terminal
+    shift_schedule?: string;
 
     date: string;
     time: string;
