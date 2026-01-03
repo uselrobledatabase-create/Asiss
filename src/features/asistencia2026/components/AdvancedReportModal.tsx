@@ -15,7 +15,7 @@ interface Props {
     marks: AttendanceMark[];
     licenses: AttendanceLicense[];
     permissions: AttendancePermission[];
-    vacations: AttendanceVacation[];
+    vacations: { rut?: string; staff_id?: string; start_date: string; end_date: string }[];
     overrides: StaffShiftOverride[];
     incidences: AttendanceIncidences;
     specialTemplates: StaffShiftSpecialTemplate[];

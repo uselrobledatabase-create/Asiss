@@ -495,7 +495,7 @@ export async function fetchVacationsForRange(
     staffIds: string[],
     startDate: string,
     endDate: string
-): Promise<{ staff_id: string; start_date: string; end_date: string }[]> {
+): Promise<{ staff_id: string; rut: string; start_date: string; end_date: string }[]> {
     if (!isSupabaseConfigured() || staffIds.length === 0) return [];
 
     // Use existing vacaciones table - join by RUT to get staff_id
@@ -520,6 +520,7 @@ export async function fetchVacationsForRange(
 
     return (data || []).map(v => ({
         staff_id: rutToId[v.rut],
+        rut: v.rut,
         start_date: v.start_date,
         end_date: v.end_date,
     }));
