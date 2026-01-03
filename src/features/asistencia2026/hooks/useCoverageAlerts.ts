@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { StaffWithShift, ShiftType, AttendanceMark, AttendanceLicense, AttendanceVacation, AttendancePermission, StaffShiftSpecialTemplate, StaffShiftOverride, AttendanceIncidences } from '../types';
-import { getFallbackShiftType, isOffDay, getSpecialShiftDetails, getTurnoFromHorario, formatDayOfWeek, isPastDate } from '../utils/shiftEngine';
+import { getFallbackShiftType, isOffDay, getSpecialShiftDetails, getTurnoFromHorario, formatDayOfWeek, isPastDate, determineDailyShift } from '../utils/shiftEngine';
 
 interface CoverageAlert {
     id: string;
@@ -93,26 +93,15 @@ export const useCoverageAlerts = (
                 // Citado = !isOff && !isAbsent
                 const isCitado = !isOff && !isAbsent;
 
-                // 3. Determine Shift (DIA/NOCHE) 
-                let shift: 'DIA' | 'NOCHE' = getTurnoFromHorario(s.horario);
-
-                // Fallback: Check Shift Name/Code if Horario didn't catch it
-                if (s.shift) {
-                    const st = shiftTypes.find(t => t.code === s.shift!.shift_type_code);
-                    const shiftNameUpper = (st?.name || '').toUpperCase();
-                    const shiftCodeUpper = (s.shift.shift_type_code || '').toUpperCase();
-                    if (shiftNameUpper.includes('NOCHE') || shiftCodeUpper.includes('NOCHE')) {
-                        shift = 'NOCHE';
-                    }
-                }
-
-                if (s.shift?.shift_type_code === 'ESPECIAL') {
-                    const specialTemplateFound = specialTemplates.find(t => t.staff_id === s.id);
-                    if (specialTemplateFound) {
-                        const details = getSpecialShiftDetails(date, specialTemplateFound);
-                        shift = details.type;
-                    }
-                }
+                // 3. Determine Shift (DIA/NOCHE) - Consolidated Logic
+                const shift: 'DIA' | 'NOCHE' = determineDailyShift(
+                    s.horario,
+                    s.shift,
+                    date,
+                    specialTemplates,
+                    s.id,
+                    shiftTypes
+                );
 
                 // 4. Accumulate
                 const term = s.terminal_code;

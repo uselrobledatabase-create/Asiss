@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react';
 import { X, AlertTriangle, ShieldAlert, Info, Filter, Users, Calendar, Activity } from 'lucide-react';
 import { StaffWithShift, ShiftType, AttendanceMark, AttendanceLicense, AttendanceVacation, AttendancePermission, StaffShiftSpecialTemplate, StaffShiftOverride, AttendanceIncidences, CARGO_ORDER, DAY_NAMES_SHORT } from '../types';
 import { useCoverageAlerts } from '../hooks/useCoverageAlerts';
-import { formatDayOfWeek, formatDayNumber, isToday, isOffDay } from '../utils/shiftEngine';
+import { formatDayOfWeek, formatDayNumber, isToday, isOffDay, determineDailyShift } from '../utils/shiftEngine';
 import { displayTerminal } from '../../../shared/utils/terminal';
 
 interface Props {
@@ -286,6 +286,15 @@ export const AdvancedReportModal = ({
                                                         isOff = dw === 0 || dw === 6;
                                                     }
 
+                                                    const dailyShift = determineDailyShift(
+                                                        person.horario,
+                                                        person.shift,
+                                                        date,
+                                                        specialTemplates,
+                                                        person.id,
+                                                        shiftTypes
+                                                    );
+
                                                     if (isOff) {
                                                         status = 'FREE';
                                                         label = 'L'; // Libre
@@ -299,6 +308,13 @@ export const AdvancedReportModal = ({
                                                         if (isLic) { status = 'ABSENT'; label = 'LIC'; colorClass = 'bg-purple-100 text-purple-700 ring-1 ring-purple-200'; }
                                                         else if (isVac) { status = 'ABSENT'; label = 'VAC'; colorClass = 'bg-teal-100 text-teal-700 ring-1 ring-teal-200'; }
                                                         else if (isPerm) { status = 'ABSENT'; label = 'PER'; colorClass = 'bg-amber-100 text-amber-700 ring-1 ring-amber-200'; }
+                                                        else {
+                                                            // Day or Night
+                                                            label = dailyShift === 'DIA' ? 'D' : 'N';
+                                                            colorClass = dailyShift === 'DIA'
+                                                                ? 'bg-amber-100 text-amber-700 font-extrabold'
+                                                                : 'bg-indigo-100 text-indigo-700 font-extrabold';
+                                                        }
                                                     }
 
                                                     return (

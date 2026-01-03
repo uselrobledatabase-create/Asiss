@@ -384,5 +384,50 @@ export function formatWeekRange(weekStartDate: string): string {
     return `${startDay} ${startMonth} - ${endDay} ${endMonth} ${year}`;
 }
 
+/**
+ * Determine the specific shift (DIA/NOCHE) for a staff member on a specific date.
+ * Consolidates logic from hooks and components.
+ */
+export function determineDailyShift(
+    horario: string | undefined,
+    shift: { shift_type_code: ShiftTypeCode; name?: string } | undefined, // Extended shift info
+    date: string,
+    specialTemplates: StaffShiftSpecialTemplate[],
+    staffId: string,
+    shiftTypes: ShiftType[] // Needed for name lookup
+): 'DIA' | 'NOCHE' {
+    // 1. Try Horario string first (most specific)
+    let dailyShift: 'DIA' | 'NOCHE' = getTurnoFromHorario(horario || '');
+
+    // 2. Fallback: Check global Shift Name/Code
+    if (shift) {
+        const globalShiftDef = shiftTypes.find(t => t.code === shift.shift_type_code);
+        const nameUpper = (globalShiftDef?.name || shift.name || '').toUpperCase();
+        const codeUpper = (shift.shift_type_code || '').toUpperCase();
+
+        // If the shift itself implies Night, and Horario was default/unknown (DIA), force Night
+        if (nameUpper.includes('NOCHE') || codeUpper.includes('NOCHE')) {
+            // Only override if getTurnoFromHorario returned 'DIA' (default) maybe incorrectly
+            // Actually, if the roster says "Turno Noche", it IS Night, regardless of horario string usually.
+            // But let's respect specific "08:00" in horario if present? 
+            // User case: "Turno Noche" label with empty horario.
+            if (dailyShift === 'DIA' && !horario?.match(/^\d{1,2}:\d{2}/)) {
+                dailyShift = 'NOCHE';
+            }
+        }
+    }
+
+    // 3. Special Manual Shift Override
+    if (shift?.shift_type_code === 'ESPECIAL') {
+        const specialTemplateFound = specialTemplates.find(t => t.staff_id === staffId);
+        if (specialTemplateFound) {
+            const details = getSpecialShiftDetails(date, specialTemplateFound);
+            dailyShift = details.type;
+        }
+    }
+
+    return dailyShift;
+}
+
 // Removed Ley 40 automatic reduction logic as per user request.
 // Now relying solely on Manual/Special Shift Templates for early exits.
