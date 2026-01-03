@@ -216,6 +216,9 @@ export function getSpecialShiftDetails(
 export function getTurnoFromHorario(horario: string): 'DIA' | 'NOCHE' {
     if (!horario) return 'DIA';
 
+    const upper = horario.toUpperCase();
+    if (upper.includes('NOCHE') || upper.includes('NIGHT')) return 'NOCHE';
+
     // Parse start time from horario (e.g., "10:00-20:00" or "22:00-06:00")
     const match = horario.match(/^(\d{1,2}):(\d{2})/);
     if (!match) return 'DIA';
