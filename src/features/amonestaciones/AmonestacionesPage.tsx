@@ -1,5 +1,5 @@
+```javascript
 import { useState } from 'react';
-import { Button } from '../../components/ui/button';
 import { AmonestacionFormModal } from './components/AmonestacionFormModal';
 import { Icon } from '../../shared/components/common/Icon';
 
@@ -13,28 +13,32 @@ export const AmonestacionesPage = () => {
                     <h1 className="text-2xl font-bold text-slate-800">Amonestaciones y Constataciones</h1>
                     <p className="text-slate-500">Gestión de faltas y actas disciplinarias</p>
                 </div>
-                <Button onClick={() => setIsModalOpen(true)} className="bg-indigo-600">
-                    <Icon name="plus" className="mr-2 h-4 w-4" />
+                <button 
+                    onClick={() => setIsModalOpen(true)} 
+                    className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white font-medium rounded-lg hover:bg-indigo-700 shadow-md transition-colors"
+                >
+                    <Icon name="plus" size={18} />
                     Nueva Amonestación
-                </Button>
+                </button>
             </div>
 
             {/* Placeholder for History List - Future feature */}
             <div className="text-center py-20 bg-slate-50 rounded-xl border border-dashed border-slate-300">
-                <Icon name="file-text" className="mx-auto h-12 w-12 text-slate-300 mb-3" />
+                <Icon name="file-text" size={48} className="mx-auto text-slate-300 mb-3" />
                 <h3 className="text-lg font-medium text-slate-700">Historial de Amonestaciones</h3>
                 <p className="text-slate-500 max-w-md mx-auto mt-2">
                     Aquí aparecerán las amonestaciones generadas. Por ahora, utiliza el botón "Nueva Amonestación" para generar y descargar PDFs.
                 </p>
             </div>
 
-            <AmonestacionFormModal
-                open={isModalOpen}
+            <AmonestacionFormModal 
+                open={isModalOpen} 
                 onClose={() => setIsModalOpen(false)}
                 // TODO: Connect to real auth context
-                currentUserName="SUPERVISOR ACTIVO"
+                currentUserName="SUPERVISOR ACTIVO" 
                 currentUserCargo="SUPERVISOR"
             />
         </div>
     );
 };
+```
