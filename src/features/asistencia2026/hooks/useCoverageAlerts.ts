@@ -95,6 +95,16 @@ export const useCoverageAlerts = (
 
                 // 3. Determine Shift (DIA/NOCHE) 
                 let shift: 'DIA' | 'NOCHE' = getTurnoFromHorario(s.horario);
+
+                // Fallback: Check Shift Name/Code if Horario didn't catch it
+                if (s.shift) {
+                    const shiftNameUpper = (s.shift.name || '').toUpperCase();
+                    const shiftCodeUpper = (s.shift.shift_type_code || '').toUpperCase();
+                    if (shiftNameUpper.includes('NOCHE') || shiftCodeUpper.includes('NOCHE')) {
+                        shift = 'NOCHE';
+                    }
+                }
+
                 if (s.shift?.shift_type_code === 'ESPECIAL') {
                     const specialTemplateFound = specialTemplates.find(t => t.staff_id === s.id);
                     if (specialTemplateFound) {
