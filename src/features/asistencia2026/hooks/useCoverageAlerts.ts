@@ -98,7 +98,8 @@ export const useCoverageAlerts = (
 
                 // Fallback: Check Shift Name/Code if Horario didn't catch it
                 if (s.shift) {
-                    const shiftNameUpper = (s.shift.name || '').toUpperCase();
+                    const st = shiftTypes.find(t => t.code === s.shift!.shift_type_code);
+                    const shiftNameUpper = (st?.name || '').toUpperCase();
                     const shiftCodeUpper = (s.shift.shift_type_code || '').toUpperCase();
                     if (shiftNameUpper.includes('NOCHE') || shiftCodeUpper.includes('NOCHE')) {
                         shift = 'NOCHE';
