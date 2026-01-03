@@ -45,7 +45,8 @@ export const useCoverageAlerts = (
         weekDates.forEach((date) => {
             // Group by Terminal -> Shift -> Cargo
             // We track: citados (Scheduled), libres (Off)
-            const coverage: Record<string, Record<string, Record<string, { citados: number; libres: number }>>> = {};
+            // We track: citados (Scheduled), libres (Off), ausentes (Absent), total (Total Staff)
+            const coverage: Record<string, Record<string, Record<string, { citados: number; libres: number; ausentes: number; total: number }>>> = {};
 
             staff.forEach((s) => {
                 if (s.status === 'DESVINCULADO') return;
@@ -108,10 +109,12 @@ export const useCoverageAlerts = (
                 const cargo = s.cargo.toUpperCase();
 
                 if (!coverage[term]) coverage[term] = { DIA: {}, NOCHE: {} };
-                if (!coverage[term][shift][cargo]) coverage[term][shift][cargo] = { citados: 0, libres: 0 };
+                if (!coverage[term][shift][cargo]) coverage[term][shift][cargo] = { citados: 0, libres: 0, ausentes: 0, total: 0 };
 
+                coverage[term][shift][cargo].total++;
                 if (isCitado) coverage[term][shift][cargo].citados++;
                 if (isOff) coverage[term][shift][cargo].libres++;
+                if (isAbsent && !isOff) coverage[term][shift][cargo].ausentes++; // Only count absence if they were supposed to work (not off)
             });
 
             // Analyze Coverage & Generate Alerts
@@ -121,12 +124,16 @@ export const useCoverageAlerts = (
 
                     // Check Supervisor Coverage
                     // Find all keys containing 'SUPERVISOR'
-                    const supervisorCounts = Object.keys(cargos)
+                    const supStats = Object.keys(cargos)
                         .filter(k => k.includes('SUPERVISOR'))
-                        .map(k => cargos[k].citados)
-                        .reduce((a, b) => a + b, 0);
+                        .reduce((acc, k) => ({
+                            citados: acc.citados + cargos[k].citados,
+                            libres: acc.libres + cargos[k].libres,
+                            ausentes: acc.ausentes + cargos[k].ausentes,
+                            total: acc.total + cargos[k].total
+                        }), { citados: 0, libres: 0, ausentes: 0, total: 0 });
 
-                    if (supervisorCounts < MIN_STAFFING['SUPERVISOR']) {
+                    if (supStats.citados < MIN_STAFFING['SUPERVISOR']) {
                         alerts.push({
                             id: `${date}-${term}-${shift}-NOSUP`,
                             date,
@@ -134,7 +141,7 @@ export const useCoverageAlerts = (
                             role: 'SUPERVISOR',
                             shift,
                             level: 'CRITICAL',
-                            message: `Sin Supervisor asignado en turno ${shift} (${term}). Requeridos: ${MIN_STAFFING['SUPERVISOR']}, Citados: ${supervisorCounts}`
+                            message: `Sin Supervisor asignado en turno ${shift} (${term}). Requeridos: ${MIN_STAFFING['SUPERVISOR']} | Actual: ${supStats.citados} (Total: ${supStats.total}, Libres: ${supStats.libres}, Ausentes: ${supStats.ausentes})`
                         });
                     }
 
@@ -142,15 +149,20 @@ export const useCoverageAlerts = (
                     Object.keys(MIN_STAFFING).forEach((roleKeyword) => {
                         if (roleKeyword === 'SUPERVISOR') return;
 
-                        const citadosCount = Object.keys(cargos)
+                        const stats = Object.keys(cargos)
                             .filter(k => k.includes(roleKeyword))
-                            .reduce((acc, k) => acc + cargos[k].citados, 0);
+                            .reduce((acc, k) => ({
+                                citados: acc.citados + cargos[k].citados,
+                                libres: acc.libres + cargos[k].libres,
+                                ausentes: acc.ausentes + cargos[k].ausentes,
+                                total: acc.total + cargos[k].total
+                            }), { citados: 0, libres: 0, ausentes: 0, total: 0 });
 
                         const required = MIN_STAFFING[roleKeyword];
 
-                        if (citadosCount < required) {
-                            const deficit = required - citadosCount;
-                            const level = citadosCount === 0 ? 'CRITICAL' : 'WARNING';
+                        if (stats.citados < required) {
+                            const deficit = required - stats.citados;
+                            const level = stats.citados === 0 ? 'CRITICAL' : 'WARNING';
                             alerts.push({
                                 id: `${date}-${term}-${shift}-${roleKeyword}`,
                                 date,
@@ -158,7 +170,7 @@ export const useCoverageAlerts = (
                                 role: roleKeyword,
                                 shift,
                                 level,
-                                message: `Faltan ${deficit} ${roleKeyword}(s) en turno ${shift}. (Citados: ${citadosCount}/${required})`
+                                message: `Faltan ${deficit} ${roleKeyword}(s) en turno ${shift}. (Citados: ${stats.citados}/${required} | Dotación: ${stats.total}, Libres: ${stats.libres}, Ausentes: ${stats.ausentes})`
                             });
                         }
                     });

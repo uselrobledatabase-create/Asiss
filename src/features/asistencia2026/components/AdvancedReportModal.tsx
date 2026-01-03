@@ -165,7 +165,18 @@ export const AdvancedReportModal = ({
                                     </div>
                                 ) : (
                                     alerts.map((alert) => (
-                                        <div key={alert.id} className="bg-white p-4 rounded-xl border border-slate-100 shadow-sm relative overflow-hidden group hover:shadow-md transition-shadow">
+                                        <div
+                                            key={alert.id}
+                                            onClick={() => {
+                                                setSelectedTerminal(alert.terminal);
+                                                // Map generic role keyword to simpler filter for display if needed, 
+                                                // but our selector values match logic keywords (SUPERVISOR, etc)
+                                                // Except 'CLEANER' maps to 'CLEANER' in logic?
+                                                // Logic uses 'CLEANER', Selector uses 'CLEANER'. Matches.
+                                                setSelectedRole(alert.role);
+                                            }}
+                                            className="bg-white p-4 rounded-xl border border-slate-100 shadow-sm relative overflow-hidden group hover:shadow-md transition-all cursor-pointer hover:border-indigo-200 active:scale-[0.98]"
+                                        >
                                             <div className={`absolute left-0 top-0 bottom-0 w-1 ${alert.level === 'CRITICAL' ? 'bg-red-500' :
                                                 alert.level === 'WARNING' ? 'bg-amber-500' : 'bg-blue-500'
                                                 }`} />
@@ -178,6 +189,9 @@ export const AdvancedReportModal = ({
                                                 </div>
                                                 <p className="text-slate-800 text-sm font-semibold leading-snug">
                                                     {alert.message}
+                                                </p>
+                                                <p className="text-[10px] text-indigo-500 font-bold mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                    Clic para filtrar tabla →
                                                 </p>
                                             </div>
                                         </div>
