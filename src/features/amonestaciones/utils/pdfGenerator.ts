@@ -2,219 +2,293 @@ import jsPDF from 'jspdf';
 import { AmonestacionFormData } from '../types';
 
 export const generateAmonestacionPDF = (data: AmonestacionFormData) => {
+    // A4 Size: 210mm x 297mm
     const doc = new jsPDF();
 
-    // Layout Config
-    const PAGE_WIDTH = doc.internal.pageSize.getWidth(); // 210mm
-    const PAGE_HEIGHT = doc.internal.pageSize.getHeight(); // 297mm
-    const MARGIN = 15;
-    const CONTENT_WIDTH = PAGE_WIDTH - (MARGIN * 2);
-    const LINE_HEIGHT = 7;
+    // --- CONFIG & STYLES ---
+    const BLUE_COLOR = [0, 74, 153] as [number, number, number]; // #004a99
+    const PAGE_W = 210;
+    const PAGE_H = 297;
+    const MARGIN_X = 15;
+    const CONTENT_W = PAGE_W - (MARGIN_X * 2);
 
-    let currentY = 20;
+    let y = 10; // Current Y Cursor
 
     // --- UTILS ---
-    const addY = (amount: number) => currentY += amount;
+    const drawSectionTitle = (title: string, yPos: number) => {
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(10);
+        doc.setTextColor(0, 0, 0);
+        doc.text(title, MARGIN_X, yPos);
+        return 6; // height consumed
+    };
 
-    // Draw a cell in a grid
-    const drawCell = (label: string, value: string, x: number, y: number, w: number, h: number = 8, labelWidth: number = 0) => {
-        // Box
-        doc.setDrawColor(0);
-        doc.setLineWidth(0.3);
-        doc.setFillColor(255, 255, 255);
-        doc.rect(x, y, w, h);
-
+    const drawBoxedField = (label: string, value: string, x: number, yPos: number, w: number, labelWidth: number = 0) => {
         // Label
-        if (label) {
-            doc.setFont('helvetica', 'bold');
-            doc.setFontSize(8);
-            doc.setTextColor(50);
-            doc.text(label.toUpperCase(), x + 2, y + (h / 2) + 1.5); // Vertically centered approx
-        }
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(9);
+        doc.text(label, x, yPos + 4);
+
+        // Box
+        const boxX = x + labelWidth;
+        const boxW = w - labelWidth;
+        const boxH = 6;
+
+        doc.setDrawColor(0);
+        doc.setLineWidth(0.2);
+        doc.rect(boxX, yPos, boxW, boxH);
 
         // Value
         if (value) {
             doc.setFont('helvetica', 'normal');
             doc.setFontSize(9);
-            doc.setTextColor(0);
-            const valX = labelWidth > 0 ? x + labelWidth + 2 : x + 2; // If label width set, offset value
-
-            // Allow wrapping if value is long? For simple cells, just print.
-            // If label is present inline:
-            if (labelWidth > 0) {
-                doc.text(value.toUpperCase(), valX, y + (h / 2) + 1.5);
-            } else {
-                // Label was just a title above? No, this function assumes inline or block. 
-                // If no labelWidth provided, assume Value Only or Label is printed diff.
-                // Let's assume this is a value cell.
-                doc.text(value.toUpperCase(), x + 2, y + (h / 2) + 1.5);
-            }
+            // Center text in box vertically? or just padding
+            doc.text(value.toUpperCase(), boxX + 2, yPos + 4.5);
         }
     };
 
-    // Draw Section Header
-    const drawSectionHeader = (title: string, y: number) => {
-        doc.setFillColor(230, 230, 230); // Light Gray
-        doc.setDrawColor(0);
-        doc.rect(MARGIN, y, CONTENT_WIDTH, 6, 'FD');
+    const drawLineInput = (label: string, value: string, x: number, yPos: number, w: number, labelWidth: number = 0) => {
         doc.setFont('helvetica', 'bold');
         doc.setFontSize(9);
-        doc.setTextColor(0);
-        doc.text(title.toUpperCase(), MARGIN + 2, y + 4);
-        return 6;
+        doc.text(label, x, yPos + 4);
+
+        const lineX = x + labelWidth;
+        const lineW = w - labelWidth;
+        // Draw line bottom
+        doc.line(lineX, yPos + 6, lineX + lineW, yPos + 6);
+
+        if (value) {
+            doc.setFont('helvetica', 'normal');
+            doc.setFontSize(9);
+            doc.text(value.toUpperCase(), lineX + 2, yPos + 4.5);
+        }
     };
 
-    // --- HEADER ---
-    // Logo Left
-    doc.setFontSize(16);
-    doc.setFont('helvetica', 'bolditalic');
-    doc.setTextColor(200, 0, 0);
-    doc.text('RBU', MARGIN, 20);
-    doc.setFontSize(8);
-    doc.setTextColor(100);
-    doc.text('SANTIAGO', MARGIN, 24);
+    const drawCheckbox = (label: string, checked: boolean, x: number, yPos: number, w: number) => {
+        // Box
+        const boxSize = 5;
+        doc.setDrawColor(0);
+        doc.setFillColor(255, 255, 255);
+        doc.rect(x, yPos, 20, boxSize); // Wide box as per design? Or square? Design shows wide rectangle
 
-    // Title Center
-    doc.setTextColor(0);
+        // Design has specific "box-check" usually square, but the screenshot/css shows `width: 100px` for the box? 
+        // "box-check { width: 100px; height: 18px }" -> Replicating the wide box style
+        const checkW = 20;
+        doc.rect(x, yPos, checkW, 5);
+
+        if (checked) {
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(10);
+            doc.text('X', x + (checkW / 2) - 1, yPos + 4);
+        }
+
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(8);
+        doc.text(label, x + checkW + 2, yPos + 4);
+    };
+
+
+    // --- HEADER ---
+    y += 15;
+    // Blue decorations
+    doc.setDrawColor(...BLUE_COLOR);
+    doc.setLineWidth(1);
+    const lineY = y + 2;
+    // Line full width? The CSS matches header text width effectively.
+    // Let's draw across margins
+    doc.line(MARGIN_X, lineY, PAGE_W - MARGIN_X, lineY);
+
+    // Circles
+    doc.setFillColor(255, 255, 255);
+    doc.setLineWidth(1); // Border 4px in css is thick
+    doc.circle(MARGIN_X, lineY, 2, 'FD');
+    doc.circle(PAGE_W - MARGIN_X, lineY, 2, 'FD');
+
+    // Title box (Center, white bg to mask line)
+    const title = "ACTA DE CONSTATACIÓN DE HECHOS";
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(14);
-    doc.text('ACTA DE CONSTATACIÓN', PAGE_WIDTH / 2, 28, { align: 'center' });
-    doc.setFontSize(10);
-    doc.text('DE HECHOS', PAGE_WIDTH / 2, 33, { align: 'center' });
+    const titleW = doc.getTextWidth(title);
 
-    // Date/Time Box Top Right? Or just inline?
-    // Let's make a mini grid for context below title
-    currentY = 45;
+    // White rect behind title
+    doc.setFillColor(255, 255, 255);
+    doc.rect((PAGE_W / 2) - (titleW / 2) - 5, y - 4, titleW + 10, 10, 'F');
 
-    // --- CONTEXTO ---
-    const rowH = 8;
-    const wDate = 35;
-    const wTime = 25;
-    const wPlace = CONTENT_WIDTH - wDate - wTime;
+    // Text
+    doc.setTextColor(0, 0, 0);
+    doc.text(title, PAGE_W / 2, y + 4, { align: 'center' });
 
-    // Row 1: FECHA | HORA | LUGAR
-    // We draw borders explicitly for a "Table" look
-    drawCell('FECHA:', data.date, MARGIN, currentY, wDate, rowH, 12);
-    drawCell('HORA:', data.time, MARGIN + wDate, currentY, wTime, rowH, 10);
-    drawCell('LUGAR:', data.place_terminal, MARGIN + wDate + wTime, currentY, wPlace, rowH, 12);
+    // Logo (Simulated)
+    const logoX = PAGE_W - MARGIN_X - 30;
+    doc.setFontSize(12);
+    doc.setTextColor(...BLUE_COLOR);
+    doc.setFont('helvetica', 'bolditalic');
+    doc.text('ASISS', logoX, y - 2);
+    doc.setFontSize(6);
+    doc.setTextColor(100);
+    doc.text('OPERACIONES', logoX, y + 2);
 
-    addY(rowH); // 53
+    y += 15;
 
-    // --- I. ANTECEDENTES TRABAJADOR ---
-    addY(2);
-    addY(drawSectionHeader('I. ANTECEDENTES DEL TRABAJADOR', currentY));
+    // --- FECHA / HORA ---
+    // Row 1
+    const halfW = CONTENT_W / 2;
+    drawBoxedField('FECHA', data.date, MARGIN_X, y, 60, 15);
+    drawBoxedField('HORA', data.time, PAGE_W / 2, y, 60, 15);
+    y += 12;
 
-    // Name
-    drawCell('NOMBRE:', data.worker_name, MARGIN, currentY, CONTENT_WIDTH, rowH, 15);
-    addY(rowH);
-    // RUT | Cargo
-    const wRut = 45;
-    const wTurno = 40;
-    const wCargo = CONTENT_WIDTH - wRut - wTurno;
+    // --- I. ANTECEDENTES PERSONALES ---
+    y += drawSectionTitle('I. Antecedentes Personales del infractor', y);
 
-    drawCell('RUT:', data.worker_rut, MARGIN, currentY, wRut, rowH, 10);
-    drawCell('CARGO:', data.worker_cargo, MARGIN + wRut, currentY, wCargo, rowH, 14);
-    drawCell('TURNO:', data.shift_schedule || '', MARGIN + wRut + wCargo, currentY, wTurno, rowH, 12);
-    addY(rowH);
+    drawBoxedField('Nombre', data.worker_name, MARGIN_X, y, CONTENT_W, 20);
+    y += 8;
+    drawBoxedField('Rut', data.worker_rut, MARGIN_X, y, 80, 20); // Short box
+    y += 8;
+    drawBoxedField('Cargo', data.worker_cargo, MARGIN_X, y, CONTENT_W, 20);
+    y += 12;
 
-    // --- II. FALTA ---
-    addY(2);
-    addY(drawSectionHeader('II. TIPIFICACIÓN DE LA FALTA', currentY));
+    // --- II. ANTECEDENTES FALTA (Grid) ---
+    y += drawSectionTitle('II. Antecedentes de la falta', y);
 
-    drawCell('CÓDIGO:', data.sanction_code_id.toString(), MARGIN, currentY, 30, rowH, 15);
-    drawCell('GRAVEDAD:', 'GRAVE / MENOS GRAVE', MARGIN + 30, currentY, CONTENT_WIDTH - 30, rowH, 20);
-    addY(rowH);
+    // Map Codes to Checkboxes
+    // 9: Abandono, 8: Desobediencia/Negativa, 1: Agresión?
+    const c = parseInt(data.sanction_code_id.toString());
+    const isAbandono = c === 9;
+    const isNegativa = c === 8; // Or Desobedecer
+    const isDesobedecer = c === 8;
+    const isAgresionV = c === 1;
+    const isAgresionF = false;
+    const isIncumplimiento = c === 10 || c === 2 || c === 5; // Generic
+    const isDia = false;
+    const isAtraso = false;
+    const isOtro = ![9, 8, 1, 10, 2, 5].includes(c);
 
-    // --- III. RELATO ---
-    addY(2);
-    addY(drawSectionHeader('III. RELATO CIRCUNSTANCIADO (HECHOS)', currentY));
+    // Col 1
+    let cy = y;
+    drawCheckbox('', isAbandono, MARGIN_X, cy, 60);
+    doc.text('Abandono de trabajo', MARGIN_X + 25, cy + 4); cy += 6;
 
-    // Big Box for Narrative
-    // Calculate text size
+    drawCheckbox('', isNegativa, MARGIN_X, cy, 60);
+    doc.text('Negativa a trabajar', MARGIN_X + 25, cy + 4); cy += 6;
+
+    drawCheckbox('', isDesobedecer, MARGIN_X, cy, 60);
+    doc.text('Desobedecer Instrucción', MARGIN_X + 25, cy + 4); cy += 6;
+
+    // Col 2
+    cy = y;
+    const col2X = MARGIN_X + 65;
+    drawCheckbox('', isAgresionV, col2X, cy, 60);
+    doc.text('Agresión verbal', col2X + 25, cy + 4); cy += 6;
+
+    drawCheckbox('', isAgresionF, col2X, cy, 60);
+    doc.text('Agresión física', col2X + 25, cy + 4); cy += 6;
+
+    drawCheckbox('', isIncumplimiento, col2X, cy, 60);
+    doc.text('Incumplimiento', col2X + 25, cy + 4); cy += 6;
+
+    // Col 3
+    cy = y;
+    const col3X = MARGIN_X + 130;
+    drawCheckbox('', isDia, col3X, cy, 60);
+    doc.text('Día falta', col3X + 25, cy + 4); cy += 6;
+
+    drawCheckbox('', isAtraso, col3X, cy, 60);
+    doc.text('Atrasos', col3X + 25, cy + 4); cy += 6;
+
+    // Other
+    drawCheckbox('', isOtro, col3X, cy, 60);
+    doc.text('Otro', col3X + 25, cy + 4); cy += 6;
+
+    y = cy + 4;
+
+    // --- III. LUGAR ---
+    y += drawSectionTitle('III. Antecedentes del lugar de la falta o incidente', y);
+
+    drawBoxedField('cabezal o terminal', data.place_terminal?.toUpperCase(), MARGIN_X, y, CONTENT_W, 35);
+    y += 8;
+    drawBoxedField('vía publica', '', MARGIN_X, y, CONTENT_W, 35); // Blank unless we have data
+    y += 8;
+
+    // Vehicle Row
+    drawBoxedField('vehículo', '', MARGIN_X, y, 80, 35);
+    // PPU Box right aligned
+    doc.rect(PAGE_W - MARGIN_X - 50, y, 50, 6);
+    doc.setFont('helvetica', 'bold');
+    doc.text('PPU', PAGE_W - MARGIN_X - 50 + 2, y + 4.5);
+    doc.line(PAGE_W - MARGIN_X - 40, y, PAGE_W - MARGIN_X - 40, y + 6); // Divider
+    // PPU Value if relevant (not in standard form data but maybe in narrative?)
+
+    y += 8;
+    drawBoxedField('detalle del lugar', '', MARGIN_X, y, CONTENT_W, 35);
+    y += 12;
+
+    // --- IV. INVOLUCRADOS ---
+    y += drawSectionTitle('IV. Antecedentes de los involucrados en el incidente', y);
+    // Grid
+    drawCheckbox('', true, MARGIN_X, y, 50); doc.text('Jefatura', MARGIN_X + 25, y + 4); y += 6;
+    drawCheckbox('', false, MARGIN_X, y, 50); doc.text('Compañeros', MARGIN_X + 25, y + 4); y += 6;
+    drawCheckbox('', false, MARGIN_X, y, 50); doc.text('Otro (esp)', MARGIN_X + 25, y + 4);
+    doc.line(MARGIN_X + 50, y + 6, CONTENT_W + MARGIN_X, y + 6); // Line for other
+    y += 10;
+
+    // --- V. DESCRIPTION ---
+    y += drawSectionTitle('V. Descripción detallada de los hechos', y);
+
+    const descH = 50;
+    doc.rect(MARGIN_X, y, CONTENT_W, descH);
+
     doc.setFont('helvetica', 'normal');
-    doc.setFontSize(9);
-    const textLines = doc.splitTextToSize(data.description.toUpperCase(), CONTENT_WIDTH - 4);
-    const textH = (textLines.length * 4.5) + 10;
-    const boxH = Math.max(textH, 80); // Min height 80mm
+    doc.setFontSize(8); // Smaller font for narrative to fit
+    const splitDesc = doc.splitTextToSize(data.description.toUpperCase(), CONTENT_W - 4);
+    doc.text(splitDesc, MARGIN_X + 2, y + 4);
 
-    doc.setDrawColor(0);
-    doc.rect(MARGIN, currentY, CONTENT_WIDTH, boxH);
-    doc.text(textLines, MARGIN + 2, currentY + 6);
+    y += descH + 8;
 
-    addY(boxH);
+    // --- VI. TESTIGOS ---
+    if (y + 40 > PAGE_H) { doc.addPage(); y = 20; }
 
-    // --- IV. TESTIGOS ---
-    addY(4);
-    addY(drawSectionHeader('IV. TESTIGOS PRESENCIALES', currentY));
+    y += drawSectionTitle('VI. Testigos Presenciales', y);
 
-    const halfW = CONTENT_WIDTH / 2;
-    // Headers for witnesses
-    doc.setFontSize(8);
-    doc.text('TESTIGO 1', MARGIN + 2, currentY - 7); // Inside grey header usually, but we already drew it.
+    const wColW = (CONTENT_W - 10) / 2;
 
-    // W1
-    drawCell('NOMBRE:', data.witness1_name, MARGIN, currentY, halfW, rowH, 15);
-    drawCell('NOMBRE:', data.witness2_name || '---', MARGIN + halfW, currentY, halfW, rowH, 15);
-    addY(rowH);
-
-    drawCell('RUT:', data.witness1_rut, MARGIN, currentY, halfW, rowH, 10);
-    drawCell('RUT:', data.witness2_rut || '---', MARGIN + halfW, currentY, halfW, rowH, 10);
-    addY(rowH);
-
-    drawCell('CARGO:', data.witness1_cargo, MARGIN, currentY, halfW, rowH, 12);
-    drawCell('CARGO:', data.witness2_cargo || '---', MARGIN + halfW, currentY, halfW, rowH, 12);
-    addY(rowH);
-
-    // FIRMA BOXES
-    const signH = 25;
-    doc.rect(MARGIN, currentY, halfW, signH); // W1
-    doc.rect(MARGIN + halfW, currentY, halfW, signH); // W2
-
+    // Witness 1
+    const w1X = MARGIN_X;
+    doc.rect(w1X, y, wColW, 45);
+    let wy = y + 5;
+    drawLineInput('Nombre:', data.witness1_name, w1X + 2, wy, wColW - 4, 15); wy += 8;
+    drawBoxedField('Rut:', data.witness1_rut, w1X + 2, wy, wColW - 4, 15); wy += 8; // Box style for rut as per design
+    drawLineInput('Cargo:', data.witness1_cargo, w1X + 2, wy, wColW - 4, 15); wy += 15;
     doc.setFontSize(7);
-    doc.text('FIRMA TESTIGO 1', MARGIN + (halfW / 2), currentY + signH - 2, { align: 'center' });
-    doc.text('FIRMA TESTIGO 2 (OPCIONAL)', MARGIN + halfW + (halfW / 2), currentY + signH - 2, { align: 'center' });
+    doc.text('Firma', w1X + 2, wy);
 
-    addY(signH);
+    // Witness 2
+    const w2X = MARGIN_X + wColW + 10;
+    doc.rect(w2X, y, wColW, 45);
+    wy = y + 5;
+    drawLineInput('Nombre:', data.witness2_name, w2X + 2, wy, wColW - 4, 15); wy += 8;
+    drawBoxedField('Rut:', data.witness2_rut, w2X + 2, wy, wColW - 4, 15); wy += 8;
+    drawLineInput('Cargo:', data.witness2_cargo, w2X + 2, wy, wColW - 4, 15); wy += 15;
+    doc.setFontSize(7);
+    doc.text('Firma', w2X + 2, wy);
 
-    // --- V. RESPONSABLE ---
-    // Bottom of page ?
-    const bottomY = 250; // Fixed footer area
+    y += 55;
 
-    // Check if we overlap
-    if (currentY > bottomY) {
-        doc.addPage();
-        currentY = 20;
-    } else {
-        currentY = bottomY;
-    }
+    // --- VII. RESPONSABLE ---
+    if (y + 30 > PAGE_H) { doc.addPage(); y = 20; }
+    y += drawSectionTitle('VII. Responsable de la constatación', y);
 
-    addY(drawSectionHeader('V. RESPONSABLE DE LA CONSTATACIÓN (JEFE DE TERMINAL)', currentY));
+    doc.rect(MARGIN_X, y, CONTENT_W, 20); // Container
+    // Content inside
+    drawBoxedField('Nombre:', data.responsible_name.toUpperCase(), MARGIN_X + 5, y + 3, CONTENT_W - 10, 20);
+    drawLineInput('Cargo:', data.responsible_cargo.toUpperCase(), MARGIN_X + 5, y + 11, CONTENT_W - 10, 20);
 
-    // Info Line
-    drawCell('NOMBRE:', data.responsible_name.toUpperCase(), MARGIN, currentY, CONTENT_WIDTH * 0.7, rowH, 15);
-    // Signature placeholder box next to it? Or below?
-    // Let's put info on left, signature box on right.
-    // Actually, usually signature is center or right.
+    y += 40;
 
-    // Re-do this row
-    // Clear the cell I just drew? No, just overwrite or simpler:
-    // We already moved Y by header (6).
+    // --- FOOTER ---
+    doc.line(PAGE_W - 80, y, PAGE_W - 20, y);
+    doc.setFont('helvetica', 'bold');
+    doc.fs = 10;
+    doc.text('FIRMA', PAGE_W - 50, y + 5, { align: 'center' });
 
-    // Name Row
-    // drawCell('NOMBRE:', data.responsible_name.toUpperCase(), MARGIN, currentY, CONTENT_WIDTH, rowH, 15);
-    // addY(rowH);
-    // drawCell('CARGO:', data.responsible_cargo.toUpperCase(), MARGIN, currentY, CONTENT_WIDTH, rowH, 15);
-    // addY(rowH);
-
-    // Signature Box Big
-    const sigBoxH = 35;
-    doc.rect(MARGIN, currentY, CONTENT_WIDTH, sigBoxH);
-
-    doc.text(`NOMBRE: ${data.responsible_name.toUpperCase()}`, MARGIN + 4, currentY + 6);
-    doc.text(`CARGO:   ${data.responsible_cargo.toUpperCase()}`, MARGIN + 4, currentY + 12);
-
-    doc.line(PAGE_WIDTH / 2, currentY + 25, PAGE_WIDTH - 40, currentY + 25);
-    doc.text('FIRMA Y TIMBRE', (PAGE_WIDTH / 2) + 40, currentY + 29, { align: 'center' });
-
-    doc.save(`Amonestacion_${data.worker_rut}_${data.date}.pdf`);
+    doc.save(`Amonestacion_Acta_${data.worker_rut}.pdf`);
 };

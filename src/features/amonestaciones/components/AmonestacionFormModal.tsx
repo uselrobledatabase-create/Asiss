@@ -24,8 +24,8 @@ export const AmonestacionFormModal = ({ open, onClose, currentUserName, currentU
     const [formData, setFormData] = useState<Partial<AmonestacionFormData>>({
         date: format(new Date(), 'dd/MM/yyyy'),
         time: format(new Date(), 'HH:mm'),
-        responsible_name: currentUserName || 'Cristian Marcelo Luraschi Muñoz',
-        responsible_cargo: currentUserCargo || 'Jefe de Terminal'
+        responsible_name: 'Cristian Marcelo Luraschi Muñoz',
+        responsible_cargo: 'Jefe de Terminal'
     });
 
     const handleWorkerFound = (s: Staff | null) => {
