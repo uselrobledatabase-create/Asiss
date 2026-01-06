@@ -443,9 +443,6 @@ export async function sendSrlEmailNotification(requestId: string, trigger: 'CREA
                     </tr>
                 </table>
 
-                <p style="text-align: center; margin-top: 24px; color: #94a3b8; font-size: 12px;">
-                     Desarrollado para Transdev Chile
-                </p>
             </td>
         </tr>
     </table>
