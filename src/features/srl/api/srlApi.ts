@@ -425,12 +425,6 @@ export async function sendSrlEmailNotification(requestId: string, trigger: 'CREA
                             <!-- Bus List -->
                             ${busesHtml}
 
-                            <!-- CTA Button -->
-                            <div style="text-align: center; margin-top: 40px;">
-                                <a href="https://asiss.online/srl" style="background-color: #1e293b; color: #ffffff; display: inline-block; padding: 14px 32px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
-                                    Gestionar en Plataforma
-                                </a>
-                            </div>
 
                         </td>
                     </tr>
