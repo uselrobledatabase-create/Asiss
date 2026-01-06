@@ -208,6 +208,7 @@ export async function fetchSrlEmailSettings() {
     const { data, error } = await supabase
         .from('srl_email_settings')
         .select('*')
+        .limit(1)
         .single();
 
     if (error && error.code !== 'PGRST116') throw error;
@@ -215,12 +216,24 @@ export async function fetchSrlEmailSettings() {
 }
 
 export async function updateSrlEmailSettings(settings: Partial<SrlEmailSetting>) {
-    const { error } = await supabase
+    // 1. Try to update existing records
+    const { data, error } = await supabase
         .from('srl_email_settings')
         .update(settings)
-        .gt('updated_at', '2000-01-01'); // Dummy condition to update all
+        .gt('id', '00000000-0000-0000-0000-000000000000') // Update any existing row
+        .select();
 
     if (error) throw error;
+
+    // 2. If no rows existed to update, insert a new one
+    if (!data || data.length === 0) {
+        const { error: insertError } = await supabase
+            .from('srl_email_settings')
+            .insert(settings);
+
+        if (insertError) throw insertError;
+    }
+
     return true;
 }
 
