@@ -244,7 +244,6 @@ export async function sendSrlEmailNotification(requestId: string, trigger: 'CREA
     console.log('📧 Starting email notification for request:', requestId, 'trigger:', trigger);
 
     // 1. Fetch Request Details with Relations
-    console.log('📋 Fetching request details...');
     const { data: request, error } = await supabase
         .from('srl_requests')
         .select(`
@@ -264,12 +263,9 @@ export async function sendSrlEmailNotification(requestId: string, trigger: 'CREA
         console.error('❌ Could not fetch request:', error);
         throw new Error('Could not fetch request for email');
     }
-    console.log('✅ Request fetched:', request.terminal_code, request.srl_request_buses.length, 'buses');
 
     // 2. Fetch Settings
-    console.log('⚙️ Fetching email settings...');
     const settings = await fetchSrlEmailSettings();
-    console.log('📧 Email settings:', settings);
 
     if (!settings) {
         console.warn('⚠️ No email settings found in database');
@@ -286,8 +282,6 @@ export async function sendSrlEmailNotification(requestId: string, trigger: 'CREA
         throw new Error('No hay destinatarios configurados. Ve a SRL → Configuración para agregar emails.');
     }
 
-    console.log('✅ Email settings valid. Recipients:', settings.recipients);
-
     // 3. Fetch Images for ALL buses
     const busesWithImages = await Promise.all(
         request.srl_request_buses.map(async (bus: any) => {
@@ -296,108 +290,160 @@ export async function sendSrlEmailNotification(requestId: string, trigger: 'CREA
         })
     );
 
-    // 4. Build Rich HTML Email with Images
+    // 4. Build Professional HTML Email
+    const criticalityColors = {
+        BAJA: '#10b981', // Emerald 500
+        MEDIA: '#f59e0b', // Amber 500
+        ALTA: '#ef4444'   // Red 500
+    };
+
+    const critColor = criticalityColors[request.criticality as keyof typeof criticalityColors] || '#64748b';
+    const statusLabel = trigger === 'CREADA' ? 'NUEVA SOLICITUD' : 'ACTUALIZACIÓN';
+
     const busesHtml = busesWithImages.map((bus: any) => {
         const imagesHtml = bus.images.length > 0
-            ? bus.images.map((img: any) => `
-                <a href="${img.publicUrl}" target="_blank" style="display: inline-block; margin: 5px;">
-                    <img src="${img.publicUrl}" alt="Evidencia" style="width: 150px; height: 150px; object-fit: cover; border-radius: 8px; border: 2px solid #e2e8f0; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
-                </a>
-            `).join('')
-            : '<p style="color: #94a3b8; font-style: italic;">Sin evidencia fotográfica</p>';
+            ? `
+                <div style="margin-top: 12px; display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px;">
+                    ${bus.images.map((img: any) => `
+                        <a href="${img.publicUrl}" target="_blank" style="text-decoration: none;">
+                            <img src="${img.publicUrl}" alt="Evidencia" style="width: 140px; height: 100px; object-fit: cover; border-radius: 6px; border: 1px solid #e2e8f0; display: inline-block; margin-right: 8px; margin-bottom: 8px;">
+                        </a>
+                    `).join('')}
+                </div>
+              `
+            : '<p style="color: #94a3b8; font-size: 13px; font-style: italic; margin: 4px 0;">Sin evidencia fotográfica adjunta.</p>';
 
         return `
-            <div style="background: #f8fafc; border-left: 4px solid #3b82f6; padding: 16px; margin-bottom: 16px; border-radius: 8px;">
-                <h3 style="margin: 0 0 8px 0; color: #1e293b; font-size: 18px; font-weight: bold;">
-                    🚌 PPU: ${bus.bus_ppu}
-                </h3>
-                <p style="margin: 4px 0; color: #475569;">
-                    <strong>Problema:</strong> ${bus.observation || bus.problem_type || 'No especificado'}
-                </p>
-                ${bus.applus ? '<p style="margin: 4px 0; color: #dc2626; font-weight: bold;">⚠️ Requiere APPLUS</p>' : ''}
-                <div style="margin-top: 12px;">
-                    <strong style="display: block; margin-bottom: 8px; color: #64748b; font-size: 12px; text-transform: uppercase;">Evidencia Fotográfica:</strong>
-                    ${imagesHtml}
+            <div style="background-color: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 20px; margin-bottom: 16px; box-shadow: 0 2px 4px rgba(0,0,0,0.02);">
+                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; border-bottom: 1px solid #f1f5f9; padding-bottom: 12px;">
+                    <div style="display: flex; align-items: center; gap: 12px;">
+                        <span style="background-color: #3b82f6; color: white; padding: 4px 10px; border-radius: 6px; font-size: 14px; font-weight: 700;">${bus.bus_ppu}</span>
+                        ${bus.applus ? '<span style="background-color: #fee2e2; color: #dc2626; padding: 4px 10px; border-radius: 6px; font-size: 12px; font-weight: 600; border: 1px solid #fecaca;">⚠️ APPLUS</span>' : ''}
+                    </div>
+                    <span style="color: #64748b; font-size: 12px; font-weight: 600; text-transform: uppercase;">${bus.problem_type || 'General'}</span>
+                </div>
+                
+                <div style="margin-bottom: 16px;">
+                    <p style="margin: 0 0 4px 0; color: #64748b; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;">Observación / Problema</p>
+                    <p style="margin: 0; color: #334155; font-size: 15px; line-height: 1.5;">
+                        ${bus.observation || 'Sin observación detallada.'}
+                    </p>
+                </div>
+
+                <div>
+                   ${imagesHtml}
                 </div>
             </div>
         `;
     }).join('');
 
-    // 5. Build Complete HTML Email
     const htmlBody = `
-<!DOCTYPE html>
-<html>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+    <title>Notificación SRL</title>
+    <style type="text/css">
+        body, td, div, p, a, input, button { font-family: "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
+    </style>
 </head>
-<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 0; padding: 0; background-color: #f1f5f9;">
-    <div style="max-width: 600px; margin: 0 auto; background: white; padding: 32px; border-radius: 12px; margin-top: 32px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
-        <!-- Header -->
-        <div style="text-align: center; margin-bottom: 32px; padding-bottom: 24px; border-bottom: 3px solid #3b82f6;">
-            <h1 style="margin: 0; color: #1e293b; font-size: 28px; font-weight: 800;">
-                ASISS
-            </h1>
-            <p style="margin: 8px 0 0 0; color: #64748b; font-size: 14px; font-weight: 500; letter-spacing: 1px; text-transform: uppercase;">
-                Operaciones y Logística
-            </p>
-        </div>
+<body style="margin: 0; padding: 0; background-color: #f4f6f8; -webkit-text-size-adjust: none;">
+    <table border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: #f4f6f8;">
+        <tr>
+            <td align="center" style="padding: 40px 0;">
+                <!-- Main Container -->
+                <table border="0" cellpadding="0" cellspacing="0" width="100%" style="max-width: 680px; background-color: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 10px 25px rgba(0,0,0,0.05); border: 1px solid #e2e8f0;">
+                    
+                    <!-- Header -->
+                    <tr>
+                        <td style="padding: 32px 40px; background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%); text-align: center;">
+                            <h1 style="margin: 0; color: #ffffff; font-size: 24px; font-weight: 800; letter-spacing: 1px;">ASISS</h1>
+                            <p style="margin: 6px 0 0 0; color: #94a3b8; font-size: 12px; font-weight: 500; text-transform: uppercase; letter-spacing: 2px;">Gestión de Flota & Logística</p>
+                        </td>
+                    </tr>
 
-        <!-- Badge -->
-        <div style="background: linear-gradient(135deg, #3b82f6 0%, #6366f1 100%); padding: 16px; border-radius: 8px; text-align: center; margin-bottom: 24px;">
-            <p style="margin: 0; color: white; font-size: 16px; font-weight: bold; letter-spacing: 0.5px;">
-                ${request.terminal_code.replace(/_/g, ' ')} - NOTIFICACIONES LOGÍSTICA
-            </p>
-        </div>
+                    <!-- Status Banner -->
+                    <tr>
+                        <td style="background-color: #ffffff; padding: 0;">
+                            <div style="background-color: ${critColor}; height: 6px; width: 100%;"></div>
+                        </td>
+                    </tr>
 
-        <!-- Title -->
-        <h2 style="margin: 0 0 24px 0; color: #1e293b; font-size: 24px; font-weight: 700; text-align: center;">
-            Solicitud SRL - ${request.terminal_code.replace(/_/g, ' ')} - ${request.srl_request_buses.length} Bus${request.srl_request_buses.length !== 1 ? 'es' : ''}
-        </h2>
+                    <!-- Content -->
+                    <tr>
+                        <td style="padding: 40px;">
+                            
+                            <!-- Headline -->
+                            <div style="text-align: center; margin-bottom: 32px;">
+                                <span style="display: inline-block; padding: 6px 12px; background-color: #f1f5f9; color: #475569; border-radius: 20px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 12px;">
+                                    ${statusLabel}
+                                </span>
+                                <h2 style="margin: 0; color: #1e293b; font-size: 28px; font-weight: 800; line-height: 1.2;">
+                                    Solicitud en ${request.terminal_code.replace(/_/g, ' ')}
+                                </h2>
+                                <p style="margin: 8px 0 0 0; color: #64748b; font-size: 16px;">
+                                    Se ha registrado una solicitud de Mantenimiento / Reparación.
+                                </p>
+                            </div>
 
-        <!-- Summary -->
-        <div style="background: #fff7ed; border: 2px solid #fed7aa; padding: 16px; border-radius: 8px; margin-bottom: 24px;">
-            <p style="margin: 0; color: #9a3412; font-weight: 600;">
-                Estimados, favor gestionar visita técnica para Buses detallados.
-            </p>
-        </div>
+                            <!-- Info Grid -->
+                            <table border="0" cellpadding="0" cellspacing="0" width="100%" style="margin-bottom: 32px; background-color: #f8fafc; border-radius: 12px; border: 1px solid #f1f5f9;">
+                                <tr>
+                                    <td style="padding: 20px; border-right: 1px solid #e2e8f0; width: 33%;">
+                                        <p style="margin: 0 0 4px 0; color: #94a3b8; font-size: 10px; font-weight: 700; text-transform: uppercase;">Terminal</p>
+                                        <p style="margin: 0; color: #1e293b; font-size: 14px; font-weight: 700;">${request.terminal_code.replace(/_/g, ' ')}</p>
+                                    </td>
+                                    <td style="padding: 20px; border-right: 1px solid #e2e8f0; width: 33%;">
+                                        <p style="margin: 0 0 4px 0; color: #94a3b8; font-size: 10px; font-weight: 700; text-transform: uppercase;">Criticidad</p>
+                                        <p style="margin: 0; color: ${critColor}; font-size: 14px; font-weight: 700;">${request.criticality}</p>
+                                    </td>
+                                    <td style="padding: 20px; width: 33%;">
+                                        <p style="margin: 0 0 4px 0; color: #94a3b8; font-size: 10px; font-weight: 700; text-transform: uppercase;">Fecha</p>
+                                        <p style="margin: 0; color: #1e293b; font-size: 14px; font-weight: 600;">${new Date(request.created_at).toLocaleDateString('es-CL')}</p>
+                                    </td>
+                                </tr>
+                            </table>
 
-        <!-- Info Grid -->
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 24px; background: #f8fafc; padding: 16px; border-radius: 8px;">
-            <div>
-                <p style="margin: 0 0 4px 0; color: #64748b; font-size: 12px; font-weight: 600; text-transform: uppercase;">Terminal</p>
-                <p style="margin: 0; color: #1e293b; font-size: 16px; font-weight: 700;">${request.terminal_code.replace(/_/g, ' ')}</p>
-            </div>
-            <div>
-                <p style="margin: 0 0 4px 0; color: #64748b; font-size: 12px; font-weight: 600; text-transform: uppercase;">Criticidad</p>
-                <p style="margin: 0; color: ${request.criticality === 'ALTA' ? '#dc2626' : request.criticality === 'MEDIA' ? '#f59e0b' : '#64748b'}; font-size: 16px; font-weight: 700;">${request.criticality}</p>
-            </div>
-            <div>
-                <p style="margin: 0 0 4px 0; color: #64748b; font-size: 12px; font-weight: 600; text-transform: uppercase;">Fecha Solicitud</p>
-                <p style="margin: 0; color: #1e293b; font-size: 14px;">${new Date(request.created_at).toLocaleString('es-CL', { dateStyle: 'long', timeStyle: 'short' })}</p>
-            </div>
-            <div>
-                <p style="margin: 0 0 4px 0; color: #64748b; font-size: 12px; font-weight: 600; text-transform: uppercase;">ID Solicitud</p>
-                <p style="margin: 0; color: #1e293b; font-family: monospace; font-size: 14px;">#${request.id.slice(0, 8)}</p>
-            </div>
-        </div>
+                            <!-- Buses Section Title -->
+                            <div style="margin-bottom: 20px; border-bottom: 2px solid #f1f5f9; padding-bottom: 12px; display: flex; align-items: center; justify-content: space-between;">
+                                <h3 style="margin: 0; color: #334155; font-size: 18px; font-weight: 700;">Detalle de Flota</h3>
+                                <span style="background-color: #eff6ff; color: #3b82f6; padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: 600;">${request.srl_request_buses.length} Bus${request.srl_request_buses.length !== 1 ? 'es' : ''}</span>
+                            </div>
 
-        <!-- Buses Section -->
-        <h3 style="margin: 0 0 16px 0; color: #1e293b; font-size: 20px; font-weight: 700; border-bottom: 2px solid #e2e8f0; padding-bottom: 8px;">
-            Buses Afectados (${request.srl_request_buses.length})
-        </h3>
-        ${busesHtml}
+                            <!-- Bus List -->
+                            ${busesHtml}
 
-        <!-- Footer -->
-        <div style="margin-top: 32px; padding-top: 24px; border-top: 2px solid #e2e8f0; text-align: center;">
-            <p style="margin: 0 0 8px 0; color: #94a3b8; font-size: 12px;">
-                ${new Date().toLocaleDateString('es-CL', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
-            </p>
-            <p style="margin: 0; color: #cbd5e1; font-size: 11px;">
-                © ${new Date().getFullYear()} Asiss - Operaciones y Logística
-            </p>
-        </div>
-    </div>
+                            <!-- CTA Button -->
+                            <div style="text-align: center; margin-top: 40px;">
+                                <a href="https://asiss.online/srl" style="background-color: #1e293b; color: #ffffff; display: inline-block; padding: 14px 32px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+                                    Gestionar en Plataforma
+                                </a>
+                            </div>
+
+                        </td>
+                    </tr>
+
+                    <!-- Footer -->
+                    <tr>
+                        <td style="background-color: #f8fafc; padding: 32px 40px; border-top: 1px solid #e2e8f0; text-align: center;">
+                            <p style="margin: 0 0 12px 0; color: #94a3b8; font-size: 12px; line-height: 1.5;">
+                                Este es un mensaje generado automáticamente por el sistema <strong>ASISS</strong>.<br/>
+                                Por favor no responder directamente a este correo.
+                            </p>
+                            <p style="margin: 0; color: #cbd5e1; font-size: 11px;">
+                                © ${new Date().getFullYear()} Asiss - Operaciones y Logística Intregrada
+                            </p>
+                        </td>
+                    </tr>
+                </table>
+
+                <p style="text-align: center; margin-top: 24px; color: #94a3b8; font-size: 12px;">
+                     Desarrollado para Transdev Chile
+                </p>
+            </td>
+        </tr>
+    </table>
 </body>
 </html>
     `;
@@ -407,7 +453,7 @@ export async function sendSrlEmailNotification(requestId: string, trigger: 'CREA
     const payload: any = {
         audience: 'manual',
         manualRecipients: settings.recipients.split(',').map((e: string) => e.trim()).filter(Boolean),
-        subject: `Solicitud SRL - ${request.terminal_code.replace(/_/g, ' ')} - ${request.srl_request_buses.length} Bus${request.srl_request_buses.length !== 1 ? 'es' : ''}`,
+        subject: `[SRL] ${request.terminal_code.replace(/_/g, ' ')} - ${request.criticality} - ${request.srl_request_buses.length} Buses`,
         body: htmlBody
     };
 
@@ -415,15 +461,8 @@ export async function sendSrlEmailNotification(requestId: string, trigger: 'CREA
         payload.cc = settings.cc_emails.split(',').map((e: string) => e.trim()).filter(Boolean);
     }
 
-    console.log('📧 Email payload:', {
-        to: payload.manualRecipients,
-        cc: payload.cc,
-        subject: payload.subject
-    });
-
-    console.log('🚀 Sending email via emailService...');
+    console.log('🚀 Sending professional email...');
     const result = await emailService.sendEmail(payload as EmailPayload);
-    console.log('✅ Email sent successfully:', result);
     return result;
 }
 
