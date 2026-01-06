@@ -5,6 +5,8 @@ import { Staff } from '../../personal/types';
 import { SANCTION_CODES } from '../constants';
 import { AmonestacionFormData } from '../types';
 import { generateAmonestacionPDF } from '../utils/pdfGenerator';
+import { useToastStore } from '../../../shared/state/toastStore';
+import { createAmonestacion } from '../api/amonestacionesApi';
 import { format } from 'date-fns';
 
 interface Props {
@@ -12,13 +14,16 @@ interface Props {
     onClose: () => void;
     currentUserName: string;
     currentUserCargo: string;
+    onSuccess?: () => void; // Callback to refresh list
 }
 
-export const AmonestacionFormModal = ({ open, onClose, currentUserName, currentUserCargo }: Props) => {
+export const AmonestacionFormModal = ({ open, onClose, currentUserName, currentUserCargo, onSuccess }: Props) => {
     const [selectedCodeId, setSelectedCodeId] = useState<string>('');
     const [worker, setWorker] = useState<Staff | null>(null);
     const [evidence, setEvidence] = useState('');
     const [manualFacts, setManualFacts] = useState('');
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const addToast = useToastStore(state => state.addToast);
 
     // Detailed State
     const [formData, setFormData] = useState<Partial<AmonestacionFormData>>({
@@ -50,7 +55,6 @@ export const AmonestacionFormModal = ({ open, onClose, currentUserName, currentU
         setEvidence(code.evidence_required);
 
         // --- SMART LEGAL NARRATIVE GENERATOR ---
-        // --- SMART LEGAL NARRATIVE GENERATOR (UPDATED FORMAT) ---
         // Header: NAME, RUT, CARGO, EN TERMINAL [TERMINAL], CON TURNO PROGRAMADO DE [TURNO], EL DÍA [FECHA]
 
         const workerName = (formData.worker_name || "____________________").toUpperCase();
@@ -79,10 +83,35 @@ export const AmonestacionFormModal = ({ open, onClose, currentUserName, currentU
 
     }, [selectedCodeId, worker, formData, manualFacts]);
 
-    const handleGenerate = () => {
+    const handleGenerate = async () => {
         if (!worker || !formData.sanction_code_id) return;
-        generateAmonestacionPDF(formData as AmonestacionFormData);
-        onClose();
+
+        try {
+            setIsSubmitting(true);
+            // 1. Save to DB
+            await createAmonestacion(formData as AmonestacionFormData);
+
+            // 2. Generate PDF
+            generateAmonestacionPDF(formData as AmonestacionFormData);
+
+            addToast({
+                type: 'success',
+                title: 'Éxito',
+                message: 'Amonestación registrada correctamente'
+            });
+
+            if (onSuccess) onSuccess();
+            onClose();
+        } catch (error) {
+            console.error('Error saving amonestacion:', error);
+            addToast({
+                type: 'error',
+                title: 'Error',
+                message: 'Error al guardar la amonestación'
+            });
+        } finally {
+            setIsSubmitting(false);
+        }
     };
 
     if (!open) return null;
@@ -275,11 +304,11 @@ export const AmonestacionFormModal = ({ open, onClose, currentUserName, currentU
                         </button>
                         <button
                             onClick={handleGenerate}
-                            disabled={!worker || !selectedCodeId}
+                            disabled={!worker || !selectedCodeId || isSubmitting}
                             className="px-6 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-lg shadow-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 text-sm transition-transform active:scale-95"
                         >
                             <Icon name="download" size={16} />
-                            Generar Documento
+                            {isSubmitting ? 'Guardando...' : 'Generar Documento'}
                         </button>
                     </div>
                 </div>
