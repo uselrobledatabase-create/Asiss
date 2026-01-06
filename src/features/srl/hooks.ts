@@ -11,6 +11,7 @@ import {
     subscribeToSrlChanges
 } from './api/srlApi';
 import { SrlFilters, SrlRequest, SrlRequestBus, SrlEmailSetting } from './types';
+import { useToastStore } from '../../shared/state/toastStore';
 
 // ==========================================
 // QUERY KEYS
@@ -106,6 +107,7 @@ export const useUpdateSrlEmailSettings = () => {
 
 export const useSrlRealtime = () => {
     const queryClient = useQueryClient();
+    const { addToast } = useToastStore();
 
     useEffect(() => {
         const unsubscribe = subscribeToSrlChanges(() => {
@@ -113,8 +115,14 @@ export const useSrlRealtime = () => {
             // Optimistic strategy: Refetch everything for now
             // Ideally we'd be more granular, but 'requests' is the main view
             queryClient.invalidateQueries({ queryKey: srlKeys.requests() });
+
+            addToast({
+                type: 'info',
+                title: 'Actualización en tiempo real',
+                message: 'Se ha detectado un cambio en las solicitudes. La lista se ha actualizado automáticamente.'
+            });
         });
 
         return unsubscribe;
-    }, [queryClient]);
+    }, [queryClient, addToast]);
 };

@@ -459,8 +459,23 @@ export async function sendSrlEmailNotification(requestId: string, trigger: 'CREA
         body: htmlBody
     };
 
+    // Validate and process CC emails
+    const validCcEmails: string[] = [];
     if (settings.cc_emails) {
-        payload.cc = settings.cc_emails.split(',').map((e: string) => e.trim()).filter(Boolean);
+        const rawCcs = settings.cc_emails.split(',').map((e: string) => e.trim());
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+        for (const email of rawCcs) {
+            if (email && emailRegex.test(email)) {
+                validCcEmails.push(email);
+            } else if (email) {
+                console.warn(`⚠️ Skipping invalid CC email: "${email}"`);
+            }
+        }
+    }
+
+    if (validCcEmails.length > 0) {
+        payload.cc = validCcEmails;
     }
 
     console.log('🚀 Sending professional email...');

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Icon, IconName } from '../../../shared/components/common/Icon';
+import { useSrlRealtime } from '../hooks';
 import { RequestsTable } from '../components/RequestsTable';
 import { SrlWorkspace } from '../components/SrlWorkspace';
 import { CalendarView } from '../components/CalendarView';
@@ -12,6 +13,9 @@ export const SrlPage = () => {
     const [activeTab, setActiveTab] = useState<Tab>('requests');
     const [workspaceOpen, setWorkspaceOpen] = useState(false);
     const [activeRequestId, setActiveRequestId] = useState<string | null>(null);
+
+    // Enable Realtime Updates
+    useSrlRealtime();
 
     const handleOpenWorkspace = (requestId?: string) => {
         setActiveRequestId(requestId || null);
