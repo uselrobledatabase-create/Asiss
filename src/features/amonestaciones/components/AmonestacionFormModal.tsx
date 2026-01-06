@@ -36,12 +36,20 @@ export const AmonestacionFormModal = ({ open, onClose, currentUserName, currentU
     const handleWorkerFound = (s: Staff | null) => {
         setWorker(s);
         if (s) {
+            // Format schedule: replace "-" or "/" with " a "
+            let formattedSchedule = (s.horario || '').replace(/[-/]/g, ' a ');
+            // If it doesn't have " a " and looks like "HH:mm HH:mm", add it
+            if (!formattedSchedule.includes(' a ') && formattedSchedule.includes(' ')) {
+                formattedSchedule = formattedSchedule.replace(' ', ' a ');
+            }
+
             setFormData(prev => ({
                 ...prev,
                 worker_rut: s.rut,
                 worker_name: s.nombre,
                 worker_cargo: s.cargo,
-                worker_base: s.terminal_code // Assuming base = terminal
+                worker_base: s.terminal_code,
+                shift_schedule: formattedSchedule || s.turno // Fallback to turno name if no schedule hours
             }));
         }
     };
