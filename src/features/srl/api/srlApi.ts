@@ -406,13 +406,13 @@ export async function sendSrlEmailNotification(requestId: string, trigger: 'CREA
     console.log('📤 Preparing email payload...');
     const payload: any = {
         audience: 'manual',
-        manualRecipients: settings.recipients.split(',').map(e => e.trim()).filter(Boolean),
+        manualRecipients: settings.recipients.split(',').map((e: string) => e.trim()).filter(Boolean),
         subject: `Solicitud SRL - ${request.terminal_code.replace(/_/g, ' ')} - ${request.srl_request_buses.length} Bus${request.srl_request_buses.length !== 1 ? 'es' : ''}`,
         body: htmlBody
     };
 
     if (settings.cc_emails) {
-        payload.cc = settings.cc_emails.split(',').map(e => e.trim()).filter(Boolean);
+        payload.cc = settings.cc_emails.split(',').map((e: string) => e.trim()).filter(Boolean);
     }
 
     console.log('📧 Email payload:', {
