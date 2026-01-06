@@ -18,7 +18,7 @@ export const AmonestacionesPage = () => {
             setRecords(data);
         } catch (error) {
             console.error(error);
-            addToast({ type: 'error', message: 'Error al cargar historial' });
+            addToast({ type: 'error', title: 'Error', message: 'Error al cargar historial' });
         } finally {
             setLoading(false);
         }
@@ -31,10 +31,10 @@ export const AmonestacionesPage = () => {
     const handleDownload = (record: AmonestacionRecord) => {
         try {
             generateAmonestacionPDF(record);
-            addToast({ type: 'success', message: 'PDF descargado nuevamente' });
+            addToast({ type: 'success', title: 'Éxito', message: 'PDF descargado nuevamente' });
         } catch (e) {
             console.error(e);
-            addToast({ type: 'error', message: 'Error al generar PDF' });
+            addToast({ type: 'error', title: 'Error', message: 'Error al generar PDF' });
         }
     };
 
@@ -58,7 +58,7 @@ export const AmonestacionesPage = () => {
                 <div className="p-4 border-b border-slate-200 bg-slate-50 flex justify-between items-center">
                     <h3 className="font-bold text-slate-700">Historial Reciente</h3>
                     <button onClick={loadRecords} className="p-2 hover:bg-slate-200 rounded-lg text-slate-500" title="Recargar">
-                        <Icon name="refresh-cw" size={16} />
+                        <Icon name="loader" size={16} />
                     </button>
                 </div>
 
