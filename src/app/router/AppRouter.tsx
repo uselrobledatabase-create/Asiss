@@ -29,6 +29,7 @@ import { AseoMobilePage } from '../../features/aseo/pages/AseoMobilePage';
 import { AseoAdminPage } from '../../features/aseo/pages/AseoAdminPage';
 import { MyInfoPage } from '../../features/asistencia2026/pages/MyInfoPage';
 import { AmonestacionesPage } from '../../features/amonestaciones/AmonestacionesPage';
+import { InspeccionICA } from '../../features/inspeccion_ica/InspeccionICA';
 
 const RequireSession = () => {
   const session = useSessionStore((state) => state.session);
@@ -79,6 +80,7 @@ export const AppRouter = () => (
           <Route path="/srl" element={<SrlPage />} />
           <Route path="/aseo/admin" element={<AseoAdminPage />} />
           <Route path="/amonestaciones" element={<AmonestacionesPage />} />
+          <Route path="/fiscalizacion-ica" element={<InspeccionICA />} />
         </Route>
       </Route>
       {/* Isolated Aseo Mobile Portal */}
