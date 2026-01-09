@@ -10,17 +10,15 @@ export const GlassCard: React.FC<GlassCardProps> = ({ children, className = '', 
     return (
         <div className={`
       relative overflow-hidden
-      bg-white/80 dark:bg-slate-900/80 
-      backdrop-blur-xl 
-      border border-white/20 dark:border-slate-700/50
-      shadow-xl 
+      bg-white dark:bg-slate-800 
+      border border-slate-200 dark:border-slate-700
+      shadow-md dark:shadow-xl
       rounded-2xl 
       transition-all duration-300
-      hover:shadow-2xl hover:bg-white/90 dark:hover:bg-slate-900/90
       ${className}
     `}>
             {title && (
-                <div className="px-6 py-4 border-b border-gray-100 dark:border-slate-800/50">
+                <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-700/50 bg-slate-50/50 dark:bg-slate-800/50">
                     <h3 className="text-lg font-semibold text-slate-800 dark:text-slate-100 flex items-center gap-2">
                         {title}
                     </h3>

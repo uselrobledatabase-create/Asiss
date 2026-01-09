@@ -33,6 +33,7 @@ const NAVIGATION: NavSection[] = [
       { label: 'Asistencia', to: '/asistencia', icon: 'clock' },
       // { label: 'Mi Info', to: '/mi-info', icon: 'user' },
       { label: 'Credenciales', to: '/credenciales', icon: 'key' },
+      { label: 'Fiscalización ICA', to: '/fiscalizacion-ica', icon: 'clipboard' },
       // { label: 'Solicitudes', to: '/solicitudes', icon: 'inbox' },
       { label: 'Amonestaciones', to: '/amonestaciones', icon: 'alert-triangle' },
       { label: 'SRL', to: '/srl', icon: 'wrench' },
@@ -67,7 +68,6 @@ const NAVIGATION: NavSection[] = [
     icon: 'truck',
     items: [
       { label: 'Estado de Flota', to: '/estado-flota', icon: 'truck' },
-      { label: 'Fiscalización ICA', to: '/fiscalizacion-ica', icon: 'clipboard' },
     ],
   },
 ];

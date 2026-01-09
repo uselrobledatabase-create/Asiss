@@ -1,93 +1,78 @@
 import React, { useState } from 'react';
 import { PageHeader } from '../../shared/components/common/PageHeader';
-import { HeaderSection } from './components/HeaderSection';
-import { ChecklistSection } from './components/ChecklistSection';
-import { ScoreBoard, MobileScoreBar } from './components/ScoreBoard';
-import { InspeccionData } from './types';
+import { FormTab } from './tabs/FormTab';
+import { HistoryTab } from './tabs/HistoryTab';
+import { ReportsTab } from './tabs/ReportsTab';
+import { ClipboardList, History, BarChart3 } from 'lucide-react';
 
-// Initial state helper
-const getInitialState = (): InspeccionData => ({
-    ppu: '',
-    terminal_id: '',
-    fiscalizador: '',
-    registrador: '',
-    fecha: new Date(),
-    detalles: {}, // Start empty to force selection
-});
+type Tab = 'form' | 'history' | 'reports';
 
 export const InspeccionICA: React.FC = () => {
-    const [formData, setFormData] = useState<InspeccionData>(getInitialState());
-
-    // Derived state for score
-    const totalPoints = 10;
-    const completedPoints = Object.keys(formData.detalles).length;
-    const score = Object.values(formData.detalles).filter((d) => d.cumple).length;
-
-    const handleChecklistChange = (id: number, cumple: boolean, obs?: string) => {
-        setFormData((prev) => ({
-            ...prev,
-            detalles: {
-                ...prev.detalles,
-                [id]: { cumple, observacion: obs },
-            },
-        }));
-    };
-
-    const handleSave = () => {
-        if (completedPoints < totalPoints) {
-            alert('Faltan puntos por evaluar. Por favor complete el checklist.');
-            return;
-        }
-        console.log('Saving Inspection:', formData);
-        alert('Inspección guardada con éxito (Simulación)');
-    };
+    const [activeTab, setActiveTab] = useState<Tab>('form');
 
     return (
         <div className="min-h-screen bg-slate-50/50 dark:bg-slate-900 pb-20 md:pb-10">
 
-            {/* Visual Score Boards */}
-            <ScoreBoard score={score} total={totalPoints} completed={completedPoints} />
-            <MobileScoreBar score={score} total={totalPoints} completed={completedPoints} />
+            <div className="max-w-7xl mx-auto px-4 py-8 space-y-8">
 
-            <div className="max-w-3xl mx-auto px-4 py-8 space-y-8">
+                {/* Header & Tabs */}
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+                    <div>
+                        <h1 className="text-3xl font-bold text-slate-900 dark:text-white tracking-tight">
+                            Control de Fiscalizaciones <span className="text-blue-600">ICA</span>
+                        </h1>
+                        <p className="text-slate-500 mt-1">
+                            Norma A18 - Gestión de Calidad y Estándar de Flota
+                        </p>
+                    </div>
 
-                {/* Title Section */}
-                <div className="mb-8">
-                    <h1 className="text-3xl font-bold text-slate-900 dark:text-white tracking-tight">
-                        Nueva Fiscalización <span className="text-blue-600">ICA A18</span>
-                    </h1>
-                    <p className="text-slate-500 mt-2">
-                        Complete todos los puntos de control para registrar la inspección.
-                    </p>
+                    {/* Tab Navigation */}
+                    <div className="bg-white dark:bg-slate-800 p-1.5 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm flex items-center gap-1 overflow-x-auto">
+                        <NavTab
+                            active={activeTab === 'form'}
+                            onClick={() => setActiveTab('form')}
+                            icon={ClipboardList}
+                            label="Nueva Inspección"
+                        />
+                        <NavTab
+                            active={activeTab === 'history'}
+                            onClick={() => setActiveTab('history')}
+                            icon={History}
+                            label="Historial"
+                        />
+                        <NavTab
+                            active={activeTab === 'reports'}
+                            onClick={() => setActiveTab('reports')}
+                            icon={BarChart3}
+                            label="Reportes"
+                        />
+                    </div>
                 </div>
 
-                {/* Header Form */}
-                <HeaderSection formData={formData} setFormData={setFormData} />
-
-                {/* Checklist */}
-                <ChecklistSection
-                    detalles={formData.detalles}
-                    onChange={handleChecklistChange}
-                />
-
-                {/* Actions Footer */}
-                <div className="sticky bottom-4 md:relative pt-6 z-30">
-                    <button
-                        onClick={handleSave}
-                        disabled={completedPoints < totalPoints}
-                        className={`
-               w-full py-4 rounded-2xl font-bold text-lg shadow-xl transition-all duration-300
-               ${completedPoints === totalPoints
-                                ? 'bg-blue-600 text-white hover:bg-blue-700 hover:shadow-2xl hover:-translate-y-1'
-                                : 'bg-slate-200 text-slate-400 cursor-not-allowed'
-                            }
-             `}
-                    >
-                        {completedPoints === totalPoints ? 'Guardar Inspección' : `Complete ${totalPoints - completedPoints} puntos para guardar`}
-                    </button>
+                {/* Content Area */}
+                <div className="mt-8">
+                    {activeTab === 'form' && <FormTab />}
+                    {activeTab === 'history' && <HistoryTab />}
+                    {activeTab === 'reports' && <ReportsTab />}
                 </div>
 
             </div>
         </div>
     );
 };
+
+const NavTab = ({ active, onClick, icon: Icon, label }: any) => (
+    <button
+        onClick={onClick}
+        className={`
+            flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all whitespace-nowrap
+            ${active
+                ? 'bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 shadow-sm'
+                : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700/50'
+            }
+        `}
+    >
+        <Icon className="w-4 h-4" />
+        {label}
+    </button>
+);
