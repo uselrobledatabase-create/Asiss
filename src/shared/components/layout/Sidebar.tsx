@@ -40,34 +40,10 @@ const NAVIGATION: NavSection[] = [
     ],
   },
   {
-    label: 'Aseo',
-    icon: 'sparkles',
-    items: [
-      { icon: 'trash', label: 'Aseo Admin', to: '/aseo/admin' },
-      // { icon: 'alert-triangle', label: 'Amonestaciones', to: '/amonestaciones' },
-      { label: 'Portal Móvil', to: '/aseo', icon: 'sparkles' },
-    ],
-  },
-  {
     label: 'Insumos',
     icon: 'package',
     items: [
       { label: 'Solicitudes', to: '/insumos', icon: 'file-text' },
-    ],
-  },
-  {
-    label: 'MiniCheck',
-    icon: 'clipboard',
-    items: [
-      { label: 'Odómetro', to: '/minicheck/odometro', icon: 'gauge' },
-      { label: 'Publicidad', to: '/minicheck/publicidad', icon: 'image' },
-    ],
-  },
-  {
-    label: 'Flota',
-    icon: 'truck',
-    items: [
-      { label: 'Estado de Flota', to: '/estado-flota', icon: 'truck' },
     ],
   },
 ];

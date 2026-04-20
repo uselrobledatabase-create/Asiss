@@ -10,23 +10,10 @@ import { ReunionesPage } from '../../features/reuniones/ReunionesPage';
 import { TareasPage } from '../../features/tareas/TareasPage';
 import { InformativosPage } from '../../features/informativos/InformativosPage';
 import { AsistenciaPage } from '../../features/asistencia/AsistenciaPage';
-/* Old aseo sections - disabled for new mobile portal
-import { AseoInteriorPage } from '../../features/aseo/sections/AseoInteriorPage';
-import { AseoExteriorPage } from '../../features/aseo/sections/AseoExteriorPage';
-import { AseoRodilloPage } from '../../features/aseo/sections/AseoRodilloPage';
-*/
 import { CredencialesRespaldoPage } from '../../features/credenciales_respaldo/CredencialesRespaldoPage';
 import { SolicitudesPage } from '../../features/solicitudes/SolicitudesPage';
-import { MiniCheckExtintorPage } from '../../features/minicheck/sections/MiniCheckExtintorPage';
-import { MiniCheckTagPage } from '../../features/minicheck/sections/MiniCheckTagPage';
-import { MiniCheckMobileyePage } from '../../features/minicheck/sections/MiniCheckMobileyePage';
-import { MiniCheckOdometroPage } from '../../features/minicheck/sections/MiniCheckOdometroPage';
-import { MiniCheckPublicidadPage } from '../../features/minicheck/sections/MiniCheckPublicidadPage';
-import { EstadoFlotaPage } from '../../features/estado-flota/EstadoFlotaPage';
 import { SolicitudesInsumosPage } from '../../features/solicitudes_insumos/SolicitudesInsumosPage';
 import { SrlPage } from '../../features/srl/pages/SrlPage';
-import { AseoMobilePage } from '../../features/aseo/pages/AseoMobilePage';
-import { AseoAdminPage } from '../../features/aseo/pages/AseoAdminPage';
 import { MyInfoPage } from '../../features/asistencia2026/pages/MyInfoPage';
 import { AmonestacionesPage } from '../../features/amonestaciones/AmonestacionesPage';
 import { InspeccionICA } from '../../features/inspeccion_ica/InspeccionICA';
@@ -63,34 +50,18 @@ export const AppRouter = () => (
           <Route path="/informativos" element={<InformativosPage />} />
           <Route path="/asistencia" element={<AsistenciaPage />} />
           <Route path="/mi-info" element={<MyInfoPage />} />
-          {/* Old aseo sections - disabled for new mobile portal
-          <Route path="/aseo/interior" element={<AseoInteriorPage />} />
-          <Route path="/aseo/exterior" element={<AseoExteriorPage />} />
-          <Route path="/aseo/rodillo" element={<AseoRodilloPage />} />
-          */}
           <Route path="/credenciales" element={<CredencialesRespaldoPage />} />
           <Route path="/solicitudes" element={<SolicitudesPage />} />
-          <Route path="/minicheck/extintor" element={<MiniCheckExtintorPage />} />
-          <Route path="/minicheck/tag" element={<MiniCheckTagPage />} />
-          <Route path="/minicheck/mobileye" element={<MiniCheckMobileyePage />} />
-          <Route path="/minicheck/odometro" element={<MiniCheckOdometroPage />} />
-          <Route path="/minicheck/publicidad" element={<MiniCheckPublicidadPage />} />
-          <Route path="/estado-flota" element={<EstadoFlotaPage />} />
           <Route path="/insumos" element={<SolicitudesInsumosPage />} />
           <Route path="/srl" element={<SrlPage />} />
-          <Route path="/aseo/admin" element={<AseoAdminPage />} />
           <Route path="/amonestaciones" element={<AmonestacionesPage />} />
           <Route path="/fiscalizacion-ica" element={<InspeccionICA />} />
         </Route>
       </Route>
-      {/* Isolated Aseo Mobile Portal */}
-      <Route path="/aseo" element={<AseoMobilePage />} />
-
-      {/* Inspector-Only View - SRL and Aseo Admin only */}
+      {/* Inspector-Only View */}
       <Route element={<InspectorLayout />}>
         <Route path="/inspector" element={<Navigate to="/inspector/srl" replace />} />
         <Route path="/inspector/srl" element={<SrlPage />} />
-        <Route path="/inspector/aseo-admin" element={<AseoAdminPage />} />
       </Route>
 
       <Route path="*" element={<Navigate to="/" replace />} />
