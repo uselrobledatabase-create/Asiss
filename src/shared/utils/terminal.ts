@@ -30,6 +30,8 @@ export const terminalGroupOptions = TERMINAL_GROUPS.map((group) => ({
 
 export const defaultTerminalContext: TerminalContext = { mode: 'ALL' };
 
+export const EL_ROBLE_SUBTERMINALS_SET = new Set<TerminalCode>(EL_ROBLE_SUBTERMINALS);
+
 export const resolveTerminalsForContext = (context: TerminalContext): TerminalCode[] => {
   if (context.mode === 'ALL' || !context.value) {
     return Object.keys(TERMINALS) as TerminalCode[];

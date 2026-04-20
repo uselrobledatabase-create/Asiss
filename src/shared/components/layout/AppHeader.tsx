@@ -81,7 +81,9 @@ export const AppHeader = ({ onMenuToggle }: Props) => {
                 </div>
                 <div className="hidden md:flex flex-col leading-tight">
                   <span className="text-sm font-semibold text-slate-900">{session.supervisorName}</span>
-                  <span className="text-xs text-slate-500">{displayTerminal(session.terminalCode)}</span>
+                  <span className="text-xs text-slate-500">
+                    {session.terminalCode ? displayTerminal(session.terminalCode) : 'Todos los terminales'}
+                  </span>
                 </div>
                 <button
                   onClick={() => {

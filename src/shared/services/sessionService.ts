@@ -3,7 +3,7 @@ import { TerminalCode } from '../types/terminal';
 
 let inMemorySession: SessionInfo | null = null;
 
-const createSession = (supervisorName: string, terminalCode: TerminalCode): SessionInfo => ({
+const createSession = (supervisorName: string, terminalCode: TerminalCode | null): SessionInfo => ({
   supervisorName,
   terminalCode,
   startedAt: new Date().toISOString(),

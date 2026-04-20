@@ -3,9 +3,17 @@ import { useNavigate } from 'react-router-dom';
 import { sessionService } from '../../shared/services/sessionService';
 import { useSessionStore } from '../../shared/state/sessionStore';
 import { useTerminalStore } from '../../shared/state/terminalStore';
-import { terminalOptions } from '../../shared/utils/terminal';
-import { TerminalCode } from '../../shared/types/terminal';
+import { terminalOptions, EL_ROBLE_SUBTERMINALS_SET } from '../../shared/utils/terminal';
+import { TerminalCode, TerminalContext } from '../../shared/types/terminal';
 import { Icon } from '../../shared/components/common/Icon';
+
+type LoginTerminal = TerminalCode | 'ALL';
+
+const resolveTerminalContext = (t: LoginTerminal): TerminalContext => {
+  if (t === 'ALL') return { mode: 'ALL' };
+  if (EL_ROBLE_SUBTERMINALS_SET.has(t as TerminalCode)) return { mode: 'GROUP', value: 'GRUPO_ROBLE' };
+  return { mode: 'TERMINAL', value: t as TerminalCode };
+};
 
 export const OnboardingPage = () => {
   const navigate = useNavigate();
@@ -13,7 +21,7 @@ export const OnboardingPage = () => {
   const session = useSessionStore((state) => state.session);
   const setTerminalContext = useTerminalStore((state) => state.setContext);
   const [supervisorName, setSupervisorName] = useState('');
-  const [terminalCode, setTerminalCode] = useState<TerminalCode>('EL_ROBLE');
+  const [loginTerminal, setLoginTerminal] = useState<LoginTerminal>('ALL');
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
@@ -25,9 +33,10 @@ export const OnboardingPage = () => {
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setSubmitting(true);
-    const session = await sessionService.startSession(supervisorName, terminalCode);
+    const sessionTerminal: TerminalCode | null = loginTerminal === 'ALL' ? null : loginTerminal as TerminalCode;
+    const session = await sessionService.startSession(supervisorName, sessionTerminal);
     setSession(session);
-    setTerminalContext({ mode: 'TERMINAL', value: terminalCode });
+    setTerminalContext(resolveTerminalContext(loginTerminal));
     navigate('/personal');
   };
 
@@ -105,8 +114,8 @@ export const OnboardingPage = () => {
                 />
                 <select
                   className="input pl-10 appearance-none cursor-pointer"
-                  value={terminalCode}
-                  onChange={(e) => setTerminalCode(e.target.value as TerminalCode)}
+                  value={loginTerminal}
+                  onChange={(e) => setLoginTerminal(e.target.value as LoginTerminal)}
                   style={{
                     backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%2394a3b8'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E")`,
                     backgroundRepeat: 'no-repeat',
@@ -115,6 +124,7 @@ export const OnboardingPage = () => {
                     paddingRight: '40px',
                   }}
                 >
+                  <option value="ALL">Todos los terminales</option>
                   {terminalOptions.map((option) => (
                     <option key={option.value} value={option.value}>
                       {option.label}
