@@ -10,6 +10,27 @@ export interface InspeccionesFilters {
     fechaHasta?: string;
 }
 
+export interface FlotaVehiculo {
+    ppu: string;
+    terminal?: string;
+}
+
+// ── PPU autocomplete from flota table ────────────────────────────────────────
+
+export const fetchFlotaPPUs = async (search: string): Promise<FlotaVehiculo[]> => {
+    if (!search || search.length < 2) return [];
+    const { data, error } = await supabase
+        .from('flota')
+        .select('ppu, terminal')
+        .ilike('ppu', `%${search}%`)
+        .order('ppu')
+        .limit(15);
+    if (error) return [];
+    return (data ?? []) as FlotaVehiculo[];
+};
+
+// ── Save / Fetch inspecciones ICA ─────────────────────────────────────────────
+
 export const saveInspeccion = async (data: InspeccionICAInsert): Promise<InspeccionICARow> => {
     const { data: result, error } = await supabase
         .from(TABLE)
@@ -25,7 +46,7 @@ export const fetchInspecciones = async (filters?: InspeccionesFilters): Promise<
         .from(TABLE)
         .select('*')
         .order('created_at', { ascending: false })
-        .limit(200);
+        .limit(300);
 
     if (filters?.ppu) query = query.ilike('ppu', `%${filters.ppu}%`);
     if (filters?.terminal_code) query = query.eq('terminal_code', filters.terminal_code);
@@ -33,6 +54,15 @@ export const fetchInspecciones = async (filters?: InspeccionesFilters): Promise<
     if (filters?.fechaHasta) query = query.lte('fecha', filters.fechaHasta);
 
     const { data, error } = await query;
+    if (error) throw error;
+    return (data ?? []) as InspeccionICARow[];
+};
+
+export const fetchAllInspecciones = async (): Promise<InspeccionICARow[]> => {
+    const { data, error } = await supabase
+        .from(TABLE)
+        .select('*')
+        .order('fecha', { ascending: false });
     if (error) throw error;
     return (data ?? []) as InspeccionICARow[];
 };
