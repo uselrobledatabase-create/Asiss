@@ -48,7 +48,7 @@ type ModalState =
 export const PersonalPage = () => {
   const terminalContext = useTerminalStore((state) => state.context);
   const setTerminalContext = useTerminalStore((state) => state.setContext);
-  const [filters, setFilters] = useState<StaffFilters>({ status: 'todos', cargo: 'todos' });
+  const [filters, setFilters] = useState<StaffFilters>({ status: 'ACTIVO', cargo: 'todos' });
   const [modalState, setModalState] = useState<ModalState>({ type: 'none' });
 
   // Queries
