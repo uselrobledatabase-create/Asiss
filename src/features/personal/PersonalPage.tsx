@@ -4,8 +4,8 @@ import { FiltersBar } from '../../shared/components/common/FiltersBar';
 import { LoadingState } from '../../shared/components/common/LoadingState';
 import { ErrorState } from '../../shared/components/common/ErrorState';
 import { ExportMenu } from '../../shared/components/common/ExportMenu';
-import { useTerminalStore } from '../../shared/state/terminalStore';
 import { exportToXlsx } from '../../shared/utils/exportToXlsx';
+import { TerminalContext } from '../../shared/types/terminal';
 import { displayTerminal } from '../../shared/utils/terminal';
 import { formatRut } from './utils/rutUtils';
 import { Icon } from '../../shared/components/common/Icon';
@@ -45,14 +45,16 @@ type ModalState =
   | { type: 'offboard'; staff: StaffViewModel }
   | { type: 'admonish'; staff: StaffViewModel };
 
+const ALL_TERMINALS: TerminalContext = { mode: 'ALL' };
+
 export const PersonalPage = () => {
-  const terminalContext = useTerminalStore((state) => state.context);
-  const setTerminalContext = useTerminalStore((state) => state.setContext);
+  // Local terminal — only affects the data table, not counters or other pages
+  const [tableTerminal, setTableTerminal] = useState<TerminalContext>(ALL_TERMINALS);
   const [filters, setFilters] = useState<StaffFilters>({ status: 'ACTIVO', cargo: 'todos' });
   const [modalState, setModalState] = useState<ModalState>({ type: 'none' });
 
   // Queries
-  const staffQuery = useStaffList(terminalContext, filters);
+  const staffQuery = useStaffList(tableTerminal, filters);
 
   // Mutations
   const createMutation = useCreateStaff();
@@ -63,7 +65,7 @@ export const PersonalPage = () => {
   const admonitionMutation = useCreateAdmonition();
 
   // Realtime subscription
-  useStaffRealtime(terminalContext);
+  useStaffRealtime(tableTerminal);
 
   // Export columns - COMPLETE export with all fields
   const exportColumns = [
@@ -194,10 +196,10 @@ export const PersonalPage = () => {
       />
 
       {/* Counters Dashboard */}
-      <StaffCounters terminalContext={terminalContext} />
+      <StaffCounters terminalContext={ALL_TERMINALS} />
 
       {/* Filters */}
-      <FiltersBar terminalContext={terminalContext} onTerminalChange={setTerminalContext}>
+      <FiltersBar terminalContext={tableTerminal} onTerminalChange={setTableTerminal}>
         <div className="w-full sm:w-auto flex flex-col gap-1">
           <label className="label">Estado</label>
           <select
