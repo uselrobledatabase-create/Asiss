@@ -79,10 +79,10 @@ export const StaffCounters = ({ terminalContext }: Props) => {
                 </h3>
                 <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-3">
                     {counts.byCargo.map((item) => {
-                        const effective = item.effective_count;
+                        const total = item.count; // All ACTIVO (including suspended)
                         const hasQuota = !!item.max_q;
-                        const isOverQ = hasQuota && effective > item.max_q!;
-                        const pct = hasQuota ? Math.min((effective / item.max_q!) * 100, 100) : 0;
+                        const isOverQ = hasQuota && total > item.max_q!;
+                        const pct = hasQuota ? Math.min((total / item.max_q!) * 100, 100) : 0;
 
                         return (
                             <div
@@ -111,7 +111,7 @@ export const StaffCounters = ({ terminalContext }: Props) => {
                                     </span>
                                 </div>
 
-                                {/* Main count */}
+                                {/* Main count — total activos */}
                                 <div className="flex items-baseline gap-1.5">
                                     <span className={`text-3xl font-extrabold leading-none tabular-nums ${
                                         isOverQ
@@ -120,7 +120,7 @@ export const StaffCounters = ({ terminalContext }: Props) => {
                                             ? 'text-green-600'
                                             : 'text-slate-800'
                                     }`}>
-                                        {effective}
+                                        {total}
                                     </span>
                                     {hasQuota && (
                                         <span className="text-sm font-semibold text-slate-400">
@@ -129,23 +129,25 @@ export const StaffCounters = ({ terminalContext }: Props) => {
                                     )}
                                 </div>
 
-                                {/* Breakdown — always same structure for uniform card height */}
+                                {/* Breakdown — uniform height for all cards */}
                                 <div className="flex flex-col gap-1 text-[11px]">
                                     <div className="flex justify-between text-slate-500">
-                                        <span>Total</span>
-                                        <span className="font-semibold text-slate-700 tabular-nums">{item.count}</span>
+                                        <span>Total activos</span>
+                                        <span className="font-semibold text-slate-700 tabular-nums">{total}</span>
                                     </div>
                                     <div className="flex justify-between text-slate-500">
                                         <span>Suspendidos</span>
                                         <span className={`font-semibold tabular-nums ${
-                                            item.suspended > 0 ? 'text-amber-600' : 'text-slate-700'
+                                            item.suspended > 0 ? 'text-amber-600' : 'text-slate-400'
                                         }`}>
                                             {item.suspended}
                                         </span>
                                     </div>
                                     <div className="flex justify-between pt-1 border-t border-slate-100">
-                                        <span className="font-semibold text-slate-600">Efectivo</span>
-                                        <span className="font-bold text-slate-800 tabular-nums">{effective}</span>
+                                        <span className="font-semibold text-slate-600">Disponibles</span>
+                                        <span className="font-bold text-slate-800 tabular-nums">
+                                            {total - item.suspended}
+                                        </span>
                                     </div>
                                 </div>
 

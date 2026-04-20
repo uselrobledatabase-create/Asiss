@@ -273,8 +273,6 @@ export const fetchStaffCounts = async (
 
     const byCargo: StaffCountByCargo[] = STAFF_CARGOS.map((c) => {
         const stats = cargoStats.get(c.value) || { count: 0, withLicenses: 0, suspended: 0 };
-        // ONLY subtract suspended, NOT licenses - licenses are tracked for info only
-        const effectiveCount = stats.count - stats.suspended;
 
         return {
             cargo: c.value,
@@ -282,7 +280,7 @@ export const fetchStaffCounts = async (
             max_q: capsMap.get(c.value) ?? null,
             with_licenses: stats.withLicenses,
             suspended: stats.suspended,
-            effective_count: effectiveCount,
+            effective_count: stats.count, // Total activos (suspended = still active)
         };
     });
 
