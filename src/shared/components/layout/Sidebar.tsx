@@ -38,13 +38,6 @@ const NAVIGATION: NavSection[] = [
       { label: 'Amonestaciones', to: '/amonestaciones', icon: 'alert-triangle' },
     ],
   },
-  {
-    label: 'Insumos',
-    icon: 'package',
-    items: [
-      { label: 'Solicitudes', to: '/insumos', icon: 'file-text' },
-    ],
-  },
 ];
 
 export const Sidebar = ({ isOpen, isCollapsed, onClose, onToggleCollapse }: Props) => {

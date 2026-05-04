@@ -11,7 +11,6 @@ import { InformativosPage } from '../../features/informativos/InformativosPage';
 import { AsistenciaPage } from '../../features/asistencia/AsistenciaPage';
 import { CredencialesRespaldoPage } from '../../features/credenciales_respaldo/CredencialesRespaldoPage';
 import { SolicitudesPage } from '../../features/solicitudes/SolicitudesPage';
-import { SolicitudesInsumosPage } from '../../features/solicitudes_insumos/SolicitudesInsumosPage';
 import { MyInfoPage } from '../../features/asistencia2026/pages/MyInfoPage';
 import { AmonestacionesPage } from '../../features/amonestaciones/AmonestacionesPage';
 import { InspeccionICA } from '../../features/inspeccion_ica/InspeccionICA';
@@ -50,7 +49,6 @@ export const AppRouter = () => (
           <Route path="/mi-info" element={<MyInfoPage />} />
           <Route path="/credenciales" element={<CredencialesRespaldoPage />} />
           <Route path="/solicitudes" element={<SolicitudesPage />} />
-          <Route path="/insumos" element={<SolicitudesInsumosPage />} />
           <Route path="/amonestaciones" element={<AmonestacionesPage />} />
           <Route path="/fiscalizacion-ica" element={<InspeccionICA />} />
         </Route>
