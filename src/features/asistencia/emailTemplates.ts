@@ -89,6 +89,15 @@ const renderTextWithBreaks = (value: string) =>
     .replace(/\r/g, '\n')
     .replace(/\n/g, '<br>');
 
+const normalizeRutForEmail = (value: string) => {
+  const compact = value.replace(/[^0-9kK]/g, '').toUpperCase();
+  if (compact.length < 2) return normalizeWhitespace(value);
+
+  const body = compact.slice(0, -1);
+  const verifier = compact.slice(-1);
+  return `${body}-${verifier}`;
+};
+
 const renderValue = (value: AsissEmailValue) => {
   if (!hasAsissEmailValue(value)) return '';
 
@@ -97,6 +106,15 @@ const renderValue = (value: AsissEmailValue) => {
   }
 
   return renderTextWithBreaks(String(value));
+};
+
+const renderColumnValue = (column: AsissEmailColumn, value: AsissEmailValue) => {
+  if (column.key !== 'rut') return renderValue(value);
+
+  const normalizedRut = normalizeRutForEmail(textValue(value));
+  if (!normalizedRut) return '';
+
+  return `<span style="display:inline-block;white-space:nowrap;text-align:center;">${escapeHtml(normalizedRut)}</span>`;
 };
 
 const textValue = (value: AsissEmailValue) => {
@@ -235,9 +253,10 @@ export const buildAsissLogisticaEmail = ({
   const valueCells = visibleColumns
     .map((column, index) => {
       const tone = getToneStyle(column, rowData[column.key]);
+      const rutStyle = column.key === 'rut' ? 'white-space:nowrap;font-size:11px;letter-spacing:.2px;' : '';
       return `
-        <td width="${widths[index]}" align="center" valign="middle" style="background:${tone.background};color:${tone.color};font-family:${FONT_STACK};font-size:12px;font-weight:800;line-height:16px;padding:16px 8px;text-align:center;vertical-align:middle;border-top:1px solid #d5e0ed;border-right:${index === visibleColumns.length - 1 ? '0' : '1px solid #d5e0ed'};">
-          ${renderValue(rowData[column.key])}
+        <td width="${widths[index]}" align="center" valign="middle" style="background:${tone.background};color:${tone.color};font-family:${FONT_STACK};font-size:12px;font-weight:800;line-height:16px;padding:16px 8px;text-align:center;vertical-align:middle;border-top:1px solid #d5e0ed;border-right:${index === visibleColumns.length - 1 ? '0' : '1px solid #d5e0ed'};${rutStyle}">
+          ${renderColumnValue(column, rowData[column.key])}
         </td>
       `;
     })
