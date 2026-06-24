@@ -437,7 +437,7 @@ export async function sendSrlEmailNotification(requestId: string, trigger: 'CREA
                                 Por favor no responder directamente a este correo.
                             </p>
                             <p style="margin: 0; color: #cbd5e1; font-size: 11px;">
-                                © ${new Date().getFullYear()} Asiss - Operaciones y Logística Intregrada
+                                © ${new Date().getFullYear()} ASISS - Sistema ASISS Logística
                             </p>
                         </td>
                     </tr>

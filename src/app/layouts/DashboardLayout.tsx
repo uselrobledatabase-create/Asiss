@@ -47,7 +47,7 @@ export const DashboardLayout = () => {
           {/* Footer */}
           <footer className="border-t border-slate-200 bg-white/50 px-4 py-4 md:px-8">
             <div className="flex flex-col items-center justify-between gap-2 text-xs text-slate-500 sm:flex-row">
-              <p>© 2024 Asiss · Dashboard de Operaciones y Logística</p>
+              <p>© 2024 ASISS · Dashboard ASISS Logística</p>
               <p className="flex items-center gap-1">
                 <span className="inline-block h-2 w-2 rounded-full bg-success-500 animate-pulse"></span>
                 Sistema operativo

@@ -97,10 +97,18 @@ export const createNoMarcacion = async (
             terminal: values.terminal_code,
             date: values.date,
             createdBy: createdBy,
+            requestId: data.id,
+            createdAt: data.created_at,
+            status: data.auth_status,
             details: {
                 'Área': values.area || '',
                 'Cargo': values.cargo || '',
                 'Jefe Terminal': values.jefe_terminal || '',
+                'Cabezal': values.cabezal || '',
+                'Tipo de Marcación': values.incident_state || '',
+                'Hora Esperada': values.schedule_in_out || '',
+                'Hora Registrada': values.time_range || '',
+                'Informado Por': values.informed_by || createdBy,
                 'Observaciones': values.observations || '',
             }
         });
@@ -193,11 +201,17 @@ export const createSinCredencial = async (
             terminal: values.terminal_code,
             date: values.date,
             createdBy: createdBy,
+            requestId: data.id,
+            createdAt: data.created_at,
+            status: data.auth_status,
             details: {
                 'Cabezal': values.cabezal || '',
-                'Horario': `${values.start_time || ''} - ${values.end_time || ''}`,
+                'Horario': formatTimeRange(values.start_time, values.end_time),
                 'Cargo': values.cargo || '',
+                'Área': values.area || '',
                 'Supervisor Autoriza': values.supervisor_autoriza || '',
+                'Responsable': values.responsable || '',
+                'Observaciones': values.observacion || '',
             }
         });
         showSuccessToast(
@@ -321,13 +335,16 @@ export const createCambioDia = async (
 
     // Send email notification
     try {
-        let documentLink = 'No adjunto';
+        let documentLink: AsissEmailValue = 'No adjunto';
         if (documentPath) {
             const { data: urlData } = supabase.storage
                 .from('attendance-docs')
                 .getPublicUrl(documentPath);
 
-            documentLink = `<a href="${urlData.publicUrl}" target="_blank" style="color: #2563eb; text-decoration: underline; font-weight: 700;">Ver Documento Adjunto</a>`;
+            documentLink = {
+                html: `<a href="${urlData.publicUrl}" target="_blank" style="color:#1f5fe7;text-decoration:underline;font-weight:800;">Ver documento adjunto</a>`,
+                text: 'Ver documento adjunto',
+            };
         }
 
         await sendRecordCreatedEmail('Cambios de Día', {
@@ -336,10 +353,16 @@ export const createCambioDia = async (
             terminal: values.terminal_code,
             date: values.date,
             createdBy: createdBy,
+            requestId: data.id,
+            createdAt: data.created_at,
+            status: data.auth_status,
             details: {
-                'Jornada Programada': `${values.prog_start || ''} - ${values.prog_end || ''}`,
+                'Jornada Programada': formatTimeRange(values.prog_start, values.prog_end),
                 'Día No Trabaja': values.day_off_date || '',
+                'Turno Original': formatTimeRange(values.day_off_start, values.day_off_end),
                 'Día Trabaja': values.day_on_date || '',
+                'Turno Solicitado': formatTimeRange(values.day_on_start, values.day_on_end),
+                'Cabezal': values.cabezal || '',
                 'Documento': documentLink,
             }
         });
@@ -459,10 +482,16 @@ export const createAutorizacion = async (
             terminal: values.terminal_code,
             date: values.authorization_date,
             createdBy: createdBy,
+            requestId: data.id,
+            createdAt: data.created_at,
+            status: data.auth_status,
             details: {
                 'Tipo': values.entry_or_exit === 'ENTRADA' ? 'Llegada Tardía' : 'Retiro Anticipado',
                 'Horario': values.horario || '',
+                'Hora Inicio': values.horario?.split('-')[0]?.trim() || '',
+                'Hora Término': values.horario?.split('-')[1]?.trim() || '',
                 'Turno': values.turno || '',
+                'Cargo': values.cargo || '',
                 'Motivo': values.motivo || '',
             }
         });
@@ -822,8 +851,8 @@ export const createVacacion = async (
     // Send email notification
     try {
         const conflictWarning = conflictInfo.hasConflict
-            ? `<strong style="color: #dc2626;">ADVERTENCIA:</strong> ${conflictDetails}`
-            : 'Sin conflictos detectados';
+            ? `Conflictos detectados\n${conflictDetails}`
+            : 'Sin conflictos\ndetectados';
 
         await sendRecordCreatedEmail('Vacaciones', {
             rut: values.rut,
@@ -831,6 +860,9 @@ export const createVacacion = async (
             terminal: values.terminal_code,
             date: values.start_date,
             createdBy: createdBy,
+            requestId: data.id,
+            createdAt: data.created_at,
+            status: data.auth_status,
             details: {
                 'Fecha Inicio': values.start_date,
                 'Fecha Término': values.end_date,
@@ -887,65 +919,245 @@ import { emailService } from '../../shared/services/emailService';
 import { displayTerminal } from '../../shared/utils/terminal';
 import { fetchAppConfig, EmailConfig } from '../settings/api';
 import { formatRut } from '../personal/utils/rutUtils';
+import {
+    AsissEmailColumn,
+    AsissEmailValue,
+    buildAsissLogisticaEmail,
+    formatEmailDate,
+    hasAsissEmailValue,
+} from './emailTemplates';
 
 const EMAIL_RECIPIENT = 'isaac.avila@transdev.cl';
+const EMAIL_AUDIENCE_LABEL = 'Revisión y autorización';
+const PENDING_STATUS_LABEL = 'Pendiente de\nautorización';
 
-// SVG Icons for emails (inline SVG is the most reliable for email clients)
-const SVG_ICONS = {
-    check: `<svg width="56" height="56" viewBox="0 0 56 56" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <circle cx="28" cy="28" r="26" fill="#dcfce7" stroke="#22c55e" stroke-width="3"/>
-        <path d="M18 28L24 34L38 20" stroke="#16a34a" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
-    </svg>`,
-    x: `<svg width="56" height="56" viewBox="0 0 56 56" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <circle cx="28" cy="28" r="26" fill="#fee2e2" stroke="#ef4444" stroke-width="3"/>
-        <path d="M20 20L36 36M36 20L20 36" stroke="#dc2626" stroke-width="4" stroke-linecap="round"/>
-    </svg>`,
-    clock: `<svg width="56" height="56" viewBox="0 0 56 56" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <circle cx="28" cy="28" r="26" fill="#fef3c7" stroke="#f59e0b" stroke-width="3"/>
-        <circle cx="28" cy="28" r="3" fill="#d97706"/>
-        <path d="M28 16V28L36 33" stroke="#d97706" stroke-width="3" stroke-linecap="round"/>
-    </svg>`,
-    user: `<svg width="18" height="18" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <circle cx="9" cy="5" r="3.5" stroke="#64748b" stroke-width="1.5"/>
-        <path d="M2 16C2 12.686 5.13401 10 9 10C12.866 10 16 12.686 16 16" stroke="#64748b" stroke-width="1.5" stroke-linecap="round"/>
-    </svg>`,
-    id: `<svg width="18" height="18" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <rect x="1.5" y="3.5" width="15" height="11" rx="2" stroke="#64748b" stroke-width="1.5"/>
-        <circle cx="6" cy="8" r="1.5" stroke="#64748b" stroke-width="1"/>
-        <path d="M4 12C4 10.8954 4.89543 10 6 10C7.10457 10 8 10.8954 8 12" stroke="#64748b" stroke-width="1"/>
-        <path d="M10.5 7.5H14.5M10.5 10H13" stroke="#64748b" stroke-width="1.2" stroke-linecap="round"/>
-    </svg>`,
-    building: `<svg width="18" height="18" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <path d="M2 16V3.5C2 3.22386 2.22386 3 2.5 3H9.5C9.77614 3 10 3.22386 10 3.5V16" stroke="#64748b" stroke-width="1.5"/>
-        <path d="M10 7H14.5C14.7761 7 15 7.22386 15 7.5V16" stroke="#64748b" stroke-width="1.5"/>
-        <path d="M5 6H7M5 9H7M5 12H7M12 10H13M12 13H13" stroke="#64748b" stroke-width="1.2" stroke-linecap="round"/>
-        <path d="M1 16H17" stroke="#64748b" stroke-width="1.5" stroke-linecap="round"/>
-    </svg>`,
-    calendar: `<svg width="18" height="18" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <rect x="2" y="3.5" width="14" height="12" rx="2" stroke="#64748b" stroke-width="1.5"/>
-        <path d="M2 7H16" stroke="#64748b" stroke-width="1.5"/>
-        <path d="M5.5 1.5V4.5M12.5 1.5V4.5" stroke="#64748b" stroke-width="1.5" stroke-linecap="round"/>
-    </svg>`,
+interface AttendanceCreatedEmailData {
+    rut: string;
+    nombre: string;
+    terminal: string;
+    date: string;
+    createdBy: string;
+    requestId?: string | number | null;
+    createdAt?: string | Date | null;
+    status?: AuthStatus;
+    details?: Record<string, AsissEmailValue>;
+}
+
+const asText = (value: AsissEmailValue): string => {
+    if (!hasAsissEmailValue(value)) return '';
+    if (typeof value === 'object' && value !== null && 'html' in value) {
+        return value.text ?? value.html.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+    }
+    return String(value);
 };
 
-const formatDate = (date: string) => {
-    const d = new Date(date + 'T12:00:00');
-    return d.toLocaleDateString('es-CL', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+const detailValue = (details: Record<string, AsissEmailValue> | undefined, key: string): AsissEmailValue =>
+    details?.[key] ?? '';
+
+const detailDate = (details: Record<string, AsissEmailValue> | undefined, key: string) => {
+    const value = detailValue(details, key);
+    const text = asText(value);
+    return text ? formatEmailDate(text) : '';
 };
 
-const generateDataRow = (icon: string, label: string, value: string, highlight = false) => `
-    <tr>
-        <td style="padding: 12px 16px; border-bottom: 1px solid #e2e8f0; width: 40%; vertical-align: middle;">
-            <table role="presentation" cellspacing="0" cellpadding="0" border="0">
-                <tr>
-                    <td style="padding-right: 12px; vertical-align: middle;">${icon}</td>
-                    <td style="font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px;">${label}</td>
-                </tr>
-            </table>
-        </td>
-        <td style="padding: 12px 16px; border-bottom: 1px solid #e2e8f0; font-size: 14px; font-weight: ${highlight ? '700' : '500'}; color: ${highlight ? '#0f172a' : '#334155'}; text-align: right;">${value}</td>
-    </tr>
-`;
+const formatTimeRange = (start?: string | null, end?: string | null) => {
+    const parts = [start, end].map((part) => part?.trim()).filter(Boolean);
+    return parts.join(' - ');
+};
+
+const requestLabelForSubsection = (subsection: string) => {
+    const normalized = subsection.toLowerCase();
+    if (normalized.includes('no marc')) return 'No marcación';
+    if (normalized.includes('sin cred')) return 'Sin credencial';
+    if (normalized.includes('cambio')) return 'Cambio de día';
+    if (normalized.includes('autoriz')) return 'Permiso';
+    if (normalized.includes('vacacion') || normalized.includes('vacaciones')) return 'Vacaciones';
+    return subsection;
+};
+
+const statusLabel = (status?: AuthStatus) => {
+    if (status === 'AUTORIZADO') return 'Autorizado';
+    if (status === 'RECHAZADO') return 'Rechazado';
+    return PENDING_STATUS_LABEL;
+};
+
+const baseRowData = (data: AttendanceCreatedEmailData): Record<string, AsissEmailValue> => ({
+    rut: formatRut(data.rut),
+    colaborador: data.nombre,
+    terminal: displayTerminal(data.terminal as any),
+    estado: statusLabel(data.status),
+});
+
+const buildRecordTable = (
+    subsection: string,
+    data: AttendanceCreatedEmailData
+): { columns: AsissEmailColumn[]; rowData: Record<string, AsissEmailValue> } => {
+    const details = data.details;
+    const requestDate = formatEmailDate(data.createdAt ?? data.date);
+    const eventDate = formatEmailDate(data.date);
+    const rowData = baseRowData(data);
+    const normalized = subsection.toLowerCase();
+
+    if (normalized.includes('vacacion') || normalized.includes('vacaciones')) {
+        return {
+            columns: [
+                { key: 'rut', label: 'RUT', width: 6 },
+                { key: 'colaborador', label: 'COLABORADOR', width: 18 },
+                { key: 'terminal', label: 'TERMINAL', width: 7 },
+                { key: 'fecha_solicitud', label: 'FECHA DE\nSOLICITUD', width: 9 },
+                { key: 'tipo', label: 'TIPO', width: 7 },
+                { key: 'estado', label: 'ESTADO', width: 12, tone: 'status' },
+                { key: 'inicio', label: 'INICIO DE\nVACACIONES', width: 8 },
+                { key: 'termino', label: 'TÉRMINO DE\nVACACIONES', width: 8 },
+                { key: 'vuelta', label: 'FECHA DE\nVUELTA', width: 8 },
+                { key: 'dias_calendario', label: 'DÍAS\nCALENDARIO', width: 5 },
+                { key: 'dias_descontar', label: 'DÍAS A\nDESCONTAR', width: 5 },
+                { key: 'conflictos', label: 'CONFLICTOS', width: 7, tone: 'conflict' },
+            ],
+            rowData: {
+                ...rowData,
+                fecha_solicitud: requestDate,
+                tipo: 'Vacaciones',
+                inicio: detailDate(details, 'Fecha Inicio'),
+                termino: detailDate(details, 'Fecha Término'),
+                vuelta: detailDate(details, 'Fecha Vuelta'),
+                dias_calendario: detailValue(details, 'Días Calendario'),
+                dias_descontar: detailValue(details, 'Días a Descontar'),
+                conflictos: detailValue(details, 'Conflictos'),
+            },
+        };
+    }
+
+    if (normalized.includes('no marc')) {
+        return {
+            columns: [
+                { key: 'rut', label: 'RUT', width: 6 },
+                { key: 'colaborador', label: 'COLABORADOR', width: 16 },
+                { key: 'cargo', label: 'CARGO', width: 8 },
+                { key: 'area', label: 'ÁREA', width: 6 },
+                { key: 'jefe_terminal', label: 'JEFE\nTERMINAL', width: 8 },
+                { key: 'terminal', label: 'TERMINAL', width: 7 },
+                { key: 'cabezal', label: 'CABEZAL', width: 6 },
+                { key: 'fecha', label: 'FECHA', width: 8 },
+                { key: 'tipo_marcacion', label: 'TIPO DE\nMARCACIÓN', width: 8 },
+                { key: 'hora_esperada', label: 'HORA\nESPERADA', width: 8 },
+                { key: 'hora_registrada', label: 'HORA\nREGISTRADA', width: 8 },
+                { key: 'estado', label: 'ESTADO', width: 9, tone: 'status' },
+                { key: 'informado_por', label: 'INFORMADO\nPOR', width: 8 },
+                { key: 'observaciones', label: 'OBSERVACIONES', width: 12 },
+            ],
+            rowData: {
+                ...rowData,
+                cargo: detailValue(details, 'Cargo'),
+                area: detailValue(details, 'Área'),
+                jefe_terminal: detailValue(details, 'Jefe Terminal'),
+                cabezal: detailValue(details, 'Cabezal'),
+                fecha: eventDate,
+                tipo_marcacion: detailValue(details, 'Tipo de Marcación'),
+                hora_esperada: detailValue(details, 'Hora Esperada'),
+                hora_registrada: detailValue(details, 'Hora Registrada'),
+                informado_por: detailValue(details, 'Informado Por'),
+                observaciones: detailValue(details, 'Observaciones'),
+            },
+        };
+    }
+
+    if (normalized.includes('sin cred')) {
+        return {
+            columns: [
+                { key: 'rut', label: 'RUT', width: 7 },
+                { key: 'colaborador', label: 'COLABORADOR', width: 18 },
+                { key: 'cargo', label: 'CARGO', width: 10 },
+                { key: 'area', label: 'ÁREA', width: 7 },
+                { key: 'terminal', label: 'TERMINAL', width: 8 },
+                { key: 'cabezal', label: 'CABEZAL', width: 7 },
+                { key: 'fecha', label: 'FECHA', width: 9 },
+                { key: 'horario', label: 'HORARIO', width: 9 },
+                { key: 'estado', label: 'ESTADO', width: 10, tone: 'status' },
+                { key: 'informado_por', label: 'INFORMADO\nPOR', width: 10 },
+                { key: 'responsable', label: 'RESPONSABLE', width: 8 },
+                { key: 'observaciones', label: 'OBSERVACIONES', width: 12 },
+            ],
+            rowData: {
+                ...rowData,
+                cargo: detailValue(details, 'Cargo'),
+                area: detailValue(details, 'Área'),
+                cabezal: detailValue(details, 'Cabezal'),
+                fecha: eventDate,
+                horario: detailValue(details, 'Horario'),
+                informado_por: detailValue(details, 'Supervisor Autoriza'),
+                responsable: detailValue(details, 'Responsable'),
+                observaciones: detailValue(details, 'Observaciones'),
+            },
+        };
+    }
+
+    if (normalized.includes('cambio')) {
+        return {
+            columns: [
+                { key: 'rut', label: 'RUT', width: 7 },
+                { key: 'colaborador', label: 'COLABORADOR', width: 18 },
+                { key: 'terminal', label: 'TERMINAL', width: 8 },
+                { key: 'cabezal', label: 'CABEZAL', width: 7 },
+                { key: 'fecha_solicitud', label: 'FECHA DE\nSOLICITUD', width: 10 },
+                { key: 'dia_original', label: 'DÍA\nORIGINAL', width: 9 },
+                { key: 'dia_solicitado', label: 'DÍA\nSOLICITADO', width: 9 },
+                { key: 'turno_original', label: 'TURNO\nORIGINAL', width: 9 },
+                { key: 'turno_solicitado', label: 'TURNO\nSOLICITADO', width: 9 },
+                { key: 'jornada_programada', label: 'JORNADA\nPROGRAMADA', width: 9 },
+                { key: 'estado', label: 'ESTADO', width: 10, tone: 'status' },
+                { key: 'documento', label: 'VALIDACIÓN', width: 9 },
+            ],
+            rowData: {
+                ...rowData,
+                cabezal: detailValue(details, 'Cabezal'),
+                fecha_solicitud: requestDate,
+                dia_original: detailDate(details, 'Día No Trabaja'),
+                dia_solicitado: detailDate(details, 'Día Trabaja'),
+                turno_original: detailValue(details, 'Turno Original'),
+                turno_solicitado: detailValue(details, 'Turno Solicitado'),
+                jornada_programada: detailValue(details, 'Jornada Programada'),
+                documento: detailValue(details, 'Documento'),
+            },
+        };
+    }
+
+    return {
+        columns: [
+            { key: 'rut', label: 'RUT', width: 7 },
+            { key: 'colaborador', label: 'COLABORADOR', width: 18 },
+            { key: 'cargo', label: 'CARGO', width: 10 },
+            { key: 'terminal', label: 'TERMINAL', width: 8 },
+            { key: 'fecha_solicitud', label: 'FECHA DE\nSOLICITUD', width: 10 },
+            { key: 'tipo_permiso', label: 'TIPO DE\nPERMISO', width: 10 },
+            { key: 'fecha_inicio', label: 'FECHA DE\nINICIO', width: 10 },
+            { key: 'hora_inicio', label: 'HORA DE\nINICIO', width: 8 },
+            { key: 'hora_termino', label: 'HORA DE\nTÉRMINO', width: 8 },
+            { key: 'turno', label: 'TURNO', width: 8 },
+            { key: 'estado', label: 'ESTADO', width: 10, tone: 'status' },
+            { key: 'motivo', label: 'MOTIVO U\nOBSERVACIONES', width: 13 },
+        ],
+        rowData: {
+            ...rowData,
+            cargo: detailValue(details, 'Cargo'),
+            fecha_solicitud: requestDate,
+            tipo_permiso: detailValue(details, 'Tipo'),
+            fecha_inicio: eventDate,
+            hora_inicio: detailValue(details, 'Hora Inicio'),
+            hora_termino: detailValue(details, 'Hora Término'),
+            turno: detailValue(details, 'Turno'),
+            motivo: detailValue(details, 'Motivo'),
+        },
+    };
+};
+
+const fetchEmailRecipients = async () => {
+    const config = await fetchAppConfig<EmailConfig>('email_notifications');
+    return {
+        recipients: config?.to && config.to.length > 0 ? config.to : [EMAIL_RECIPIENT],
+        ccRecipients: config?.cc || [],
+    };
+};
 
 export const sendAuthorizationEmail = async (
     type: 'AUTORIZADO' | 'RECHAZADO',
@@ -956,49 +1168,36 @@ export const sendAuthorizationEmail = async (
     date: string,
     reason?: string
 ): Promise<void> => {
-    const isApproved = type === 'AUTORIZADO';
-    const statusColor = isApproved ? '#16a34a' : '#dc2626';
-    const statusBg = isApproved ? '#f0fdf4' : '#fef2f2'; // Very light green/red
-    const statusBorder = isApproved ? '#bbf7d0' : '#fecaca';
-    const statusIcon = isApproved ? SVG_ICONS.check : SVG_ICONS.x;
-
     const subject = `${subsection} ${type} - ${nombre}`;
-    const body = `
-        <!-- Status Banner -->
-        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin-bottom: 24px;">
-            <tr>
-                <td style="background: ${statusBg}; border: 1px solid ${statusBorder}; border-radius: 12px; padding: 24px; text-align: center;">
-                    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
-                        <tr>
-                            <td align="center" style="padding-bottom: 8px;">
-                                ${statusIcon}
-                            </td>
-                        </tr>
-                        <tr>
-                            <td align="center">
-                                <span style="font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 1px; display: block; margin-bottom: 4px;">Estado del Registro</span>
-                                <span style="font-size: 20px; font-weight: 800; color: ${statusColor}; letter-spacing: -0.5px;">${type}</span>
-                            </td>
-                        </tr>
-                    </table>
-                </td>
-            </tr>
-        </table>
-        
-        <!-- Data Table -->
-        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden; border-spacing: 0; border-collapse: separate;">
-            ${generateDataRow(SVG_ICONS.id, 'Subsección', subsection, true)}
-            ${generateDataRow(SVG_ICONS.id, 'RUT', formatRut(rut))}
-            ${generateDataRow(SVG_ICONS.user, 'Trabajador', nombre)}
-            ${generateDataRow(SVG_ICONS.building, 'Terminal', displayTerminal(terminal as any))}
-            ${generateDataRow(SVG_ICONS.calendar, 'Fecha', formatDate(date))}
-            ${reason ? generateDataRow(SVG_ICONS.id, 'Motivo', reason, true) : ''}
-        </table>
-    `.trim();
+    const requestLabel = requestLabelForSubsection(subsection);
+    const body = buildAsissLogisticaEmail({
+        title: `${type === 'AUTORIZADO' ? 'Registro aprobado' : 'Registro rechazado'}: ${requestLabel}`,
+        subtitle: 'Actualización registrada en el flujo de autorización.',
+        unitOrTerminal: displayTerminal(terminal as any),
+        registeredBy: 'Sistema ASISS',
+        audience: EMAIL_AUDIENCE_LABEL,
+        columns: [
+            { key: 'rut', label: 'RUT', width: 10 },
+            { key: 'colaborador', label: 'COLABORADOR', width: 24 },
+            { key: 'terminal', label: 'TERMINAL', width: 12 },
+            { key: 'tipo', label: 'TIPO DE\nSOLICITUD', width: 14 },
+            { key: 'fecha', label: 'FECHA', width: 14 },
+            { key: 'estado', label: 'ESTADO', width: 14, tone: 'status' },
+            { key: 'motivo', label: 'MOTIVO U\nOBSERVACIONES', width: 12 },
+        ],
+        rowData: {
+            rut: formatRut(rut),
+            colaborador: nombre,
+            terminal: displayTerminal(terminal as any),
+            tipo: requestLabel,
+            fecha: formatEmailDate(date),
+            estado: statusLabel(type),
+            motivo: reason || '',
+        },
+        status: type,
+    });
 
-    const config = await fetchAppConfig<EmailConfig>('email_notifications');
-    const recipients = config?.to && config.to.length > 0 ? config.to : [EMAIL_RECIPIENT];
-    const ccRecipients = config?.cc || [];
+    const { recipients, ccRecipients } = await fetchEmailRecipients();
 
     try {
         await emailService.sendEmail({
@@ -1007,6 +1206,7 @@ export const sendAuthorizationEmail = async (
             cc: ccRecipients,
             subject,
             body,
+            module: 'asistencia',
         });
     } catch (err) {
         console.error('Error sending authorization email:', err);
@@ -1021,89 +1221,29 @@ export const sendRecordCreatedEmail = async (
         terminal: string;
         date: string;
         createdBy: string;
-        details?: Record<string, string>;
+        requestId?: string | number | null;
+        createdAt?: string | Date | null;
+        status?: AuthStatus;
+        details?: Record<string, AsissEmailValue>;
     }
 ): Promise<void> => {
-    const detailsRows = data.details
-        ? Object.entries(data.details)
-            .filter(([_, v]) => v && v.trim())
-            .map(([k, v]) => generateDataRow(SVG_ICONS.id, k, v))
-            .join('')
-        : '';
+    const requestLabel = requestLabelForSubsection(subsection);
+    const { columns, rowData } = buildRecordTable(subsection, data);
+    const subject = `Nuevo Registro: ${requestLabel}`;
+    const body = buildAsissLogisticaEmail({
+        title: `Nuevo registro: ${requestLabel}`,
+        subtitle: 'Solicitud ingresada para revisión y autorización.',
+        unitOrTerminal: displayTerminal(data.terminal as any),
+        requestId: data.requestId,
+        registeredBy: data.createdBy,
+        audience: EMAIL_AUDIENCE_LABEL,
+        sentAt: new Date(),
+        columns,
+        rowData,
+        status: data.status || 'PENDIENTE',
+    });
 
-    const subject = `Nuevo Registro: ${subsection}`;
-    const body = `
-        <!-- Worker Name Header -->
-        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin-bottom: 24px;">
-            <tr>
-                <td align="center">
-                    <h2 style="margin: 0; font-size: 24px; font-weight: 800; color: #0f172a;">${data.nombre}</h2>
-                </td>
-            </tr>
-        </table>
-        
-        <!-- Status Banner -->
-        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin-bottom: 24px;">
-            <tr>
-                <td style="background: #fffbeb; border: 1px solid #fde68a; border-radius: 12px; padding: 24px; text-align: center;">
-                    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
-                        <tr>
-                            <td align="center" style="padding-bottom: 8px;">
-                                ${SVG_ICONS.clock}
-                            </td>
-                        </tr>
-                        <tr>
-                            <td align="center">
-                                <span style="font-size: 11px; font-weight: 700; color: #92400e; text-transform: uppercase; letter-spacing: 1px; display: block; margin-bottom: 4px;">Estado del Registro</span>
-                                <span style="font-size: 18px; font-weight: 800; color: #b45309; letter-spacing: -0.5px;">PENDIENTE DE AUTORIZACIÓN</span>
-                            </td>
-                        </tr>
-                    </table>
-                </td>
-            </tr>
-        </table>
-        
-        <!-- Subsection Badge -->
-        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin-bottom: 24px;">
-            <tr>
-                <td align="center">
-                    <span style="display: inline-block; padding: 8px 20px; background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 100px; color: #2563eb; font-size: 12px; font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase;">${subsection}</span>
-                </td>
-            </tr>
-        </table>
-        
-        <!-- Data Table -->
-        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden; border-spacing: 0; border-collapse: separate;">
-            ${generateDataRow(SVG_ICONS.id, 'RUT', formatRut(data.rut))}
-            ${generateDataRow(SVG_ICONS.user, 'Trabajador', data.nombre, true)}
-            ${generateDataRow(SVG_ICONS.building, 'Terminal', displayTerminal(data.terminal as any))}
-            ${generateDataRow(SVG_ICONS.calendar, 'Fecha', formatDate(data.date))}
-            ${detailsRows}
-        </table>
-        
-        <!-- Registered By -->
-        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin-top: 24px;">
-            <tr>
-                <td style="padding: 16px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px;">
-                    <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
-                        <tr>
-                            <td width="40" style="padding-right: 12px; vertical-align: middle;">
-                                <div style="width: 40px; height: 40px; background: #2563eb; border-radius: 50%; text-align: center; line-height: 40px; color: white; font-weight: 700; font-size: 16px;">${data.createdBy.charAt(0)}</div>
-                            </td>
-                            <td style="vertical-align: middle;">
-                                <span style="display: block; font-size: 10px; color: #64748b; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 2px;">Registrado por</span>
-                                <span style="display: block; font-size: 14px; font-weight: 700; color: #0f172a;">${data.createdBy}</span>
-                            </td>
-                        </tr>
-                    </table>
-                </td>
-            </tr>
-        </table>
-    `.trim();
-
-    const config = await fetchAppConfig<EmailConfig>('email_notifications');
-    const recipients = config?.to && config.to.length > 0 ? config.to : [EMAIL_RECIPIENT];
-    const ccRecipients = config?.cc || [];
+    const { recipients, ccRecipients } = await fetchEmailRecipients();
 
     try {
         await emailService.sendEmail({
@@ -1112,6 +1252,7 @@ export const sendRecordCreatedEmail = async (
             cc: ccRecipients,
             subject,
             body,
+            module: 'asistencia',
         });
     } catch (err) {
         console.error('Error sending record created email:', err);

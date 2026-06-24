@@ -74,6 +74,11 @@ export const renderEmailTemplate = ({
   accentColor = '#2563eb',
   module = 'asistencia',
 }: EmailTemplateInput) => {
+  const trimmedBody = body.trim();
+  if (/^<!doctype html/i.test(trimmedBody) || trimmedBody.includes('ASISS_LOGISTICA_EMAIL')) {
+    return trimmedBody;
+  }
+
   const terminals = terminalCodes?.length ? terminalCodes.join(', ') : 'Todos';
   const year = new Date().getFullYear();
   const dateTime = new Date().toLocaleString('es-CL', {
@@ -84,7 +89,7 @@ export const renderEmailTemplate = ({
 
   // All emails use the same sender name - subject contains the specific context
   const config = {
-    name: 'US El Roble - Notificaciones Logistica',
+    name: 'US El Roble - Notificaciones Logística',
     color: '#2563eb'
   };
 
@@ -125,7 +130,7 @@ export const renderEmailTemplate = ({
                   </td>
                   <td style="vertical-align: middle;">
                     <span style="color: #0f172a; font-size: 20px; font-weight: 800; letter-spacing: -0.5px; display: block;">ASISS</span>
-                    <span style="color: #64748b; font-size: 10px; letter-spacing: 1px; font-weight: 700; text-transform: uppercase; display: block; margin-top: 2px;">Operaciones y Logística</span>
+                    <span style="color: #64748b; font-size: 10px; letter-spacing: 2px; font-weight: 700; text-transform: uppercase; display: block; margin-top: 2px;">LOGÍSTICA</span>
                   </td>
                 </tr>
               </table>
@@ -214,7 +219,7 @@ export const renderEmailTemplate = ({
           <tr>
             <td align="center" style="padding-top: 32px;">
               <p style="margin: 0 0 8px 0; color: #94a3b8; font-size: 12px;">${dateTime}</p>
-              <p style="margin: 0; color: #cbd5e1; font-size: 11px;">© ${year} Asiss · Operaciones y Logística</p>
+              <p style="margin: 0; color: #cbd5e1; font-size: 11px;">© ${year} ASISS · Sistema ASISS Logística</p>
             </td>
           </tr>
           
@@ -227,4 +232,3 @@ export const renderEmailTemplate = ({
 </body>
 </html>`;
 };
-
