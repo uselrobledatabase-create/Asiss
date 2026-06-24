@@ -98,6 +98,50 @@ const normalizeRutForEmail = (value: string) => {
   return `${body}-${verifier}`;
 };
 
+const normalizedColumnToken = (value: string) => stripAccents(value).toLowerCase();
+
+const isNoWrapColumn = (column: AsissEmailColumn) => {
+  const key = normalizedColumnToken(column.key);
+  const label = normalizedColumnToken(column.label);
+
+  return (
+    key === 'rut' ||
+    key.includes('colaborador') ||
+    key.includes('nombre') ||
+    key.includes('fecha') ||
+    key.includes('hora') ||
+    key.includes('turno') ||
+    key.includes('jornada') ||
+    key.includes('horario') ||
+    key.includes('inicio') ||
+    key.includes('termino') ||
+    key.includes('vuelta') ||
+    label.includes('rut') ||
+    label.includes('colaborador') ||
+    label.includes('fecha') ||
+    label.includes('hora')
+  );
+};
+
+const getColumnValueStyle = (column: AsissEmailColumn) => {
+  const key = normalizedColumnToken(column.key);
+  const styles = ['display:inline-block;text-align:center;'];
+
+  if (isNoWrapColumn(column)) {
+    styles.push('white-space:nowrap;word-break:keep-all;');
+  }
+
+  if (key === 'rut') {
+    styles.push('font-size:10px;letter-spacing:.15px;');
+  } else if (key.includes('colaborador') || key.includes('nombre')) {
+    styles.push('font-size:10px;line-height:13px;');
+  } else if (key.includes('fecha') || key.includes('hora')) {
+    styles.push('font-size:10px;line-height:13px;');
+  }
+
+  return styles.join('');
+};
+
 const renderValue = (value: AsissEmailValue) => {
   if (!hasAsissEmailValue(value)) return '';
 
@@ -109,12 +153,17 @@ const renderValue = (value: AsissEmailValue) => {
 };
 
 const renderColumnValue = (column: AsissEmailColumn, value: AsissEmailValue) => {
-  if (column.key !== 'rut') return renderValue(value);
+  if (column.key !== 'rut') {
+    const renderedValue = renderValue(value);
+    if (!renderedValue) return '';
+
+    return `<span style="${getColumnValueStyle(column)}">${renderedValue}</span>`;
+  }
 
   const normalizedRut = normalizeRutForEmail(textValue(value));
   if (!normalizedRut) return '';
 
-  return `<span style="display:inline-block;white-space:nowrap;text-align:center;">${escapeHtml(normalizedRut)}</span>`;
+  return `<span style="${getColumnValueStyle(column)}">${escapeHtml(normalizedRut)}</span>`;
 };
 
 const textValue = (value: AsissEmailValue) => {
@@ -215,6 +264,25 @@ const calculateWidths = (columns: AsissEmailColumn[]) => {
   return baseWidths.map((width) => `${((width / total) * 100).toFixed(2)}%`);
 };
 
+const getColumnCellStyle = (column: AsissEmailColumn) => {
+  const key = normalizedColumnToken(column.key);
+  const styles = ['font-size:11px;', 'line-height:14px;', 'padding:12px 6px;'];
+
+  if (isNoWrapColumn(column)) {
+    styles.push('white-space:nowrap;word-break:keep-all;');
+  }
+
+  if (key.includes('colaborador') || key.includes('nombre')) {
+    styles.push('font-size:10px;');
+  }
+
+  if (key === 'rut' || key.includes('fecha') || key.includes('hora')) {
+    styles.push('font-size:10px;');
+  }
+
+  return styles.join('');
+};
+
 export const buildAsissLogisticaEmail = ({
   title,
   subtitle = 'Solicitud ingresada para revisión y autorización.',
@@ -253,9 +321,8 @@ export const buildAsissLogisticaEmail = ({
   const valueCells = visibleColumns
     .map((column, index) => {
       const tone = getToneStyle(column, rowData[column.key]);
-      const rutStyle = column.key === 'rut' ? 'white-space:nowrap;font-size:11px;letter-spacing:.2px;' : '';
       return `
-        <td width="${widths[index]}" align="center" valign="middle" style="background:${tone.background};color:${tone.color};font-family:${FONT_STACK};font-size:12px;font-weight:800;line-height:16px;padding:16px 8px;text-align:center;vertical-align:middle;border-top:1px solid #d5e0ed;border-right:${index === visibleColumns.length - 1 ? '0' : '1px solid #d5e0ed'};${rutStyle}">
+        <td width="${widths[index]}" align="center" valign="middle" style="background:${tone.background};color:${tone.color};font-family:${FONT_STACK};font-weight:800;text-align:center;vertical-align:middle;border-top:1px solid #d5e0ed;border-right:${index === visibleColumns.length - 1 ? '0' : '1px solid #d5e0ed'};${getColumnCellStyle(column)}">
           ${renderColumnValue(column, rowData[column.key])}
         </td>
       `;
@@ -274,37 +341,19 @@ export const buildAsissLogisticaEmail = ({
     `
     : '';
 
-  return `<!DOCTYPE html>
-<!-- ASISS_LOGISTICA_EMAIL -->
-<html lang="es">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta http-equiv="X-UA-Compatible" content="IE=edge">
-  <title>${renderTextWithBreaks(safeTitle)}</title>
-</head>
-<body style="margin:0;padding:0;background:#edf2f8;font-family:${FONT_STACK};color:#1b2a43;-webkit-font-smoothing:antialiased;">
-  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="width:100%;background:#edf2f8;border-collapse:collapse;">
+  return `
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="width:100%;border-collapse:collapse;">
     <tr>
-      <td align="center" style="padding:26px 24px 40px 24px;text-align:center;">
-        <table role="presentation" cellspacing="0" cellpadding="0" border="0" style="margin:0 auto 14px auto;border-collapse:collapse;">
-          <tr>
-            <td align="center" style="text-align:center;font-family:${FONT_STACK};">
-              <span style="display:block;margin:0;color:#101d36;font-size:24px;font-weight:800;letter-spacing:-0.5px;line-height:26px;">ASISS</span>
-              <span style="display:block;margin-top:2px;color:#59708f;font-size:10px;font-weight:700;letter-spacing:2px;line-height:12px;text-transform:uppercase;">LOGÍSTICA</span>
-            </td>
-          </tr>
-        </table>
-
-        <table role="presentation" width="1320" cellspacing="0" cellpadding="0" border="0" style="width:1320px;max-width:1320px;background:#ffffff;border:1px solid #d5e0ed;border-collapse:separate;border-spacing:0;box-shadow:0 4px 16px rgba(38,58,94,.07);">
+      <td align="center" style="padding:0;text-align:center;">
+        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="width:100%;background:#ffffff;border:1px solid #d5e0ed;border-collapse:separate;border-spacing:0;">
           <tr>
             <td style="padding:0;">
               <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="width:100%;background:#132f55;border-collapse:collapse;">
                 <tr>
-                  <td align="left" style="padding:11px 24px;text-align:left;color:#dce9fb;font-family:${FONT_STACK};font-size:10px;font-weight:800;letter-spacing:.85px;text-transform:uppercase;line-height:13px;">
+                  <td align="left" style="padding:11px 20px;text-align:left;color:#dce9fb;font-family:${FONT_STACK};font-size:10px;font-weight:800;letter-spacing:.85px;text-transform:uppercase;line-height:13px;">
                     ${renderTextWithBreaks(`${safeUnitOrTerminal} · NOTIFICACIÓN AUTOMÁTICA`)}
                   </td>
-                  <td align="right" style="padding:11px 24px;text-align:right;color:#dce9fb;font-family:${FONT_STACK};font-size:10px;font-weight:800;letter-spacing:.85px;text-transform:uppercase;line-height:13px;">
+                  <td align="right" style="padding:11px 20px;text-align:right;color:#dce9fb;font-family:${FONT_STACK};font-size:10px;font-weight:800;letter-spacing:.85px;text-transform:uppercase;line-height:13px;">
                     ${safeRequestId ? `SOLICITUD N&deg; ${renderTextWithBreaks(safeRequestId)}` : ''}
                   </td>
                 </tr>
@@ -313,8 +362,8 @@ export const buildAsissLogisticaEmail = ({
           </tr>
 
           <tr>
-            <td align="left" style="padding:24px 24px 18px 24px;text-align:left;font-family:${FONT_STACK};">
-              <span style="display:block;margin:0;color:#13213a;font-size:26px;font-weight:800;letter-spacing:-0.55px;line-height:31px;">${renderTextWithBreaks(safeTitle.toUpperCase())}</span>
+            <td align="left" style="padding:18px 20px 12px 20px;text-align:left;font-family:${FONT_STACK};">
+              <span style="display:block;margin:0;color:#13213a;font-size:24px;font-weight:800;letter-spacing:-0.45px;line-height:28px;">${renderTextWithBreaks(safeTitle.toUpperCase())}</span>
               <span style="display:block;margin-top:5px;color:#657792;font-size:13px;font-weight:600;line-height:18px;">${renderTextWithBreaks(subtitle)}</span>
             </td>
           </tr>
@@ -323,17 +372,17 @@ export const buildAsissLogisticaEmail = ({
             <td style="padding:0;">
               <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="width:100%;background:#f7faff;border-top:1px solid #dce5f0;border-bottom:1px solid #dce5f0;border-collapse:collapse;">
                 <tr>
-                  <td width="33.33%" align="left" style="padding:12px 24px;text-align:left;border-right:1px solid #dce5f0;font-family:${FONT_STACK};">
+                  <td width="33.33%" align="left" style="padding:10px 20px;text-align:left;border-right:1px solid #dce5f0;font-family:${FONT_STACK};">
                     <span style="display:block;color:#7285a1;font-size:9px;font-weight:800;letter-spacing:.65px;line-height:12px;text-transform:uppercase;">REGISTRADO POR</span>
-                    <span style="display:block;margin-top:4px;color:#1e2f4b;font-size:13px;font-weight:800;line-height:17px;">${renderTextWithBreaks(safeRegisteredBy)}</span>
+                    <span style="display:block;margin-top:4px;color:#1e2f4b;font-size:12px;font-weight:800;line-height:16px;white-space:nowrap;word-break:keep-all;">${renderTextWithBreaks(safeRegisteredBy)}</span>
                   </td>
-                  <td width="33.33%" align="left" style="padding:12px 24px;text-align:left;border-right:1px solid #dce5f0;font-family:${FONT_STACK};">
+                  <td width="33.33%" align="left" style="padding:10px 20px;text-align:left;border-right:1px solid #dce5f0;font-family:${FONT_STACK};">
                     <span style="display:block;color:#7285a1;font-size:9px;font-weight:800;letter-spacing:.65px;line-height:12px;text-transform:uppercase;">AUDIENCIA</span>
-                    <span style="display:block;margin-top:4px;color:#1e2f4b;font-size:13px;font-weight:800;line-height:17px;">${renderTextWithBreaks(safeAudience)}</span>
+                    <span style="display:block;margin-top:4px;color:#1e2f4b;font-size:12px;font-weight:800;line-height:16px;white-space:nowrap;word-break:keep-all;">${renderTextWithBreaks(safeAudience)}</span>
                   </td>
-                  <td width="33.33%" align="left" style="padding:12px 24px;text-align:left;font-family:${FONT_STACK};">
+                  <td width="33.33%" align="left" style="padding:10px 20px;text-align:left;font-family:${FONT_STACK};">
                     <span style="display:block;color:#7285a1;font-size:9px;font-weight:800;letter-spacing:.65px;line-height:12px;text-transform:uppercase;">FECHA DE ENVÍO</span>
-                    <span style="display:block;margin-top:4px;color:#1e2f4b;font-size:13px;font-weight:800;line-height:17px;">${renderTextWithBreaks(safeSentAt)}</span>
+                    <span style="display:block;margin-top:4px;color:#1e2f4b;font-size:12px;font-weight:800;line-height:16px;white-space:nowrap;word-break:keep-all;">${renderTextWithBreaks(safeSentAt)}</span>
                   </td>
                 </tr>
               </table>
@@ -341,13 +390,13 @@ export const buildAsissLogisticaEmail = ({
           </tr>
 
           <tr>
-            <td align="left" style="padding:23px 24px 10px 24px;text-align:left;color:#132f55;font-family:${FONT_STACK};font-size:11px;font-weight:800;letter-spacing:.8px;line-height:14px;text-transform:uppercase;">
+            <td align="left" style="padding:16px 20px 8px 20px;text-align:left;color:#132f55;font-family:${FONT_STACK};font-size:11px;font-weight:800;letter-spacing:.8px;line-height:14px;text-transform:uppercase;">
               RESUMEN COMPLETO DE LA SOLICITUD
             </td>
           </tr>
 
           <tr>
-            <td style="padding:0 24px 0 24px;">
+            <td style="padding:0 20px 0 20px;">
               <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="width:100%;border:1px solid #3e587d;border-collapse:collapse;">
                 <tr>${headerCells}</tr>
                 <tr>${valueCells}</tr>
@@ -356,7 +405,7 @@ export const buildAsissLogisticaEmail = ({
           </tr>
 
           <tr>
-            <td style="padding:18px 24px 0 24px;">
+            <td style="padding:14px 20px 0 20px;">
               <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="width:100%;background:#f4f8fe;border:1px solid #dce5f0;border-left:4px solid #1f5fe7;border-collapse:collapse;">
                 <tr>
                   <td align="left" style="padding:13px 16px;text-align:left;color:#4f6481;font-family:${FONT_STACK};font-size:12px;font-weight:600;line-height:18px;">
@@ -370,14 +419,12 @@ export const buildAsissLogisticaEmail = ({
           ${actionButton}
 
           <tr>
-            <td align="center" style="padding:16px 24px;text-align:center;border-top:1px solid #dce5f0;color:#7a8ba5;font-family:${FONT_STACK};font-size:10px;font-weight:600;line-height:14px;">
+            <td align="center" style="padding:16px 20px;text-align:center;border-top:1px solid #dce5f0;color:#7a8ba5;font-family:${FONT_STACK};font-size:10px;font-weight:600;line-height:14px;">
               Notificación automática &middot; Sistema ASISS Logística
             </td>
           </tr>
         </table>
       </td>
     </tr>
-  </table>
-</body>
-</html>`;
+  </table>`;
 };
