@@ -67,12 +67,44 @@ export const updateCardStatus = async (id: string, status: string): Promise<void
     if (error) throw error;
 };
 
+export const updateCardNotes = async (id: string, notes: string): Promise<void> => {
+    const { error } = await supabase
+        .from('backup_cards')
+        .update({ notes: notes.trim() || null })
+        .eq('id', id);
+
+    if (error) throw error;
+};
+
 export const deactivateCard = async (id: string): Promise<void> => {
     const { error } = await supabase
         .from('backup_cards')
         .update({ status: 'INACTIVA' })
         .eq('id', id);
 
+    if (error) throw error;
+};
+
+export const deleteCard = async (id: string): Promise<void> => {
+    // Data integrity guard: a card cannot be deleted while it still has loan records.
+    const { data: loans, error: loansError } = await supabase
+        .from('backup_loans')
+        .select('id, status')
+        .eq('card_id', id);
+
+    if (loansError) throw loansError;
+
+    if (loans && loans.length > 0) {
+        const hasActive = loans.some((l) => l.status === 'ASIGNADA');
+        if (hasActive) {
+            throw new Error('La credencial tiene un prestamo activo. Recupere o cancele el prestamo antes de eliminarla.');
+        }
+        throw new Error(
+            `La credencial tiene ${loans.length} registro(s) historico(s) asociado(s). Eliminelos primero desde "Registros de Prestamos".`
+        );
+    }
+
+    const { error } = await supabase.from('backup_cards').delete().eq('id', id);
     if (error) throw error;
 };
 
@@ -122,12 +154,9 @@ export const createLoan = async (values: LoanFormValues): Promise<BackupLoan> =>
             person_name: values.person_name,
             person_cargo: values.person_cargo || null,
             person_terminal: values.person_terminal,
-            person_turno: values.person_turno || null,
-            person_horario: values.person_horario || null,
-            person_contacto: values.person_contacto || null,
-            boss_email: values.worker_email || null,
             reason: values.reason,
             requested_at: values.requested_at,
+            issued_at: values.issued_at,
             discount_amount: values.discount_amount,
             discount_applied: values.discount_applied,
             created_by_supervisor: values.created_by_supervisor,
@@ -213,6 +242,29 @@ export const cancelLoan = async (id: string, reason: string): Promise<void> => {
         .eq('id', loan.card_id);
 
     if (cardError) throw cardError;
+};
+
+export const deleteLoan = async (id: string): Promise<void> => {
+    // If the loan is still active, free the card back to the inventory before deleting.
+    const { data: loan, error: fetchError } = await supabase
+        .from('backup_loans')
+        .select('card_id, status')
+        .eq('id', id)
+        .single();
+
+    if (fetchError) throw fetchError;
+
+    if (loan.status === 'ASIGNADA' && loan.card_id) {
+        const { error: cardError } = await supabase
+            .from('backup_cards')
+            .update({ status: 'LIBRE' })
+            .eq('id', loan.card_id);
+
+        if (cardError) throw cardError;
+    }
+
+    const { error } = await supabase.from('backup_loans').delete().eq('id', id);
+    if (error) throw error;
 };
 
 export const updateLoanEmailsSent = async (id: string): Promise<void> => {

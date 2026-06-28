@@ -56,6 +56,18 @@ export const createAmonestacion = async (data: AmonestacionFormData) => {
     return record;
 };
 
+export const deleteAmonestacion = async (id: string): Promise<void> => {
+    const { error } = await supabase
+        .from('amonestaciones')
+        .delete()
+        .eq('id', id);
+
+    if (error) {
+        console.error('Error deleting amonestacion:', error);
+        throw error;
+    }
+};
+
 export const fetchAmonestaciones = async () => {
     const { data, error } = await supabase
         .from('amonestaciones')

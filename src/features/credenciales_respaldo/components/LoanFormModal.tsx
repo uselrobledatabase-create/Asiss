@@ -22,12 +22,9 @@ export const LoanFormModal = ({ isOpen, onClose, onSubmit, isLoading, supervisor
         person_name: '',
         person_cargo: '',
         person_terminal: 'EL_ROBLE',
-        person_turno: '',
-        person_horario: '',
-        person_contacto: '',
-        worker_email: '',
         reason: 'PERDIDA',
         requested_at: new Date().toISOString().split('T')[0],
+        issued_at: new Date().toISOString().split('T')[0],
         card_id: '',
         discount_applied: true,
         discount_amount: 5000,
@@ -58,7 +55,7 @@ export const LoanFormModal = ({ isOpen, onClose, onSubmit, isLoading, supervisor
         // Try to find in staff table
         const { data: staff } = await supabase
             .from('staff')
-            .select('nombre, cargo, terminal_code, turno, horario, contacto')
+            .select('nombre, cargo, terminal_code')
             .eq('rut', cleanedRut)
             .single();
 
@@ -69,9 +66,6 @@ export const LoanFormModal = ({ isOpen, onClose, onSubmit, isLoading, supervisor
                 person_name: staff.nombre,
                 person_cargo: staff.cargo || '',
                 person_terminal: staff.terminal_code || 'EL_ROBLE',
-                person_turno: staff.turno || '',
-                person_horario: staff.horario || '',
-                person_contacto: staff.contacto || '',
             }));
         } else {
             setForm((prev) => ({ ...prev, person_rut: formatRut(cleanedRut) }));
@@ -521,12 +515,9 @@ export const LoanFormModal = ({ isOpen, onClose, onSubmit, isLoading, supervisor
                 person_name: '',
                 person_cargo: '',
                 person_terminal: 'EL_ROBLE',
-                person_turno: '',
-                person_horario: '',
-                person_contacto: '',
-                worker_email: '',
                 reason: 'PERDIDA',
                 requested_at: new Date().toISOString().split('T')[0],
+                issued_at: new Date().toISOString().split('T')[0],
                 card_id: '',
                 discount_applied: true,
                 discount_amount: 5000,
@@ -605,44 +596,6 @@ export const LoanFormModal = ({ isOpen, onClose, onSubmit, isLoading, supervisor
                                         ))}
                                     </select>
                                 </div>
-                                <div>
-                                    <label className="block text-sm font-medium text-slate-600 mb-1">Turno</label>
-                                    <input
-                                        type="text"
-                                        className="input"
-                                        value={form.person_turno}
-                                        onChange={(e) => setForm((prev) => ({ ...prev, person_turno: e.target.value }))}
-                                    />
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-medium text-slate-600 mb-1">Horario</label>
-                                    <input
-                                        type="text"
-                                        className="input"
-                                        value={form.person_horario}
-                                        onChange={(e) => setForm((prev) => ({ ...prev, person_horario: e.target.value }))}
-                                        placeholder="08:00-18:00"
-                                    />
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-medium text-slate-600 mb-1">Contacto</label>
-                                    <input
-                                        type="text"
-                                        className="input"
-                                        value={form.person_contacto}
-                                        onChange={(e) => setForm((prev) => ({ ...prev, person_contacto: e.target.value }))}
-                                    />
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-medium text-slate-600 mb-1">Correo <span className="text-slate-400 font-normal">(opcional)</span></label>
-                                    <input
-                                        type="email"
-                                        className="input"
-                                        value={form.worker_email}
-                                        onChange={(e) => setForm((prev) => ({ ...prev, worker_email: e.target.value }))}
-                                        placeholder="Para notificar cuando llegue su credencial"
-                                    />
-                                </div>
                             </div>
                         </div>
 
@@ -664,14 +617,15 @@ export const LoanFormModal = ({ isOpen, onClose, onSubmit, isLoading, supervisor
                                     </select>
                                 </div>
                                 <div>
-                                    <label className="block text-sm font-medium text-slate-600 mb-1">Fecha Solicitud</label>
+                                    <label className="block text-sm font-medium text-slate-600 mb-1">Fecha de Asignación</label>
                                     <input
                                         type="date"
                                         className="input"
-                                        value={form.requested_at}
-                                        onChange={(e) => setForm((prev) => ({ ...prev, requested_at: e.target.value }))}
+                                        value={form.issued_at}
+                                        onChange={(e) => setForm((prev) => ({ ...prev, issued_at: e.target.value, requested_at: e.target.value }))}
                                         required
                                     />
+                                    <p className="text-xs text-slate-400 mt-1">Por defecto hoy. Puede modificarla.</p>
                                 </div>
                             </div>
                         </div>

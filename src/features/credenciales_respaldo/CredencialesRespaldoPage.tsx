@@ -1,11 +1,9 @@
 import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, CreditCard, Settings, Download, Filter, AlertTriangle } from 'lucide-react';
+import { Plus, CreditCard, Settings, Download, Filter, AlertTriangle, ClipboardList } from 'lucide-react';
 import { PageHeader } from '../../shared/components/common/PageHeader';
 import { LoadingState } from '../../shared/components/common/LoadingState';
 import { ErrorState } from '../../shared/components/common/ErrorState';
-import { useTerminalStore } from '../../shared/state/terminalStore';
-import { terminalOptions } from '../../shared/utils/terminal';
 import { exportToXlsx } from '../../shared/utils/exportToXlsx';
 import { KpiCards } from './components/KpiCards';
 import { ChartsPanel } from './components/ChartsPanel';
@@ -17,6 +15,8 @@ import { CancelModal } from './components/CancelModal';
 import { CardsInventoryModal } from './components/CardsInventoryModal';
 import { EmailSettingsModal } from './components/EmailSettingsModal';
 import { SignedDocumentModal } from './components/SignedDocumentModal';
+import { InventoryPanel } from './components/InventoryPanel';
+import { ConfirmDialog } from '../../shared/components/common/ConfirmDialog';
 import {
     fetchLoans,
     fetchKpis,
@@ -24,6 +24,7 @@ import {
     createLoan,
     recoverLoan,
     cancelLoan,
+    deleteLoan,
     sendBackupEmails,
     EmailAttachment,
 } from './api/backupApi';
@@ -31,6 +32,7 @@ import {
     BackupLoan,
     BackupLoansFilters,
     LoanFormValues,
+    TerminalFilter,
     STATUS_OPTIONS,
     REASON_OPTIONS,
 } from './types';
@@ -40,9 +42,10 @@ import { showSuccessToast, showErrorToast, showWarningToast } from '../../shared
 
 export const CredencialesRespaldoPage = () => {
     const queryClient = useQueryClient();
-    const terminalContext = useTerminalStore((state) => state.context);
-    const setTerminalContext = useTerminalStore((state) => state.setContext);
     const session = useSessionStore((state) => state.session);
+
+    // Shared terminal filter — drives BOTH the inventory panel and the loans registry
+    const [terminalFilter, setTerminalFilter] = useState<TerminalFilter>('TODAS');
 
     // Filters
     const [filters, setFilters] = useState<BackupLoansFilters>({
@@ -62,6 +65,7 @@ export const CredencialesRespaldoPage = () => {
     const [showSignedDocModal, setShowSignedDocModal] = useState(false);
     const [pendingEmailLoan, setPendingEmailLoan] = useState<BackupLoan | null>(null);
     const [emailSendLoading, setEmailSendLoading] = useState(false);
+    const [loanToDelete, setLoanToDelete] = useState<BackupLoan | null>(null);
 
     // Queries
     const loansQuery = useQuery({
@@ -122,15 +126,27 @@ export const CredencialesRespaldoPage = () => {
         },
     });
 
-    // Filter loans by terminal context if not ALL
+    const deleteLoanMutation = useMutation({
+        mutationFn: (id: string) => deleteLoan(id),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['backup-loans'] });
+            queryClient.invalidateQueries({ queryKey: ['backup-kpis'] });
+            queryClient.invalidateQueries({ queryKey: ['backup-cards'] });
+            setLoanToDelete(null);
+            showSuccessToast('Registro eliminado', 'El registro de prestamo fue eliminado.');
+        },
+        onError: (error: unknown) => {
+            showErrorToast('No se pudo eliminar', error instanceof Error ? error.message : 'Error desconocido');
+        },
+    });
+
+    // Filter loans by the shared terminal filter (by the assigned card's inventory terminal,
+    // so the registry mirrors exactly what the inventory panel shows for that terminal)
     const filteredLoans = useMemo(() => {
         let loans = loansQuery.data || [];
 
-        if (terminalContext.mode !== 'ALL' && terminalContext.value) {
-            const terminalName = terminalOptions.find((t) => t.value === terminalContext.value)?.label;
-            if (terminalName) {
-                loans = loans.filter((l) => l.person_terminal === terminalContext.value || l.person_terminal === terminalName);
-            }
+        if (terminalFilter !== 'TODAS') {
+            loans = loans.filter((l) => l.backup_cards?.inventory_terminal === terminalFilter);
         }
 
         if (filters.alertsOnly) {
@@ -144,7 +160,7 @@ export const CredencialesRespaldoPage = () => {
         }
 
         return loans;
-    }, [loansQuery.data, terminalContext, filters.alertsOnly]);
+    }, [loansQuery.data, terminalFilter, filters.alertsOnly]);
 
     // Handlers
     const handleView = (loan: BackupLoan) => {
@@ -301,6 +317,32 @@ export const CredencialesRespaldoPage = () => {
                 <ChartsPanel loans={loansQuery.data} />
             )}
 
+            {/* Inventory by terminal (El Roble / La Reina / Maria Angelica) — the terminal
+                filter here is shared and also filters the loans registry below */}
+            <InventoryPanel terminalFilter={terminalFilter} onTerminalFilterChange={setTerminalFilter} />
+
+            <div className="divider" />
+
+            {/* Loan registry section header */}
+            <div className="flex items-center gap-2.5">
+                <span className="flex items-center justify-center w-9 h-9 rounded-xl bg-slate-900 text-white">
+                    <ClipboardList className="w-5 h-5" />
+                </span>
+                <div>
+                    <h2 className="text-lg font-bold text-slate-900 leading-tight flex items-center gap-2">
+                        Registros de Prestamos
+                        {terminalFilter !== 'TODAS' && (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-brand-100 text-brand-700 text-xs font-semibold">
+                                {terminalFilter}
+                            </span>
+                        )}
+                    </h2>
+                    <p className="text-xs text-slate-500">
+                        Historial de entregas y devoluciones · sincronizado con el filtro de terminal del inventario
+                    </p>
+                </div>
+            </div>
+
             {/* Compact Filters */}
             <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-sm flex flex-col md:flex-row md:items-center gap-3">
                 <div className="flex items-center gap-2 w-full md:w-auto">
@@ -314,24 +356,7 @@ export const CredencialesRespaldoPage = () => {
                     />
                 </div>
 
-                <div className="grid grid-cols-2 md:flex items-center gap-2 w-full md:w-auto">
-                    <select
-                        className="h-9 md:h-8 px-2 text-sm border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 w-full md:w-auto transition-all"
-                        value={terminalContext.value || ''}
-                        onChange={(e) => {
-                            if (e.target.value) {
-                                setTerminalContext({ mode: 'TERMINAL', value: e.target.value as any });
-                            } else {
-                                setTerminalContext({ mode: 'ALL' });
-                            }
-                        }}
-                    >
-                        <option value="">Todo Terminal</option>
-                        {terminalOptions.map((t) => (
-                            <option key={t.value} value={t.value}>{t.label}</option>
-                        ))}
-                    </select>
-
+                <div className="flex items-center gap-2 w-full md:w-auto">
                     <select
                         className="h-9 md:h-8 px-2 text-sm border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 w-full md:w-auto transition-all"
                         value={filters.status || 'TODAS'}
@@ -401,6 +426,7 @@ export const CredencialesRespaldoPage = () => {
                     onRecover={handleRecover}
                     onCancel={handleCancel}
                     onResendEmails={handleResendEmails}
+                    onDelete={setLoanToDelete}
                 />
             )}
 
@@ -480,6 +506,29 @@ export const CredencialesRespaldoPage = () => {
                 }}
                 onSubmit={handleSendEmailWithAttachment}
                 isLoading={emailSendLoading}
+            />
+
+            <ConfirmDialog
+                isOpen={!!loanToDelete}
+                title="Eliminar registro"
+                message={
+                    <>
+                        Vas a eliminar el registro de prestamo de{' '}
+                        <strong className="text-slate-900">{loanToDelete?.person_name}</strong>
+                        {loanToDelete?.backup_cards?.card_number ? (
+                            <> (tarjeta <strong className="text-slate-900 font-mono">{loanToDelete.backup_cards.card_number}</strong>)</>
+                        ) : null}
+                        . Esta accion es permanente y no se puede deshacer.
+                        {loanToDelete?.status === 'ASIGNADA' && (
+                            <span className="block mt-2 text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                                El prestamo esta activo: al eliminarlo, la tarjeta se liberara automaticamente al inventario.
+                            </span>
+                        )}
+                    </>
+                }
+                isLoading={deleteLoanMutation.isPending}
+                onConfirm={() => loanToDelete && deleteLoanMutation.mutate(loanToDelete.id)}
+                onClose={() => setLoanToDelete(null)}
             />
         </div>
     );

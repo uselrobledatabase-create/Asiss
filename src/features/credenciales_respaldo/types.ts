@@ -9,6 +9,9 @@ export type BackupReason = 'PERDIDA' | 'DETERIORO';
 export const INVENTORY_TERMINALS = ['El Roble', 'La Reina', 'Maria Angelica'] as const;
 export type InventoryTerminal = typeof INVENTORY_TERMINALS[number];
 
+// Shared terminal filter used by both the inventory panel and the loans registry
+export type TerminalFilter = 'TODAS' | InventoryTerminal;
+
 // Backup card (inventory)
 export interface BackupCard {
     id: string;
@@ -72,13 +75,11 @@ export interface LoanFormValues {
     person_name: string;
     person_cargo: string;
     person_terminal: string;
-    person_turno: string;
-    person_horario: string;
-    person_contacto: string;
-    worker_email?: string;
     // Request
     reason: BackupReason;
     requested_at: string;
+    // Assignment date (issued_at) — editable, defaults to today
+    issued_at: string;
     // Card
     card_id: string;
     // Discount

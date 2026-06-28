@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { Eye, Edit, RotateCcw, X, Mail, AlertTriangle } from 'lucide-react';
+import { Eye, Edit, RotateCcw, X, Mail, AlertTriangle, Trash2 } from 'lucide-react';
 import { BackupLoan } from '../types';
 import { formatRut } from '../utils/rut';
 
@@ -10,6 +10,7 @@ interface Props {
     onRecover: (loan: BackupLoan) => void;
     onCancel: (loan: BackupLoan) => void;
     onResendEmails: (loan: BackupLoan) => void;
+    onDelete: (loan: BackupLoan) => void;
 }
 
 const StatusBadge = ({ status, isOverdue }: { status: string; isOverdue: boolean }) => {
@@ -58,6 +59,7 @@ export const LoansTable = ({
     onRecover,
     onCancel,
     onResendEmails,
+    onDelete,
 }: Props) => {
     const loansWithOverdue = useMemo(() => {
         const now = new Date();
@@ -149,6 +151,13 @@ export const LoansTable = ({
                                 title="Reenviar correos"
                             >
                                 <Mail className="w-5 h-5" />
+                            </button>
+                            <button
+                                onClick={() => onDelete(loan)}
+                                className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg active:scale-95 transition-transform"
+                                title="Eliminar registro"
+                            >
+                                <Trash2 className="w-5 h-5" />
                             </button>
                         </div>
                     </div>
@@ -270,6 +279,13 @@ export const LoansTable = ({
                                             title="Reenviar correos"
                                         >
                                             <Mail className="w-4 h-4" />
+                                        </button>
+                                        <button
+                                            onClick={() => onDelete(loan)}
+                                            className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded"
+                                            title="Eliminar registro"
+                                        >
+                                            <Trash2 className="w-4 h-4" />
                                         </button>
                                     </div>
                                 </td>

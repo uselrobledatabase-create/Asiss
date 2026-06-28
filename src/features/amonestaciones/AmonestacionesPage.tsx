@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { AmonestacionFormModal } from './components/AmonestacionFormModal';
 import { Icon } from '../../shared/components/common/Icon';
-import { fetchAmonestaciones, AmonestacionRecord } from './api/amonestacionesApi';
+import { ConfirmDialog } from '../../shared/components/common/ConfirmDialog';
+import { fetchAmonestaciones, deleteAmonestacion, AmonestacionRecord } from './api/amonestacionesApi';
 import { generateAmonestacionPDF } from './utils/pdfGenerator';
 import { useToastStore } from '../../shared/state/toastStore';
 
@@ -9,6 +10,8 @@ export const AmonestacionesPage = () => {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [records, setRecords] = useState<AmonestacionRecord[]>([]);
     const [loading, setLoading] = useState(true);
+    const [recordToDelete, setRecordToDelete] = useState<AmonestacionRecord | null>(null);
+    const [deleting, setDeleting] = useState(false);
     const addToast = useToastStore(state => state.addToast);
 
     const loadRecords = async () => {
@@ -35,6 +38,22 @@ export const AmonestacionesPage = () => {
         } catch (e) {
             console.error(e);
             addToast({ type: 'error', title: 'Error', message: 'Error al generar PDF' });
+        }
+    };
+
+    const handleDelete = async () => {
+        if (!recordToDelete) return;
+        try {
+            setDeleting(true);
+            await deleteAmonestacion(recordToDelete.id);
+            addToast({ type: 'success', title: 'Eliminada', message: 'La amonestación fue eliminada de la base de datos' });
+            setRecordToDelete(null);
+            await loadRecords();
+        } catch (e) {
+            console.error(e);
+            addToast({ type: 'error', title: 'Error', message: 'No se pudo eliminar la amonestación' });
+        } finally {
+            setDeleting(false);
         }
     };
 
@@ -101,13 +120,22 @@ export const AmonestacionesPage = () => {
                                             {r.responsible_name}
                                         </td>
                                         <td className="px-4 py-3 text-right">
-                                            <button
-                                                onClick={() => handleDownload(r)}
-                                                className="p-2 bg-indigo-50 text-indigo-600 hover:bg-indigo-100 rounded-lg transition-colors"
-                                                title="Descargar PDF"
-                                            >
-                                                <Icon name="download" size={16} />
-                                            </button>
+                                            <div className="flex items-center justify-end gap-2">
+                                                <button
+                                                    onClick={() => handleDownload(r)}
+                                                    className="p-2 bg-indigo-50 text-indigo-600 hover:bg-indigo-100 rounded-lg transition-colors"
+                                                    title="Descargar PDF"
+                                                >
+                                                    <Icon name="download" size={16} />
+                                                </button>
+                                                <button
+                                                    onClick={() => setRecordToDelete(r)}
+                                                    className="p-2 bg-red-50 text-red-600 hover:bg-red-100 rounded-lg transition-colors"
+                                                    title="Eliminar"
+                                                >
+                                                    <Icon name="trash" size={16} />
+                                                </button>
+                                            </div>
                                         </td>
                                     </tr>
                                 ))}
@@ -117,12 +145,20 @@ export const AmonestacionesPage = () => {
                 )}
             </div>
 
-            <AmonestacionFormModal
-                open={isModalOpen}
-                onClose={() => setIsModalOpen(false)}
-                currentUserName="SUPERVISOR ACTIVO"
-                currentUserCargo="SUPERVISOR"
-                onSuccess={loadRecords}
+            <ConfirmDialog
+                isOpen={!!recordToDelete}
+                title="Eliminar amonestación"
+                message={
+                    <>
+                        Vas a eliminar la amonestación de{' '}
+                        <strong className="text-slate-900">{recordToDelete?.worker_name}</strong> (Cód.{' '}
+                        {recordToDelete?.sanction_code_id}). Esta acción elimina el registro de la base de datos de forma
+                        permanente y no se puede deshacer.
+                    </>
+                }
+                isLoading={deleting}
+                onConfirm={handleDelete}
+                onClose={() => setRecordToDelete(null)}
             />
         </div>
     );

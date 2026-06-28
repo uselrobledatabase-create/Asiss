@@ -1,8 +1,8 @@
 import { useState, FormEvent } from 'react';
-import { X, Plus, CreditCard, Trash2 } from 'lucide-react';
+import { X, Plus, CreditCard, Trash2, Pencil, Check } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { BackupCard, CardFormValues, INVENTORY_TERMINALS, CARD_STATUS_OPTIONS } from '../types';
-import { fetchCards, createCard, deactivateCard } from '../api/backupApi';
+import { fetchCards, createCard, deactivateCard, updateCardNotes } from '../api/backupApi';
 
 interface Props {
     isOpen: boolean;
@@ -14,6 +14,8 @@ export const CardsInventoryModal = ({ isOpen, onClose }: Props) => {
     const [showAddForm, setShowAddForm] = useState(false);
     const [filterTerminal, setFilterTerminal] = useState('');
     const [filterStatus, setFilterStatus] = useState('');
+    const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
+    const [editingNoteValue, setEditingNoteValue] = useState('');
     const [newCard, setNewCard] = useState<CardFormValues>({
         card_number: '',
         inventory_terminal: 'El Roble',
@@ -42,6 +44,15 @@ export const CardsInventoryModal = ({ isOpen, onClose }: Props) => {
         },
     });
 
+    const updateNotesMutation = useMutation({
+        mutationFn: ({ id, notes }: { id: string; notes: string }) => updateCardNotes(id, notes),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['backup-cards'] });
+            setEditingNoteId(null);
+            setEditingNoteValue('');
+        },
+    });
+
     const handleSubmitCard = (e: FormEvent) => {
         e.preventDefault();
         createMutation.mutate(newCard);
@@ -51,6 +62,20 @@ export const CardsInventoryModal = ({ isOpen, onClose }: Props) => {
         if (confirm(`Desactivar tarjeta ${card.card_number}?`)) {
             deactivateMutation.mutate(card.id);
         }
+    };
+
+    const startEditNote = (card: BackupCard) => {
+        setEditingNoteId(card.id);
+        setEditingNoteValue(card.notes || '');
+    };
+
+    const cancelEditNote = () => {
+        setEditingNoteId(null);
+        setEditingNoteValue('');
+    };
+
+    const saveNote = (card: BackupCard) => {
+        updateNotesMutation.mutate({ id: card.id, notes: editingNoteValue });
     };
 
     if (!isOpen) return null;
@@ -168,26 +193,83 @@ export const CardsInventoryModal = ({ isOpen, onClose }: Props) => {
                                 {cards.map((card) => (
                                     <div
                                         key={card.id}
-                                        className="flex items-center justify-between p-3 bg-slate-50 rounded-lg hover:bg-slate-100"
+                                        className="p-3 bg-slate-50 rounded-lg hover:bg-slate-100"
                                     >
-                                        <div className="flex items-center gap-3">
-                                            <CreditCard className="w-5 h-5 text-slate-400" />
-                                            <div>
-                                                <p className="text-sm font-medium text-slate-900">{card.card_number}</p>
-                                                <p className="text-xs text-slate-500">{card.inventory_terminal}</p>
+                                        <div className="flex items-center justify-between">
+                                            <div className="flex items-center gap-3">
+                                                <CreditCard className="w-5 h-5 text-slate-400" />
+                                                <div>
+                                                    <p className="text-sm font-medium text-slate-900">{card.card_number}</p>
+                                                    <p className="text-xs text-slate-500">{card.inventory_terminal}</p>
+                                                </div>
+                                            </div>
+                                            <div className="flex items-center gap-3">
+                                                <span className={`px-2 py-0.5 text-xs font-medium rounded-full ${statusColors[card.status] || ''}`}>
+                                                    {card.status}
+                                                </span>
+                                                {editingNoteId !== card.id && (
+                                                    <button
+                                                        onClick={() => startEditNote(card)}
+                                                        className="p-1.5 text-slate-400 hover:text-brand-600 hover:bg-brand-50 rounded"
+                                                        title="Editar nota"
+                                                    >
+                                                        <Pencil className="w-4 h-4" />
+                                                    </button>
+                                                )}
+                                                {card.status !== 'INACTIVA' && card.status !== 'ASIGNADA' && (
+                                                    <button
+                                                        onClick={() => handleDeactivate(card)}
+                                                        className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded"
+                                                        title="Desactivar"
+                                                    >
+                                                        <Trash2 className="w-4 h-4" />
+                                                    </button>
+                                                )}
                                             </div>
                                         </div>
-                                        <div className="flex items-center gap-3">
-                                            <span className={`px-2 py-0.5 text-xs font-medium rounded-full ${statusColors[card.status] || ''}`}>
-                                                {card.status}
-                                            </span>
-                                            {card.status !== 'INACTIVA' && card.status !== 'ASIGNADA' && (
+
+                                        {/* Note row (editable) */}
+                                        <div className="mt-2 pl-8">
+                                            {editingNoteId === card.id ? (
+                                                <div className="flex items-center gap-2">
+                                                    <input
+                                                        type="text"
+                                                        autoFocus
+                                                        className="input h-8 py-1 text-sm flex-1"
+                                                        value={editingNoteValue}
+                                                        onChange={(e) => setEditingNoteValue(e.target.value)}
+                                                        onKeyDown={(e) => {
+                                                            if (e.key === 'Enter') saveNote(card);
+                                                            if (e.key === 'Escape') cancelEditNote();
+                                                        }}
+                                                        placeholder="Escribe una nota..."
+                                                    />
+                                                    <button
+                                                        onClick={() => saveNote(card)}
+                                                        disabled={updateNotesMutation.isPending}
+                                                        className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded disabled:opacity-50"
+                                                        title="Guardar"
+                                                    >
+                                                        <Check className="w-4 h-4" />
+                                                    </button>
+                                                    <button
+                                                        onClick={cancelEditNote}
+                                                        className="p-1.5 text-slate-400 hover:bg-slate-200 rounded"
+                                                        title="Cancelar"
+                                                    >
+                                                        <X className="w-4 h-4" />
+                                                    </button>
+                                                </div>
+                                            ) : (
                                                 <button
-                                                    onClick={() => handleDeactivate(card)}
-                                                    className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded"
-                                                    title="Desactivar"
+                                                    onClick={() => startEditNote(card)}
+                                                    className="text-left text-xs text-slate-500 hover:text-slate-700"
                                                 >
-                                                    <Trash2 className="w-4 h-4" />
+                                                    {card.notes ? (
+                                                        <span><span className="font-medium text-slate-400">Nota:</span> {card.notes}</span>
+                                                    ) : (
+                                                        <span className="italic text-slate-400">Sin nota — clic para agregar</span>
+                                                    )}
                                                 </button>
                                             )}
                                         </div>
