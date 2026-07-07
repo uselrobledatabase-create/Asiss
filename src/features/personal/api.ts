@@ -1,6 +1,7 @@
 import { supabase, isSupabaseConfigured } from '../../shared/lib/supabaseClient';
 import { TerminalCode, TerminalContext } from '../../shared/types/terminal';
 import { resolveTerminalsForContext } from '../../shared/utils/terminal';
+import { showWarningToast } from '../../shared/state/toastStore';
 import { normalizeRut } from './utils/rutUtils';
 import {
     Staff,
@@ -14,6 +15,25 @@ import {
     StaffCargo,
     STAFF_CARGOS,
 } from './types';
+
+type SupabaseLikeError = {
+    code?: string;
+    message?: string;
+};
+
+let missingStaffSchemaWarned = false;
+
+const isMissingTableError = (error: SupabaseLikeError | null | undefined, table: string) =>
+    error?.code === 'PGRST205' && error.message?.includes(`'public.${table}'`);
+
+const warnMissingStaffSchema = () => {
+    if (missingStaffSchemaWarned) return;
+    missingStaffSchemaWarned = true;
+    showWarningToast(
+        'Esquema incompleto en Supabase',
+        'La base conectada no tiene la tabla staff. Personal se mostrará vacío hasta restaurar ese esquema.'
+    );
+};
 
 // ==========================================
 // STAFF CRUD
@@ -56,6 +76,10 @@ export const fetchStaff = async (
     const { data, error } = await query;
 
     if (error) {
+        if (isMissingTableError(error, 'staff')) {
+            warnMissingStaffSchema();
+            return [];
+        }
         console.error('Error fetching staff:', error);
         throw error;
     }
@@ -229,7 +253,28 @@ export const fetchStaffCounts = async (
         .eq('status', 'ACTIVO')
         .in('terminal_code', terminals);
 
-    if (staffError) throw staffError;
+    if (staffError) {
+        if (isMissingTableError(staffError, 'staff')) {
+            warnMissingStaffSchema();
+            return {
+                byCargo: STAFF_CARGOS.map((c) => ({
+                    cargo: c.value,
+                    count: 0,
+                    max_q: null,
+                    with_licenses: 0,
+                    suspended: 0,
+                    effective_count: 0,
+                })),
+                byTerminal: terminals.map((t) => ({
+                    terminal_code: t,
+                    count: 0,
+                })),
+                total: 0,
+            };
+        }
+
+        throw staffError;
+    }
 
     // Get today's date for license check
     const today = new Date().toISOString().split('T')[0];
