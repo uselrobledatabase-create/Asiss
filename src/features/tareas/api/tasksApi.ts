@@ -1,7 +1,8 @@
 import { supabase, isSupabaseConfigured } from '../../../shared/lib/supabaseClient';
 import { TerminalContext } from '../../../shared/types/terminal';
-import { resolveTerminalsForContext } from '../../../shared/utils/terminal';
+import { resolveTerminalsForContext, displayTerminal } from '../../../shared/utils/terminal';
 import { emailService } from '../../../shared/services/emailService';
+import { EmailAttachment } from '../../../shared/types/email';
 import { showSuccessToast, showErrorToast } from '../../../shared/state/toastStore';
 import {
     Task,
@@ -447,4 +448,131 @@ export const fetchStaffForAssignment = async (): Promise<{ id: string; nombre: s
 
     if (error) throw error;
     return data || [];
+};
+
+// ==========================================
+// TASK COMPLETION (status TERMINADO + email "Tarea Terminada")
+// ==========================================
+
+const fileToEmailAttachment = (file: File): Promise<EmailAttachment> =>
+    new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+            const result = typeof reader.result === 'string' ? reader.result : '';
+            resolve({ filename: file.name, content: result.split(',')[1] ?? '' });
+        };
+        reader.onerror = () => reject(new Error('No se pudo leer el archivo'));
+        reader.readAsDataURL(file);
+    });
+
+const buildCompletedEmailBody = (task: Task, completedBy: string, note: string, fileName?: string | null): string => {
+    const dueText = task.due_at ? new Date(task.due_at).toLocaleDateString('es-CL') : 'Sin fecha';
+    const terminal = displayTerminal(task.terminal_code);
+    const row = (label: string, value: string) => `
+        <tr>
+            <td style="padding:10px 14px;border-bottom:1px solid #e2e8f0;font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.5px;width:42%;">${label}</td>
+            <td style="padding:10px 14px;border-bottom:1px solid #e2e8f0;font-size:14px;color:#0f172a;font-weight:600;">${value}</td>
+        </tr>`;
+
+    return `
+        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin-bottom:20px;">
+            <tr>
+                <td style="background:#ecfdf5;border:1px solid #a7f3d0;border-radius:14px;padding:24px;text-align:center;">
+                    <div style="font-size:34px;line-height:1;margin-bottom:8px;">✅</div>
+                    <div style="font-size:11px;font-weight:700;color:#047857;text-transform:uppercase;letter-spacing:1px;">Notificación de cierre</div>
+                    <div style="font-size:20px;font-weight:800;color:#065f46;margin-top:4px;">TAREA TERMINADA</div>
+                </td>
+            </tr>
+        </table>
+
+        <p style="margin:0 0 12px;font-size:12px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.5px;">Detalle de la tarea</p>
+        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="border:1px solid #e2e8f0;border-radius:12px;border-collapse:separate;overflow:hidden;margin-bottom:20px;">
+            ${row('Título', task.title)}
+            ${row('Terminal', terminal)}
+            ${row('Prioridad', task.priority)}
+            ${row('Asignada a', task.assigned_to_name)}
+            ${row('Vencimiento', dueText)}
+            ${row('Completada por', completedBy)}
+            ${fileName ? row('Archivo adjunto', fileName) : ''}
+        </table>
+
+        ${note ? `
+        <p style="margin:0 0 8px;font-size:12px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.5px;">Comentarios / Notas</p>
+        <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:16px;font-size:14px;color:#334155;line-height:1.6;margin-bottom:20px;">${note.replace(/\n/g, '<br>')}</div>
+        ` : ''}
+
+        <div style="border-top:1px solid #e2e8f0;padding-top:16px;">
+            <p style="margin:0;font-size:14px;color:#64748b;">Saludos,</p>
+            <p style="margin:4px 0 0;font-size:14px;font-weight:700;color:#0f172a;">Gestión de Tareas</p>
+        </div>
+    `.trim();
+};
+
+export const sendTaskCompletedEmail = async (
+    task: Task,
+    recipients: string[],
+    completedBy: string,
+    note: string,
+    attachment?: EmailAttachment | null,
+    fileName?: string | null
+): Promise<void> => {
+    const to = Array.from(new Set(recipients.map((r) => r.trim()).filter(Boolean)));
+    if (to.length === 0) return;
+
+    await emailService.sendEmail({
+        audience: 'manual',
+        manualRecipients: to,
+        subject: `Tarea Terminada - ${task.title}`,
+        body: buildCompletedEmailBody(task, completedBy, note, fileName),
+        attachments: attachment ? [attachment] : undefined,
+    });
+};
+
+export interface CompleteTaskOptions {
+    note?: string;
+    file?: File | null;
+    recipients: string[];
+}
+
+export const completeTask = async (
+    task: Task,
+    completedBy: string,
+    options: CompleteTaskOptions
+): Promise<void> => {
+    // 1. Mark as TERMINADO
+    const { error } = await supabase.from('tasks').update({ status: 'TERMINADO' }).eq('id', task.id);
+    if (error) {
+        showErrorToast('Error al terminar tarea', 'No se pudo actualizar el estado');
+        throw error;
+    }
+
+    // 2. Save the note as a comment (so it stays in the task history)
+    const note = options.note?.trim() || '';
+    if (note) {
+        try { await addComment(task.id, note, completedBy); } catch (e) { console.error(e); }
+    }
+
+    // 3. Upload the deliverable file + prepare it for the email
+    let emailAttachment: EmailAttachment | null = null;
+    if (options.file) {
+        try {
+            await uploadAttachment(task.id, options.file, completedBy);
+            emailAttachment = await fileToEmailAttachment(options.file);
+        } catch (e) {
+            console.error('Attachment error on completion:', e);
+        }
+    }
+
+    // 4. Send the "Tarea Terminada" email (assignee + any extra recipients)
+    const recipients = [...options.recipients];
+    if (task.assigned_to_email) recipients.push(task.assigned_to_email);
+    try {
+        await sendTaskCompletedEmail(task, recipients, completedBy, note, emailAttachment, options.file?.name);
+    } catch (e) {
+        console.error('Error sending completion email:', e);
+        showErrorToast('Tarea terminada, pero el correo falló', 'Revisa la configuración de correo');
+        return;
+    }
+
+    showSuccessToast('Tarea terminada', `"${task.title}" marcada como terminada`, completedBy);
 };

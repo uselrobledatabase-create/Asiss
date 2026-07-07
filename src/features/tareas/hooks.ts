@@ -18,8 +18,9 @@ import {
     fetchEmailSettings,
     upsertEmailSettings,
     fetchStaffForAssignment,
+    completeTask,
 } from './api/tasksApi';
-import { TaskFilters, TaskFormValues, TaskStatus, TaskEmailSettings } from './types';
+import { TaskFilters, TaskFormValues, TaskStatus, TaskEmailSettings, Task } from './types';
 
 const taskKeys = {
     all: ['tasks'] as const,
@@ -113,6 +114,22 @@ export const useEvaluateTask = () => {
             evaluateTask(id, accepted, session?.supervisorName || '', note, reason),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: taskKeys.all });
+        },
+    });
+};
+
+export const useCompleteTask = () => {
+    const queryClient = useQueryClient();
+    const session = useSessionStore((s) => s.session);
+
+    return useMutation({
+        mutationFn: ({ task, note, file, recipients }: { task: Task; note?: string; file?: File | null; recipients: string[] }) =>
+            completeTask(task, session?.supervisorName || '', { note, file, recipients }),
+        onSuccess: (_, { task }) => {
+            queryClient.invalidateQueries({ queryKey: taskKeys.all });
+            queryClient.invalidateQueries({ queryKey: taskKeys.detail(task.id) });
+            queryClient.invalidateQueries({ queryKey: taskKeys.attachments(task.id) });
+            queryClient.invalidateQueries({ queryKey: taskKeys.comments(task.id) });
         },
     });
 };

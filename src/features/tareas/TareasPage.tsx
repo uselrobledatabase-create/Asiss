@@ -13,6 +13,30 @@ import { isTaskManager } from './utils/permissions';
 
 type Tab = 'kanban' | 'lista' | 'calendario' | 'reportes' | 'config';
 
+const STAT_TONES: Record<string, { icon: string; value: string }> = {
+  slate: { icon: 'bg-slate-100 text-slate-500', value: 'text-slate-900' },
+  blue: { icon: 'bg-blue-100 text-blue-600', value: 'text-blue-700' },
+  red: { icon: 'bg-red-100 text-red-600', value: 'text-red-700' },
+  amber: { icon: 'bg-amber-100 text-amber-600', value: 'text-amber-700' },
+  rose: { icon: 'bg-rose-100 text-rose-600', value: 'text-rose-700' },
+  emerald: { icon: 'bg-emerald-100 text-emerald-600', value: 'text-emerald-700' },
+};
+
+const StatCard = ({ label, value, tone, icon }: { label: string; value: number | string; tone: keyof typeof STAT_TONES; icon: IconName }) => {
+  const t = STAT_TONES[tone];
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white p-3">
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</span>
+        <span className={`flex h-7 w-7 items-center justify-center rounded-lg ${t.icon}`}>
+          <Icon name={icon} size={14} />
+        </span>
+      </div>
+      <div className={`mt-1.5 text-2xl font-bold ${t.value}`}>{value}</div>
+    </div>
+  );
+};
+
 const TABS: { id: Tab; label: string; icon: IconName; description: string }[] = [
   { id: 'kanban', label: 'Tablero', icon: 'layers', description: 'Flujo por estado y seguimiento visual' },
   { id: 'lista', label: 'Lista', icon: 'clipboard', description: 'Control detallado con búsqueda y filtros' },
@@ -102,98 +126,67 @@ export const TareasPage = () => {
 
   return (
     <div className="space-y-6">
-      <section className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
-        <div className="bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 px-6 py-6 md:px-8">
-          <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
-            <div>
-              <div className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-slate-100">
-                <Icon name="briefcase" size={14} />
-                Centro Operativo
-              </div>
-              <h1 className="mt-3 text-2xl font-bold text-white md:text-3xl">Gestión Empresarial de Tareas</h1>
-              <p className="mt-2 max-w-2xl text-sm text-slate-300">
-                Seguimiento por prioridad, control de vencimientos y ejecución diaria con foco en cumplimiento operacional.
-              </p>
+      <section className="overflow-hidden rounded-2xl border border-slate-200 bg-gradient-to-br from-brand-50 via-white to-white shadow-sm">
+        <div className="flex flex-col gap-5 px-6 py-6 md:px-8 lg:flex-row lg:items-start lg:justify-between">
+          <div>
+            <div className="inline-flex items-center gap-2 rounded-full border border-brand-200 bg-white px-3 py-1 text-xs font-semibold uppercase tracking-wide text-brand-600">
+              <Icon name="briefcase" size={14} />
+              Centro de Tareas
             </div>
+            <h1 className="mt-3 text-2xl font-bold text-slate-900 md:text-3xl">Gestión de Tareas</h1>
+            <p className="mt-2 max-w-2xl text-sm text-slate-500">
+              Organiza, asigna y da seguimiento al trabajo del equipo. Arrastra, comenta, adjunta y notifica automáticamente al terminar.
+            </p>
+          </div>
 
-            <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-2">
+            <button
+              onClick={() => setActiveTab('reportes')}
+              className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50"
+            >
+              <Icon name="bar-chart" size={16} />
+              Reportes
+            </button>
+            {canManage && (
               <button
-                onClick={() => setActiveTab('reportes')}
-                className="inline-flex items-center gap-2 rounded-lg border border-white/20 bg-white/10 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-white/20"
+                onClick={() => setShowNewTaskModal(true)}
+                className="inline-flex items-center gap-2 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white shadow-sm shadow-brand-500/20 transition-colors hover:bg-brand-700"
               >
-                <Icon name="bar-chart" size={16} />
-                Reportes
+                <Icon name="plus" size={16} />
+                Nueva tarea
               </button>
-              {canManage && (
-                <button
-                  onClick={() => setShowNewTaskModal(true)}
-                  className="inline-flex items-center gap-2 rounded-lg bg-brand-500 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-brand-500/20 transition-colors hover:bg-brand-600"
-                >
-                  <Icon name="plus" size={16} />
-                  Nueva tarea
-                </button>
-              )}
-            </div>
+            )}
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-3 border-t border-slate-200 bg-slate-50 p-4 md:grid-cols-4 md:p-6">
-          <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
-            <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Pendientes</div>
-            <div className="mt-1 text-2xl font-bold text-slate-900">{kpisQuery.data?.pending ?? 0}</div>
-          </div>
-          <div className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3">
-            <div className="text-xs font-semibold uppercase tracking-wide text-blue-700">En ejecución</div>
-            <div className="mt-1 text-2xl font-bold text-blue-900">{kpisQuery.data?.inProgress ?? 0}</div>
-          </div>
-          <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3">
-            <div className="text-xs font-semibold uppercase tracking-wide text-red-700">Vencidas</div>
-            <div className="mt-1 text-2xl font-bold text-red-900">{kpisQuery.data?.overdue ?? 0}</div>
-          </div>
-          <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3">
-            <div className="text-xs font-semibold uppercase tracking-wide text-emerald-700">Cumplimiento</div>
-            <div className="mt-1 text-2xl font-bold text-emerald-900">{executiveStats.completionRate}%</div>
-          </div>
-        </div>
-
-        <div className="grid gap-3 border-t border-slate-200 bg-white p-4 md:grid-cols-3 md:p-6">
-          <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-            <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Carga activa</div>
-            <div className="mt-2 text-xl font-bold text-slate-900">{executiveStats.openTasks} tareas abiertas</div>
-          </div>
-          <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
-            <div className="text-xs font-semibold uppercase tracking-wide text-amber-700">Próximas 48h</div>
-            <div className="mt-2 text-xl font-bold text-amber-900">{executiveStats.dueIn48h} por vencer</div>
-          </div>
-          <div className="rounded-xl border border-red-200 bg-red-50 p-4">
-            <div className="text-xs font-semibold uppercase tracking-wide text-red-700">Riesgo crítico</div>
-            <div className="mt-2 text-xl font-bold text-red-900">{executiveStats.criticalOpen} críticas abiertas</div>
-          </div>
+        <div className="grid grid-cols-2 gap-3 border-t border-slate-200/70 bg-white/50 p-4 md:grid-cols-3 lg:grid-cols-6 md:p-6">
+          <StatCard label="Pendientes" value={kpisQuery.data?.pending ?? 0} tone="slate" icon="clock" />
+          <StatCard label="En ejecución" value={kpisQuery.data?.inProgress ?? 0} tone="blue" icon="activity" />
+          <StatCard label="Vencidas" value={kpisQuery.data?.overdue ?? 0} tone="red" icon="alert-triangle" />
+          <StatCard label="Próximas 48h" value={executiveStats.dueIn48h} tone="amber" icon="calendar" />
+          <StatCard label="Críticas" value={executiveStats.criticalOpen} tone="rose" icon="alert-circle" />
+          <StatCard label="Cumplimiento" value={`${executiveStats.completionRate}%`} tone="emerald" icon="check-circle" />
         </div>
       </section>
 
-      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-5">
+      <div className="flex gap-2 overflow-x-auto pb-1">
         {TABS.map((tab) => (
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
-            className={`rounded-xl border p-4 text-left transition-all ${activeTab === tab.id
-              ? 'border-slate-900 bg-slate-900 text-white shadow-lg'
-              : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:shadow-sm'
+            title={tab.description}
+            className={`inline-flex shrink-0 items-center gap-2 rounded-xl border px-4 py-2.5 text-sm font-semibold transition-all ${activeTab === tab.id
+              ? 'border-brand-600 bg-brand-600 text-white shadow-sm'
+              : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:text-slate-900'
               }`}
           >
-            <div className="flex items-start justify-between gap-3">
-              <div className={`rounded-lg p-2 ${activeTab === tab.id ? 'bg-white/15 text-white' : 'bg-slate-100 text-slate-700'}`}>
-                <Icon name={tab.icon} size={18} />
-              </div>
-              {tabBadges[tab.id] !== null && (
-                <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${activeTab === tab.id ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-600'}`}>
-                  {tabBadges[tab.id]}
-                </span>
-              )}
-            </div>
-            <div className="mt-3 text-sm font-semibold">{tab.label}</div>
-            <p className={`mt-1 text-xs ${activeTab === tab.id ? 'text-slate-200' : 'text-slate-500'}`}>{tab.description}</p>
+            <Icon name={tab.icon} size={16} />
+            {tab.label}
+            {tabBadges[tab.id] !== null && (
+              <span className={`rounded-full px-1.5 text-xs font-bold ${activeTab === tab.id ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-600'}`}>
+                {tabBadges[tab.id]}
+              </span>
+            )}
           </button>
         ))}
       </div>

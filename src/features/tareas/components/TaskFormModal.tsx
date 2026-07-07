@@ -65,8 +65,8 @@ export const TaskFormModal = ({ task, onClose, onSuccess }: TaskFormModalProps) 
         setShowStaffDropdown(false);
     };
 
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
+    const handleSubmit = async (e?: React.FormEvent) => {
+        e?.preventDefault();
         try {
             if (task) {
                 await updateMutation.mutateAsync({ id: task.id, values: formData });
@@ -84,18 +84,24 @@ export const TaskFormModal = ({ task, onClose, onSuccess }: TaskFormModalProps) 
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
-            <div className="relative w-full max-w-2xl bg-white rounded-2xl shadow-2xl max-h-[90vh] overflow-hidden">
-                <div className="bg-brand-600 text-white p-4">
-                    <div className="flex items-center justify-between">
-                        <h3 className="text-xl font-bold">{task ? 'Editar Tarea' : 'Nueva Tarea'}</h3>
-                        <button onClick={onClose} className="p-2 hover:bg-white/20 rounded-lg">
-                            <Icon name="x" size={24} />
-                        </button>
+            <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={onClose} />
+            <div className="relative w-full max-w-xl bg-white rounded-2xl shadow-2xl max-h-[88vh] flex flex-col overflow-hidden animate-scale-in">
+                <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
+                    <div className="flex items-center gap-3">
+                        <span className="flex items-center justify-center w-10 h-10 rounded-xl bg-brand-50 text-brand-600">
+                            <Icon name={task ? 'edit' : 'plus'} size={20} />
+                        </span>
+                        <div>
+                            <h3 className="text-base font-bold text-slate-900 leading-tight">{task ? 'Editar Tarea' : 'Nueva Tarea'}</h3>
+                            <p className="text-xs text-slate-500">{task ? 'Actualiza los datos de la tarea' : 'Crea y asigna una nueva tarea'}</p>
+                        </div>
                     </div>
+                    <button onClick={onClose} className="p-2 text-slate-400 hover:bg-slate-100 rounded-lg">
+                        <Icon name="x" size={20} />
+                    </button>
                 </div>
 
-                <form onSubmit={handleSubmit} className="p-6 overflow-y-auto max-h-[calc(90vh-180px)]">
+                <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-5">
                     <div className="space-y-4">
                         <div>
                             <label className="label">Título</label>
@@ -227,13 +233,14 @@ export const TaskFormModal = ({ task, onClose, onSuccess }: TaskFormModalProps) 
                         </div>
                     </div>
 
-                    <div className="flex justify-end gap-3 pt-6 mt-6 border-t">
-                        <button type="button" onClick={onClose} className="btn btn-secondary">Cancelar</button>
-                        <button type="submit" disabled={!isValid || isLoading} className="btn btn-primary">
-                            {isLoading ? 'Guardando...' : task ? 'Actualizar' : 'Crear Tarea'}
-                        </button>
-                    </div>
                 </form>
+
+                <div className="flex justify-end gap-3 px-5 py-4 border-t border-slate-100 bg-slate-50">
+                    <button type="button" onClick={onClose} className="btn btn-secondary">Cancelar</button>
+                    <button type="button" onClick={() => handleSubmit()} disabled={!isValid || isLoading} className="btn btn-primary">
+                        {isLoading ? 'Guardando...' : task ? 'Actualizar' : 'Crear Tarea'}
+                    </button>
+                </div>
             </div>
         </div>
     );
