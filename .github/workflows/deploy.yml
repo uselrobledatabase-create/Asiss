@@ -26,9 +26,9 @@ jobs:
         run: npm run build
         env:
           # Hardcoded environment variables as requested by user
-          VITE_SUPABASE_URL: "https://kzslhhctjfxsdvcrqvvs.supabase.co"
-          VITE_SUPABASE_ANON_KEY: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imt6c2xoaGN0amZ4c2R2Y3JxdnZzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjU4NDAzODQsImV4cCI6MjA4MTQxNjM4NH0.NQ1maFD5Nl8y-5TxJFjeSdhOSzOi-6Hd8o4VcrmLUKo"
-          VITE_EMAIL_API_URL: "https://kzslhhctjfxsdvcrqvvs.supabase.co/functions/v1/send-email"
+          VITE_SUPABASE_URL: "https://wvcplgwemvqhvtstlqmt.supabase.co"
+          VITE_SUPABASE_ANON_KEY: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Ind2Y3BsZ3dlbXZxaHZ0c3RscW10Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjAzNjIyMDUsImV4cCI6MjA3NTkzODIwNX0.K1YOv5lRn9fOous3AyG2gPxsQBzqOXRfYHgrCmO5zxk"
+          VITE_EMAIL_API_URL: "https://wvcplgwemvqhvtstlqmt.supabase.co/functions/v1/send-email"
           # MiniCheck Supabase credentials (separate database for Extintor, TAG, Mobileye, Publicidad, Odómetro)
           VITE_MINICHECK_SUPABASE_URL: "https://wvcplgwemvqhvtstlqmt.supabase.co"
           VITE_MINICHECK_SUPABASE_ANON_KEY: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Ind2Y3BsZ3dlbXZxaHZ0c3RscW10Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjAzNjIyMDUsImV4cCI6MjA3NTkzODIwNX0.K1YOv5lRn9fOous3AyG2gPxsQBzqOXRfYHgrCmO5zxk"
