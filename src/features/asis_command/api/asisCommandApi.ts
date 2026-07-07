@@ -7,6 +7,14 @@ import { supabase, isSupabaseConfigured } from '../../../shared/lib/supabaseClie
 import { emailService } from '../../../shared/services/emailService';
 import { CommandLog, CommandLogInsert, CommandEmailSetting, CommandIntent, ResolvedPerson } from '../types';
 
+type SupabaseLikeError = {
+    code?: string;
+    message?: string;
+};
+
+const isMissingTableError = (error: SupabaseLikeError | null | undefined, table: string) =>
+    error?.code === 'PGRST205' && error.message?.includes(`'public.${table}'`);
+
 // ==========================================
 // COMMAND LOGS
 // ==========================================
@@ -33,6 +41,9 @@ export async function fetchCommandLogs(
     const { data, error } = await query;
 
     if (error) {
+        if (isMissingTableError(error, 'asis_command_logs')) {
+            return [];
+        }
         console.error('fetchCommandLogs error:', error.message);
         return [];
     }
@@ -53,6 +64,9 @@ export async function createCommandLog(log: CommandLogInsert): Promise<CommandLo
         .single();
 
     if (error) {
+        if (isMissingTableError(error, 'asis_command_logs')) {
+            return null;
+        }
         console.error('createCommandLog error:', error.message);
         return null;
     }
@@ -76,6 +90,9 @@ export async function fetchEmailSettings(): Promise<CommandEmailSetting[]> {
         .order('intent');
 
     if (error) {
+        if (isMissingTableError(error, 'asis_command_email_settings')) {
+            return [];
+        }
         console.error('fetchEmailSettings error:', error.message);
         return [];
     }
@@ -96,6 +113,9 @@ export async function getEmailSettingForIntent(intent: CommandIntent): Promise<C
         .single();
 
     if (error && error.code !== 'PGRST116') {
+        if (isMissingTableError(error, 'asis_command_email_settings')) {
+            return null;
+        }
         console.error('getEmailSettingForIntent error:', error.message);
     }
 
@@ -123,6 +143,9 @@ export async function updateEmailSetting(
         }, { onConflict: 'intent' });
 
     if (error) {
+        if (isMissingTableError(error, 'asis_command_email_settings')) {
+            return false;
+        }
         console.error('updateEmailSetting error:', error.message);
         return false;
     }
