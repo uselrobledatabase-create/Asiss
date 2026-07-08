@@ -4,6 +4,13 @@ on:
   push:
     branches: [ main ]
 
+# Credenciales de Supabase para el sitio publicado.
+# Si Supabase rota las claves, actualizar SOLO estas dos lineas y hacer push.
+# Panel: https://supabase.com/dashboard/project/wvcplgwemvqhvtstlqmt/settings/api-keys
+env:
+  SUPABASE_URL: "https://wvcplgwemvqhvtstlqmt.supabase.co"
+  SUPABASE_ANON_KEY: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Ind2Y3BsZ3dlbXZxaHZ0c3RscW10Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjAzNjIyMDUsImV4cCI6MjA3NTkzODIwNX0.K1YOv5lRn9fOous3AyG2gPxsQBzqOXRfYHgrCmO5zxk"
+
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
@@ -25,13 +32,12 @@ jobs:
       - name: Build
         run: npm run build
         env:
-          # Hardcoded environment variables as requested by user
-          VITE_SUPABASE_URL: "https://wvcplgwemvqhvtstlqmt.supabase.co"
-          VITE_SUPABASE_ANON_KEY: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Ind2Y3BsZ3dlbXZxaHZ0c3RscW10Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjAzNjIyMDUsImV4cCI6MjA3NTkzODIwNX0.K1YOv5lRn9fOous3AyG2gPxsQBzqOXRfYHgrCmO5zxk"
-          VITE_EMAIL_API_URL: "https://wvcplgwemvqhvtstlqmt.supabase.co/functions/v1/send-email"
-          # MiniCheck Supabase credentials (separate database for Extintor, TAG, Mobileye, Publicidad, Odómetro)
-          VITE_MINICHECK_SUPABASE_URL: "https://wvcplgwemvqhvtstlqmt.supabase.co"
-          VITE_MINICHECK_SUPABASE_ANON_KEY: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Ind2Y3BsZ3dlbXZxaHZ0c3RscW10Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjAzNjIyMDUsImV4cCI6MjA3NTkzODIwNX0.K1YOv5lRn9fOous3AyG2gPxsQBzqOXRfYHgrCmO5zxk"
+          VITE_SUPABASE_URL: ${{ env.SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ env.SUPABASE_ANON_KEY }}
+          VITE_EMAIL_API_URL: ${{ env.SUPABASE_URL }}/functions/v1/send-email
+          # MiniCheck usa la misma base de datos que el resto de la app
+          VITE_MINICHECK_SUPABASE_URL: ${{ env.SUPABASE_URL }}
+          VITE_MINICHECK_SUPABASE_ANON_KEY: ${{ env.SUPABASE_ANON_KEY }}
 
       - name: Deploy
         uses: JamesIves/github-pages-deploy-action@v4
