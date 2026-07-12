@@ -47,18 +47,18 @@ export const DashboardTurnosStats = ({ data }: Props) => {
                             <div className={`w-3 h-3 rounded-full ${colorConfig || 'bg-slate-300'}`}></div>
                             <span className="text-xs font-bold text-slate-600 uppercase">{cargo.label}</span>
                         </div>
-                        <div className="flex items-end justify-between mt-auto pt-2 border-t border-slate-50">
-                            <div className="flex flex-col">
-                                <span className="text-2xl font-black text-slate-800 leading-none">{stat.turno}</span>
-                                <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Turno</span>
+                        <div className="grid grid-cols-3 mt-auto pt-2 border-t border-slate-50 items-end divide-x divide-slate-100">
+                            <div className="flex flex-col pr-1">
+                                <span className="text-xl font-black text-slate-800 leading-none">{stat.turno}</span>
+                                <span className="text-[9px] font-semibold text-slate-400 uppercase tracking-wider truncate" title="En Turno">Turno</span>
                             </div>
-                            <div className="flex flex-col text-center border-x border-slate-100 px-3">
+                            <div className="flex flex-col text-center px-1">
                                 <span className="text-xl font-bold text-emerald-500 leading-none">{stat.presentes}</span>
-                                <span className="text-[10px] font-semibold text-emerald-600 uppercase tracking-wider">Presentes</span>
+                                <span className="text-[9px] font-semibold text-emerald-600 uppercase tracking-wider truncate" title="Presentes">Presentes</span>
                             </div>
-                            <div className="flex flex-col text-right">
-                                <span className="text-lg font-bold text-slate-400 leading-none">{stat.libre}</span>
-                                <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Libres</span>
+                            <div className="flex flex-col text-right pl-1">
+                                <span className="text-xl font-bold text-slate-400 leading-none">{stat.libre}</span>
+                                <span className="text-[9px] font-semibold text-slate-400 uppercase tracking-wider truncate" title="Libres">Libres</span>
                             </div>
                         </div>
                         <div className="w-full bg-slate-100 h-1.5 rounded-full mt-3 overflow-hidden flex">
