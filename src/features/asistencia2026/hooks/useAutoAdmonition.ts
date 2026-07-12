@@ -1,7 +1,8 @@
 import { useMutation } from '@tanstack/react-query';
 import { supabase } from '../../../shared/lib/supabaseClient';
-import { jsPDF } from 'jspdf';
 import { StaffWithShift } from '../types';
+import { generateAmonestacionPDF } from '../../amonestaciones/utils/pdfGenerator';
+import { AmonestacionFormData } from '../../amonestaciones/types';
 
 export const useAutoAdmonition = () => {
     return useMutation({
@@ -23,63 +24,39 @@ export const useAutoAdmonition = () => {
             const testigoRut = supervisorData?.rut || 'Sin RUT';
             const testigoCargo = supervisorData?.cargo || 'SUPERVISOR';
 
-            // 2. Generate PDF using jsPDF
-            const doc = new jsPDF();
-            
-            // Configure fonts and styles
-            doc.setFont('helvetica');
-            
-            // Title
-            doc.setFontSize(16);
-            doc.setFont('helvetica', 'bold');
-            doc.text('AMONESTACIÓN POR AUSENCIA INJUSTIFICADA', 105, 20, { align: 'center' });
-            
-            // Subtitle / Info
-            doc.setFontSize(12);
-            doc.setFont('helvetica', 'normal');
-            
+            // 2. Format Data for PDF Generator
             const formattedDate = date.split('-').reverse().join('/'); // YYYY-MM-DD to DD/MM/YYYY
             
-            // Format name to [APELLIDOS], [NOMBRES]
-            // We assume DB name is usually "NOMBRES APELLIDOS" in some format. We'll just do a best effort split.
-            const nameParts = staff.nombre.split(' ');
-            let apellidos = '';
-            let nombres = '';
-            if (nameParts.length > 2) {
-                apellidos = nameParts.slice(nameParts.length - 2).join(' ');
-                nombres = nameParts.slice(0, nameParts.length - 2).join(' ');
-            } else if (nameParts.length === 2) {
-                nombres = nameParts[0];
-                apellidos = nameParts[1];
-            } else {
-                nombres = staff.nombre;
-            }
-            const nameFormatted = apellidos ? `${apellidos}, ${nombres}` : staff.nombre;
+            const formData: AmonestacionFormData = {
+                worker_rut: staff.rut,
+                worker_name: staff.nombre,
+                worker_cargo: staff.cargo,
+                worker_base: staff.terminal_code || '',
+                shift_schedule: timeRange,
+                date: formattedDate,
+                time: "00:00",
+                place_terminal: staff.terminal_code || '',
+                place_public_way: '',
+                place_vehicle: '',
+                place_ppu: '',
+                place_detail: '',
+                involved_jefatura: '',
+                involved_companeros: '',
+                involved_other: '',
+                description: 'SE CONSTATA QUE EL/LA COLABORADOR(A) NO SE PRESENTA A SU TURNO EN LA FECHA INDICADA, INCURRIENDO EN AUSENCIA INJUSTIFICADA. ASIMISMO, NO REALIZA AVISO PREVIO NI DEJA CONSTANCIA FORMAL A SU JEFATURA DIRECTA RESPECTO DE SU INASISTENCIA, IMPIDIENDO LA COORDINACIÓN OPORTUNA DE LA CONTINUIDAD OPERATIVA.',
+                witness1_name: testigoNombre,
+                witness1_rut: testigoRut,
+                witness1_cargo: testigoCargo,
+                witness2_name: '',
+                witness2_rut: '',
+                witness2_cargo: '',
+                responsible_name: testigoNombre,
+                responsible_cargo: testigoCargo,
+                sanction_code_id: 24, // Faltar sin aviso
+            };
 
-            doc.text(`${nameFormatted}, RUT: ${staff.rut}, ${staff.cargo}, TERMINAL ${staff.terminal_code}, CON TURNO PROGRAMADO DE ${timeRange}, EL DÍA ${formattedDate}.`, 20, 40, { maxWidth: 170, align: 'justify', lineHeightFactor: 1.5 });
-            
-            doc.text('SE CONSTATA QUE EL/LA COLABORADOR(A) NO SE PRESENTA A SU TURNO EN LA FECHA INDICADA, INCURRIENDO EN AUSENCIA INJUSTIFICADA. ASIMISMO, NO REALIZA AVISO PREVIO NI DEJA CONSTANCIA FORMAL A SU JEFATURA DIRECTA RESPECTO DE SU INASISTENCIA, IMPIDIENDO LA COORDINACIÓN OPORTUNA DE LA CONTINUIDAD OPERATIVA.', 20, 70, { maxWidth: 170, align: 'justify', lineHeightFactor: 1.5 });
-            
-            doc.text('ESTA SITUACIÓN OBLIGA A REORGANIZAR Y REPROGRAMAR PERSONAL PARA CUBRIR LAS FUNCIONES ASIGNADAS, GENERANDO SOBRECARGA DE LABORES, RETRASOS EN LAS TAREAS DIARIAS Y AFECTACIÓN DIRECTA EN LA OPERACIÓN DEL TERMINAL.', 20, 115, { maxWidth: 170, align: 'justify', lineHeightFactor: 1.5 });
-            
-            doc.setFont('helvetica', 'bold');
-            doc.text('CAYENDO EN FALTA GRAVE (CÓDIGO 24).', 20, 155, { maxWidth: 170, align: 'justify' });
-            
-            // Signatures
-            doc.setFont('helvetica', 'normal');
-            doc.text('_______________________', 40, 210);
-            doc.text('Firma Trabajador', 45, 220);
-            
-            doc.text('_______________________', 130, 210);
-            doc.text('Testigo 1', 145, 220);
-            
-            doc.setFontSize(10);
-            doc.text(testigoNombre, 130, 227);
-            doc.text(`RUT: ${testigoRut}`, 130, 232);
-            doc.text(testigoCargo, 130, 237);
-
-            // 3. Save as Blob and upload
-            const pdfBlob = doc.output('blob');
+            // 3. Generate PDF and get Blob
+            const pdfBlob = generateAmonestacionPDF(formData, true) as Blob;
             const file = new File([pdfBlob], `amonestacion_${staff.rut}_${date}.pdf`, { type: 'application/pdf' });
             
             const fileExt = file.name.split('.').pop();

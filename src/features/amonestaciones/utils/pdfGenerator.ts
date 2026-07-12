@@ -2,7 +2,7 @@ import jsPDF from 'jspdf';
 import { AmonestacionFormData } from '../types';
 import { LOGO_RBU_BASE64, LOGO_ASISS_BASE64 } from './logos';
 
-export const generateAmonestacionPDF = (data: AmonestacionFormData) => {
+export const generateAmonestacionPDF = (data: AmonestacionFormData, returnBlob: boolean = false): Blob | void => {
     // Letter Size: 215.9mm x 279.4mm
     const doc = new jsPDF({
         format: 'letter',
@@ -140,14 +140,15 @@ export const generateAmonestacionPDF = (data: AmonestacionFormData) => {
 
     const c = parseInt(data.sanction_code_id.toString());
 
-    const isAbandono = c === 9;
-    const isNegativa = c === 8;
+    const isAbandono = c === 9 || c === 50;
+    const isNegativa = c === 8 || c === 51;
     const isDesobedecer = c === 8;
-    const isAgresionV = c === 1;
-    const isIncumplimiento = (c === 10 || c === 2 || c === 5);
+    const isAgresionV = c === 1 || c === 32;
+    const isIncumplimiento = (c === 10 || c === 2 || c === 5 || c === 29);
+    const isAusencia = c === 24 || c === 11; // 24 = Faltar sin aviso
 
     // Explicit isOtro: True ONLY if c is NOT one of the known ones that have boxes
-    const knownCodes = [9, 8, 1, 10, 2, 5];
+    const knownCodes = [9, 50, 8, 51, 1, 32, 10, 2, 5, 29, 24, 11];
     const isOtro = !knownCodes.includes(c);
 
     // Grid 3 Cols
@@ -157,7 +158,7 @@ export const generateAmonestacionPDF = (data: AmonestacionFormData) => {
     // Row 1
     drawCheckbox('Abandono de trabajo', isAbandono, MARGIN_X, cy, colW);
     drawCheckbox('Agresión verbal', isAgresionV, MARGIN_X + colW, cy, colW);
-    drawCheckbox('Ausencia injustif.', false, MARGIN_X + (colW * 2), cy, colW);
+    drawCheckbox('Ausencia injustif.', isAusencia, MARGIN_X + (colW * 2), cy, colW);
     cy += 5;
 
     // Row 2
@@ -264,5 +265,8 @@ export const generateAmonestacionPDF = (data: AmonestacionFormData) => {
     doc.setFontSize(7);
     doc.text('FIRMA Y TIMBRE', sigX + ((PAGE_W - MARGIN_X - 10 - sigX) / 2), y + rBoxH - 4, { align: 'center' });
 
+    if (returnBlob) {
+        return doc.output('blob');
+    }
     doc.save(`Amonestacion_Acta_${data.worker_rut}.pdf`);
 };
