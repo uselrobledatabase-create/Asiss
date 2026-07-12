@@ -500,10 +500,10 @@ export const Asistencia2026Page = () => {
                     'INICIO NUEVO': item.day_on_start || 'N/A',
                     'TÉRMINO NUEVO': item.day_on_end || 'N/A',
                     'CARGO': s?.cargo || 'N/A',
-                    'Autoriza': item.authorized_by || 'N/A',
-                    'Área': 'N/A', // Se obtiene de otro lado si aplica
-                    'Responsable': 'N/A',
-                    'Motivo Cambio': '-',
+                    'Autoriza': 'CLM',
+                    'Área': 'Logística',
+                    'Responsable': session?.supervisorName || 'N/A',
+                    'Motivo Cambio': '',
                 };
             });
         const wsCD = XLSX.utils.json_to_sheet(cdData.length > 0 ? cdData : [{ 'Status': 'Sin Registros' }]);

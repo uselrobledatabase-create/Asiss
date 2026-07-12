@@ -17,6 +17,7 @@ import { CambiosDeDiaForm } from '../forms/CambiosDeDiaForm';
 import { useCambiosDia, useAttendanceKPIs, useCreateCambioDia, useUpdateCambioDia, useAuthorize, useReject, useAttendanceRealtime } from '../hooks';
 import { getDocumentUrl } from '../api';
 import { AttendanceFilters, AUTH_STATUS_OPTIONS, CambioDia, CambioDiaFormValues } from '../types';
+import { useStaff } from '../../personal/hooks/useStaff';
 
 type ModalState =
     | { type: 'none' }
@@ -45,6 +46,12 @@ export const CambiosDeDiaPage = () => {
     const rejectMutation = useReject();
     useAttendanceRealtime();
 
+    const staffQuery = useStaff(terminalContext);
+    const getCargo = (rut: string) => {
+        const person = staffQuery.data?.find(s => s.rut === rut);
+        return person?.cargo || '-';
+    };
+
     const exportColumns = [
         { key: 'rut', header: 'RUT', value: (r: CambioDia) => formatRut(r.rut) },
         { key: 'nombre', header: 'NOMBRE', value: (r: CambioDia) => r.nombre },
@@ -54,11 +61,11 @@ export const CambiosDeDiaPage = () => {
         { key: 'day_on_date', header: 'FECHA NUEVO', value: (r: CambioDia) => r.day_on_date },
         { key: 'day_on_start', header: 'INICIO NUEVO', value: (r: CambioDia) => r.day_on_start || r.reprogram_start },
         { key: 'day_on_end', header: 'TÉRMINO NUEVO', value: (r: CambioDia) => r.day_on_end || r.reprogram_end },
-        { key: 'cargo', header: 'CARGO', value: () => '-' },
-        { key: 'autoriza', header: 'Autoriza', value: (r: CambioDia) => r.authorized_by || '-' },
-        { key: 'area', header: 'Área', value: () => '-' },
-        { key: 'responsable', header: 'Responsable', value: () => '-' },
-        { key: 'motivo_cambio', header: 'Motivo Cambio', value: () => '-' },
+        { key: 'cargo', header: 'CARGO', value: (r: CambioDia) => getCargo(r.rut) },
+        { key: 'autoriza', header: 'Autoriza', value: () => 'CLM' },
+        { key: 'area', header: 'Área', value: () => 'Logística' },
+        { key: 'responsable', header: 'Responsable', value: () => supervisorName },
+        { key: 'motivo_cambio', header: 'Motivo Cambio', value: () => '' },
     ];
 
     const handleCreate = async (values: CambioDiaFormValues) => {
@@ -260,11 +267,11 @@ export const CambiosDeDiaPage = () => {
                                         <td className="table-cell">{row.day_on_date}</td>
                                         <td className="table-cell">{row.day_on_start || row.reprogram_start || '-'}</td>
                                         <td className="table-cell">{row.day_on_end || row.reprogram_end || '-'}</td>
-                                        <td className="table-cell">-</td>
-                                        <td className="table-cell">{row.authorized_by || '-'}</td>
-                                        <td className="table-cell">-</td>
-                                        <td className="table-cell">-</td>
-                                        <td className="table-cell max-w-[150px] truncate" title={''}>-</td>
+                                        <td className="table-cell">{getCargo(row.rut)}</td>
+                                        <td className="table-cell">CLM</td>
+                                        <td className="table-cell">Logística</td>
+                                        <td className="table-cell">{supervisorName}</td>
+                                        <td className="table-cell max-w-[150px] truncate" title={''}></td>
                                         <td className="table-cell">
                                             {row.document_path ? (
                                                 <button onClick={() => handleViewDocument(row.document_path!)} className="btn btn-ghost btn-icon text-brand-600" title="Ver documento">
