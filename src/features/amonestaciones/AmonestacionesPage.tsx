@@ -5,6 +5,7 @@ import { ConfirmDialog } from '../../shared/components/common/ConfirmDialog';
 import { fetchAmonestaciones, deleteAmonestacion, AmonestacionRecord } from './api/amonestacionesApi';
 import { generateAmonestacionPDF } from './utils/pdfGenerator';
 import { useToastStore } from '../../shared/state/toastStore';
+import { useSessionStore } from '../../shared/state/sessionStore';
 
 export const AmonestacionesPage = () => {
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -13,6 +14,7 @@ export const AmonestacionesPage = () => {
     const [recordToDelete, setRecordToDelete] = useState<AmonestacionRecord | null>(null);
     const [deleting, setDeleting] = useState(false);
     const addToast = useToastStore(state => state.addToast);
+    const session = useSessionStore(state => state.session);
 
     const loadRecords = async () => {
         try {
@@ -160,6 +162,19 @@ export const AmonestacionesPage = () => {
                 onConfirm={handleDelete}
                 onClose={() => setRecordToDelete(null)}
             />
+
+            {isModalOpen && (
+                <AmonestacionFormModal
+                    open={isModalOpen}
+                    onClose={() => setIsModalOpen(false)}
+                    currentUserName={session?.supervisorName || "Usuario Activo"}
+                    currentUserCargo={"Inspector"} // Cargo is not stored in session, default to Inspector
+                    onSuccess={() => {
+                        setIsModalOpen(false);
+                        loadRecords();
+                    }}
+                />
+            )}
         </div>
     );
 };
