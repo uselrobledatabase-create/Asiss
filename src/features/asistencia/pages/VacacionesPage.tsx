@@ -32,7 +32,9 @@ export const VacacionesPage = () => {
     const supervisorName = session?.supervisorName ?? '';
     const canAuthorize = isAuthorizer(supervisorName);
 
-    const [filters, setFilters] = useState<AttendanceFilters>({ auth_status: 'todos' });
+    const [filters, setFilters] = useState<AttendanceFilters>({
+        auth_status: canAuthorize ? 'PENDIENTE' : 'todos',
+    });
     const [modal, setModal] = useState<ModalState>({ type: 'none' });
     const [showCalendar, setShowCalendar] = useState(false);
 
