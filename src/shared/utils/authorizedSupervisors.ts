@@ -9,6 +9,8 @@ export type AuthorizedSupervisorName = typeof AUTHORIZED_SUPERVISORS[number];
 
 export const normalizeSupervisorName = (name: string): string => {
     return name
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
         .trim()
         .replace(/\s+/g, ' ')
         .toUpperCase();
