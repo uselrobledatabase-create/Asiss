@@ -1,0 +1,68 @@
+import React, { useMemo } from 'react';
+import { ProcessedStaff } from './useDashboardTurnos';
+import { STAFF_CARGOS } from '../../../personal/types';
+import { CARGO_COLORS } from '../../../asistencia2026/utils/colors';
+
+interface Props {
+    data: ProcessedStaff[];
+}
+
+export const DashboardTurnosStats = ({ data }: Props) => {
+    // We want to count how many are in Turno vs Libre for each Cargo
+    const stats = useMemo(() => {
+        const counts: Record<string, { turno: number; libre: number; total: number }> = {};
+        
+        STAFF_CARGOS.forEach(c => {
+            counts[c.value] = { turno: 0, libre: 0, total: 0 };
+        });
+
+        data.forEach(staff => {
+            if (counts[staff.cargo]) {
+                counts[staff.cargo].total += 1;
+                if (staff.isOff) {
+                    counts[staff.cargo].libre += 1;
+                } else {
+                    counts[staff.cargo].turno += 1;
+                }
+            }
+        });
+
+        return counts;
+    }, [data]);
+
+    return (
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+            {STAFF_CARGOS.map(cargo => {
+                const stat = stats[cargo.value];
+                if (stat.total === 0) return null; // Don't show empty cargos
+
+                const colorConfig = CARGO_COLORS[cargo.value as keyof typeof CARGO_COLORS];
+
+                return (
+                    <div key={cargo.value} className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm flex flex-col hover:shadow-md transition-shadow">
+                        <div className="flex items-center gap-2 mb-2">
+                            <div className={`w-3 h-3 rounded-full ${colorConfig || 'bg-slate-300'}`}></div>
+                            <span className="text-xs font-bold text-slate-600 uppercase">{cargo.label}</span>
+                        </div>
+                        <div className="flex items-end justify-between mt-auto pt-2 border-t border-slate-50">
+                            <div className="flex flex-col">
+                                <span className="text-2xl font-black text-slate-800 leading-none">{stat.turno}</span>
+                                <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">En Turno</span>
+                            </div>
+                            <div className="flex flex-col text-right">
+                                <span className="text-lg font-bold text-slate-400 leading-none">{stat.libre}</span>
+                                <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Libres</span>
+                            </div>
+                        </div>
+                        <div className="w-full bg-slate-100 h-1.5 rounded-full mt-3 overflow-hidden">
+                            <div 
+                                className="h-full bg-emerald-500 rounded-full" 
+                                style={{ width: `${(stat.turno / stat.total) * 100}%` }}
+                            ></div>
+                        </div>
+                    </div>
+                );
+            })}
+        </div>
+    );
+};

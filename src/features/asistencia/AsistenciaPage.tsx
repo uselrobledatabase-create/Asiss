@@ -6,6 +6,7 @@ import { CambiosDeDiaPage } from './pages/CambiosDeDiaPage';
 import { AutorizacionesPage } from './pages/AutorizacionesPage';
 import { VacacionesPage } from './pages/VacacionesPage';
 import { Asistencia2026Page } from '../asistencia2026/pages/Asistencia2026Page';
+import { DashboardTurnosModal } from './components/dashboard/DashboardTurnosModal';
 import { AttendanceSubsection } from './types';
 
 const TABS: { id: AttendanceSubsection; label: string; icon: IconName }[] = [
@@ -22,6 +23,7 @@ import { EmailConfigModal } from '../settings/components/EmailConfigModal';
 export const AsistenciaPage = () => {
   const [activeTab, setActiveTab] = useState<AttendanceSubsection>('asistencia-2026');
   const [isConfigOpen, setIsConfigOpen] = useState(false);
+  const [isDashboardOpen, setIsDashboardOpen] = useState(false);
 
   const renderContent = () => {
     switch (activeTab) {
@@ -63,19 +65,31 @@ export const AsistenciaPage = () => {
           ))}
         </div>
 
-        <button
-          onClick={() => setIsConfigOpen(true)}
-          className="btn btn-secondary text-sm flex items-center gap-2 shrink-0"
-        >
-          <Icon name="settings" size={16} />
-          <span>Configurar Correos</span>
-        </button>
+        <div className="flex items-center gap-2 shrink-0">
+          <button
+            onClick={() => setIsDashboardOpen(true)}
+            className="btn btn-primary text-sm flex items-center gap-2"
+          >
+            <Icon name="bar-chart" size={16} />
+            <span>Dashboard Turnos</span>
+          </button>
+          <button
+            onClick={() => setIsConfigOpen(true)}
+            className="btn btn-secondary text-sm flex items-center gap-2"
+          >
+            <Icon name="settings" size={16} />
+            <span className="hidden sm:inline">Configurar Correos</span>
+          </button>
+        </div>
       </div>
 
       {/* Content */}
       {renderContent()}
 
       <EmailConfigModal isOpen={isConfigOpen} onClose={() => setIsConfigOpen(false)} />
+      {isDashboardOpen && (
+        <DashboardTurnosModal onClose={() => setIsDashboardOpen(false)} />
+      )}
     </div>
   );
 };
