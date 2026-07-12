@@ -410,7 +410,7 @@ export const RutPdfExportModal = ({
                         // Draw Date (Bigger)
                         doc.setFontSize(9); 
                         doc.setFont('helvetica', 'bold');
-                        doc.setTextColor(...customData.textColor);
+                        doc.setTextColor(customData.textColor[0], customData.textColor[1], customData.textColor[2]);
                         doc.text(dateText, x, y, { align: 'center' });
                         
                         // Draw Rest of text (Smaller)
