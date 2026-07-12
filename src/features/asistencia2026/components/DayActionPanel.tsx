@@ -4,6 +4,8 @@
 
 import { useState } from 'react';
 import { Icon } from '../../../shared/components/common/Icon';
+import { useSessionStore } from '../../../shared/state/sessionStore';
+import { useAutoAdmonition } from '../hooks/useAutoAdmonition';
 import { StaffWithShift, AttendanceMarkType, IncidenceCode } from '../types';
 import { DAY_COLORS, BUTTON_VARIANTS } from '../utils/colors';
 import { formatDayOfWeek } from '../utils/shiftEngine';
@@ -40,7 +42,9 @@ export const DayActionPanel = ({
     onRequestOffboarding,
     isManager = false,
 }: DayActionPanelProps) => {
-    const [activeForm, setActiveForm] = useState<'none' | 'license'>('none');
+    const session = useSessionStore((s) => s.session);
+    const autoAdmonition = useAutoAdmonition();
+    const [activeForm, setActiveForm] = useState<'none' | 'license' | 'absent_confirm'>('none');
     const [licenseStart, setLicenseStart] = useState(date);
     const [licenseEnd, setLicenseEnd] = useState(date);
     const [licenseNote, setLicenseNote] = useState('');
@@ -55,6 +59,34 @@ export const DayActionPanel = ({
         onRegisterLicense(licenseStart, licenseEnd, licenseNote || undefined);
         setLicenseNote('');
         setActiveForm('none');
+    };
+
+    const handleConfirmAbsent = async (isJustified: boolean) => {
+        if (isJustified) {
+            onMarkAbsent('Justificado');
+            setActiveForm('none');
+        } else {
+            if (!session) return;
+            try {
+                // Generate and upload PDF
+                const pdfUrl = await autoAdmonition.mutateAsync({
+                    staff,
+                    supervisorName: session.supervisorName,
+                    date,
+                    timeRange: staff.horario
+                });
+                
+                // Mark as absent
+                onMarkAbsent('Ausencia Injustificada');
+                setActiveForm('none');
+                
+                // Open PDF in new tab to print
+                window.open(pdfUrl, '_blank');
+            } catch (error) {
+                console.error(error);
+                alert('Hubo un error al generar la amonestación. Intente nuevamente.');
+            }
+        }
     };
 
     return (
@@ -106,7 +138,7 @@ export const DayActionPanel = ({
                     )}
 
                     {/* Quick marks */}
-                    {!isDesvinculado && (
+                    {!isDesvinculado && activeForm === 'none' && (
                         <div className="space-y-2">
                             <h4 className="text-sm font-medium text-slate-700">Marcar asistencia</h4>
                             <div className="flex gap-2">
@@ -119,11 +151,51 @@ export const DayActionPanel = ({
                                     Presente (P)
                                 </button>
                                 <button
-                                    onClick={() => onMarkAbsent('')}
+                                    onClick={() => setActiveForm('absent_confirm')}
                                     className={`flex-1 py-2 rounded-lg font-medium transition-colors ${BUTTON_VARIANTS.danger}`}
                                 >
                                     <Icon name="x" size={16} className="inline mr-1" />
                                     Ausente (A)
+                                </button>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Absent confirmation */}
+                    {activeForm === 'absent_confirm' && (
+                        <div className="space-y-3 p-4 bg-rose-50 rounded-xl border border-rose-100">
+                            <div className="flex items-center gap-2 text-rose-800">
+                                <Icon name="alert-circle" size={20} />
+                                <h4 className="font-bold">Confirmar Ausencia</h4>
+                            </div>
+                            <p className="text-sm text-rose-700 font-medium">¿La ausencia de este trabajador está justificada?</p>
+                            <p className="text-xs text-rose-600/80 leading-tight">Si indica "No", se generará e imprimirá automáticamente una amonestación por falta grave (Código 24).</p>
+                            
+                            <div className="flex flex-col gap-2 mt-4">
+                                <button
+                                    onClick={() => handleConfirmAbsent(true)}
+                                    className="w-full py-2.5 rounded-lg font-bold bg-white text-rose-700 border-2 border-rose-200 hover:bg-rose-100 transition-colors"
+                                >
+                                    Sí, está justificada
+                                </button>
+                                <button
+                                    onClick={() => handleConfirmAbsent(false)}
+                                    disabled={autoAdmonition.isPending}
+                                    className="w-full py-2.5 rounded-lg font-bold bg-rose-600 text-white hover:bg-rose-700 transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
+                                >
+                                    {autoAdmonition.isPending ? (
+                                        <Icon name="loader" size={16} className="animate-spin" />
+                                    ) : (
+                                        <Icon name="file-text" size={16} />
+                                    )}
+                                    No, generar amonestación
+                                </button>
+                                <button
+                                    onClick={() => setActiveForm('none')}
+                                    disabled={autoAdmonition.isPending}
+                                    className="w-full py-2 rounded-lg font-medium text-slate-500 hover:bg-slate-100 transition-colors mt-2 text-sm"
+                                >
+                                    Cancelar
                                 </button>
                             </div>
                         </div>

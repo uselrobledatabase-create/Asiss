@@ -35,8 +35,58 @@ export const DashboardTurnosStats = ({ data, filters, onFilterChange }: Props) =
         return counts;
     }, [data]);
 
+    const totals = useMemo(() => {
+        let turno = 0, libre = 0, presentes = 0, total = 0;
+        Object.values(stats).forEach(s => {
+            turno += s.turno;
+            libre += s.libre;
+            presentes += s.presentes;
+            total += s.total;
+        });
+        return { turno, libre, presentes, total };
+    }, [stats]);
+
     return (
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+            {/* Tarjeta de TODOS */}
+            <div 
+                onClick={() => onFilterChange({ ...filters, cargo: 'TODOS' })}
+                className={`bg-white rounded-xl border p-4 shadow-sm flex flex-col hover:shadow-md transition-all cursor-pointer select-none ${
+                    filters.cargo === 'TODOS' ? 'ring-2 ring-brand-500 border-brand-500' : 'border-slate-200 opacity-90 hover:opacity-100'
+                }`}
+            >
+                <div className="flex items-center gap-2 mb-2">
+                    <div className="w-3 h-3 rounded-full bg-brand-500"></div>
+                    <span className="text-xs font-bold text-slate-600 uppercase">TODOS LOS CARGOS</span>
+                </div>
+                <div className="grid grid-cols-3 mt-auto pt-2 border-t border-slate-50 items-end divide-x divide-slate-100">
+                    <div className="flex flex-col pr-1">
+                        <span className="text-xl font-black text-slate-800 leading-none">{totals.turno}</span>
+                        <span className="text-[9px] font-semibold text-slate-400 uppercase tracking-wider truncate" title="En Turno">Turno</span>
+                    </div>
+                    <div className="flex flex-col text-center px-1">
+                        <span className="text-xl font-bold text-emerald-500 leading-none">{totals.presentes}</span>
+                        <span className="text-[9px] font-semibold text-emerald-600 uppercase tracking-wider truncate" title="Presentes">Presentes</span>
+                    </div>
+                    <div className="flex flex-col text-right pl-1">
+                        <span className="text-xl font-bold text-slate-400 leading-none">{totals.libre}</span>
+                        <span className="text-[9px] font-semibold text-slate-400 uppercase tracking-wider truncate" title="Libres">Libres</span>
+                    </div>
+                </div>
+                <div className="w-full bg-slate-100 h-1.5 rounded-full mt-3 overflow-hidden flex">
+                    <div 
+                        className="h-full bg-emerald-500 rounded-l-full" 
+                        style={{ width: `${totals.turno > 0 ? (totals.presentes / totals.total) * 100 : 0}%` }}
+                        title="Presentes"
+                    ></div>
+                    <div 
+                        className="h-full bg-amber-400 rounded-r-full" 
+                        style={{ width: `${totals.turno > 0 ? ((totals.turno - totals.presentes) / totals.total) * 100 : 0}%` }}
+                        title="Ausentes / Faltas"
+                    ></div>
+                </div>
+            </div>
+
             {STAFF_CARGOS.map(cargo => {
                 const stat = stats[cargo.value];
                 if (stat.total === 0) return null; // Don't show empty cargos
