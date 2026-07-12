@@ -401,7 +401,8 @@ export async function fetchLicensesForRange(
         .from('attendance_licenses')
         .select('*')
         .in('staff_id', staffIds)
-        .or(`start_date.lte.${endDate},end_date.gte.${startDate}`);
+        .lte('start_date', endDate)
+        .gte('end_date', startDate);
 
     if (error) throw error;
     return data || [];
@@ -458,7 +459,8 @@ export async function fetchPermissionsForRange(
         .from('attendance_permissions')
         .select('*')
         .in('staff_id', staffIds)
-        .or(`start_date.lte.${endDate},end_date.gte.${startDate}`);
+        .lte('start_date', endDate)
+        .gte('end_date', startDate);
 
     if (error) throw error;
     return data || [];
@@ -514,7 +516,8 @@ export async function fetchVacationsForRange(
         .select('rut, start_date, end_date')
         .in('rut', ruts)
         .eq('auth_status', 'AUTORIZADO')
-        .or(`start_date.lte.${endDate},end_date.gte.${startDate}`);
+        .lte('start_date', endDate)
+        .gte('end_date', startDate);
 
     if (error) throw error;
 

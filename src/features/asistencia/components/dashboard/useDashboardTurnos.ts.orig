@@ -14,8 +14,6 @@ import {
     isOffDay,
     determineDailyShift,
     isPastDate,
-    getTurnoFromHorario,
-    isDateInRange,
 } from '../../../asistencia2026/utils/shiftEngine';
 import { TerminalCode } from '../../../../shared/types/terminal';
 import { StaffWithShift } from '../../../asistencia2026/types';
@@ -63,8 +61,8 @@ export const useDashboardTurnos = (date: string) => {
         if (isLoading) return [];
 
         return activeStaff.map((staff): ProcessedStaff => {
-            const hasLicense = licenses.some(l => l.staff_id === staff.id && isDateInRange(date, l.start_date, l.end_date));
-            const hasVacation = vacations.some(v => v.staff_id === staff.id && isDateInRange(date, v.start_date, v.end_date));
+            const hasLicense = licenses.some(l => l.staff_id === staff.id);
+            const hasVacation = vacations.some(v => v.staff_id === staff.id);
             const mark = marks.find(m => m.staff_id === staff.id);
 
             const isRegularOff = staff.shift ? isOffDay(
@@ -83,7 +81,14 @@ export const useDashboardTurnos = (date: string) => {
             else if (hasVacation) offReason = 'VACACIONES';
             else if (isRegularOff) offReason = 'DESCANSO';
 
-            const assignedTurno = getTurnoFromHorario(staff.horario);
+            const assignedTurno = determineDailyShift(
+                staff.horario,
+                staff.shift,
+                date,
+                templates,
+                staff.id,
+                shiftTypes
+            );
 
             return {
                 ...staff,
