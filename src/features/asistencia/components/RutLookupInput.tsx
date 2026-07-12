@@ -50,9 +50,15 @@ export const RutLookupInput = ({ value, onChange, onStaffFound, disabled }: Prop
             if (rut !== lastLookedUpRut.current) return;
 
             if (staff) {
-                setFound(true);
-                setError(null); // Explicitly clear error
-                onStaffFound(staff);
+                if (staff.status === 'DESVINCULADO' || staff.suspended) {
+                    setFound(false);
+                    setError('Personal se encuentra suspendido o desvinculado');
+                    onStaffFound(null);
+                } else {
+                    setFound(true);
+                    setError(null); // Explicitly clear error
+                    onStaffFound(staff);
+                }
             } else {
                 setFound(false); // Explicitly clear found
                 setError('RUT no encontrado en Personal');

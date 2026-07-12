@@ -56,6 +56,8 @@ export async function fetchStaffWithShifts(
     let query = supabase
         .from('staff')
         .select('id, rut, nombre, cargo, terminal_code, turno, horario, contacto, status')
+        .eq('status', 'ACTIVO')
+        .eq('suspended', false)
         .order('cargo')
         .order('nombre');
 
