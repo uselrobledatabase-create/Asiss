@@ -69,7 +69,7 @@ export const useDashboardTurnos = (date: string) => {
                 date,
                 staff.shift.shift_type_code,
                 staff.shift.variant_code,
-                shiftTypes.find(st => st.code === staff.shift?.shift_type_code)?.pattern_json || { type: 'rotating', description: '', cycleDays: 7, workDays: 5, offDays: 2 },
+                shiftTypes.find(st => st.code === staff.shift?.shift_type_code)?.pattern_json || { type: 'manual', description: '', cycleDays: 28, offDays: [] },
                 templates.find(t => t.staff_id === staff.id),
                 overrides.find(o => o.staff_id === staff.id)
             ) : false;
