@@ -10,6 +10,7 @@ import { useSessionStore } from '../../../shared/state/sessionStore';
 import { exportToXlsx } from '../../../shared/utils/exportToXlsx';
 import { displayTerminal } from '../../../shared/utils/terminal';
 import { formatRut } from '../../personal/utils/rutUtils';
+import { formatDateDDMMYYYY } from '../../../shared/utils/dates';
 import { isAuthorizer } from '../utils/authorizers';
 import { AttendanceKPIs } from '../components/AttendanceKPIs';
 import { AuthorizeRejectModal } from '../components/AuthorizeRejectModal';
@@ -49,7 +50,7 @@ export const SinCredencialesPage = () => {
         { key: 'nombre', header: 'Nombre', value: (r: SinCredencial) => r.nombre },
         { key: 'terminal', header: 'Terminal', value: (r: SinCredencial) => displayTerminal(r.terminal_code) },
         { key: 'cabezal', header: 'Cabezal', value: (r: SinCredencial) => r.cabezal },
-        { key: 'date', header: 'Fecha', value: (r: SinCredencial) => r.date },
+        { key: 'date', header: 'Fecha', value: (r: SinCredencial) => formatDateDDMMYYYY(r.date) },
         { key: 'start_time', header: 'Hora Inicio', value: (r: SinCredencial) => r.start_time },
         { key: 'end_time', header: 'Hora Fin', value: (r: SinCredencial) => r.end_time },
         { key: 'cargo', header: 'Cargo', value: (r: SinCredencial) => r.cargo },
@@ -166,7 +167,7 @@ export const SinCredencialesPage = () => {
                                 <div className="grid grid-cols-2 gap-2 text-sm border-t border-b border-slate-100 py-3">
                                     <div>
                                         <span className="text-xs text-slate-400 block">Fecha</span>
-                                        <span className="font-medium text-slate-700">{row.date}</span>
+                                        <span className="font-medium text-slate-700">{formatDateDDMMYYYY(row.date)}</span>
                                     </div>
                                     <div>
                                         <span className="text-xs text-slate-400 block">Horario</span>
@@ -236,7 +237,7 @@ export const SinCredencialesPage = () => {
                                         <td className="table-cell font-medium">{row.nombre}</td>
                                         <td className="table-cell">{displayTerminal(row.terminal_code)}</td>
                                         <td className="table-cell">{row.cabezal || '-'}</td>
-                                        <td className="table-cell">{row.date}</td>
+                                        <td className="table-cell">{formatDateDDMMYYYY(row.date)}</td>
                                         <td className="table-cell">{row.start_time}</td>
                                         <td className="table-cell">{row.end_time}</td>
                                         <td className="table-cell">{row.cargo || '-'}</td>

@@ -9,6 +9,7 @@ import { useTerminalStore } from '../../../shared/state/terminalStore';
 import { useSessionStore } from '../../../shared/state/sessionStore';
 import { TerminalCode } from '../../../shared/types/terminal';
 import { emailService } from '../../../shared/services/emailService';
+import { formatDateDDMMYYYY } from '../../../shared/utils/dates';
 import {
     useShiftTypes,
     useStaffWithShifts,
@@ -307,7 +308,7 @@ export const Asistencia2026Page = () => {
             ?.map(item => {
                 const s = staff.find(st => st.rut === item.rut);
                 return {
-                    'FECHA': item.date,
+                    'FECHA': formatDateDDMMYYYY(item.date),
                     'RUT': item.rut,
                     'NOMBRE': s?.nombre || 'N/A',
                     'CARGO': s?.cargo || 'N/A',
@@ -325,7 +326,7 @@ export const Asistencia2026Page = () => {
             ?.map(item => {
                 const s = staff.find(st => st.rut === item.rut);
                 return {
-                    'FECHA': item.date,
+                    'FECHA': formatDateDDMMYYYY(item.date),
                     'RUT': item.rut,
                     'NOMBRE': s?.nombre || 'N/A',
                     'CARGO': s?.cargo || 'N/A',
@@ -343,8 +344,8 @@ export const Asistencia2026Page = () => {
             ?.map(item => {
                 const s = staff.find(st => st.rut === item.rut);
                 return {
-                    'FECHA ORIGINAL': item.date,
-                    'FECHA CAMBIO': item.day_on_date,
+                    'FECHA ORIGINAL': formatDateDDMMYYYY(item.day_off_date),
+                    'FECHA CAMBIO': formatDateDDMMYYYY(item.day_on_date),
                     'RUT': item.rut,
                     'NOMBRE': s?.nombre || 'N/A',
                     'CARGO': s?.cargo || 'N/A',
@@ -361,7 +362,7 @@ export const Asistencia2026Page = () => {
             ?.map(item => {
                 const s = staff.find(st => st.rut === item.rut);
                 return {
-                    'FECHA': item.date,
+                    'FECHA': formatDateDDMMYYYY(item.authorization_date),
                     'RUT': item.rut,
                     'NOMBRE': s?.nombre || 'N/A',
                     'CARGO': s?.cargo || 'N/A',

@@ -10,6 +10,7 @@ import { useSessionStore } from '../../../shared/state/sessionStore';
 import { exportToXlsx } from '../../../shared/utils/exportToXlsx';
 import { displayTerminal } from '../../../shared/utils/terminal';
 import { formatRut } from '../../personal/utils/rutUtils';
+import { formatDateDDMMYYYY } from '../../../shared/utils/dates';
 import { isAuthorizer } from '../utils/authorizers';
 import { AttendanceKPIs } from '../components/AttendanceKPIs';
 import { AuthorizeRejectModal } from '../components/AuthorizeRejectModal';
@@ -54,7 +55,7 @@ export const NoMarcacionesPage = () => {
         { key: 'cabezal', header: 'Cabezal', value: (r: NoMarcacion) => r.cabezal },
         { key: 'incident_state', header: 'Estado', value: (r: NoMarcacion) => r.incident_state },
         { key: 'schedule_in_out', header: 'Marcacion', value: (r: NoMarcacion) => r.schedule_in_out },
-        { key: 'date', header: 'Fecha', value: (r: NoMarcacion) => r.date },
+        { key: 'date', header: 'Fecha', value: (r: NoMarcacion) => formatDateDDMMYYYY(r.date) },
         { key: 'time_range', header: 'Horario', value: (r: NoMarcacion) => r.time_range },
         { key: 'observations', header: 'Observaciones', value: (r: NoMarcacion) => r.observations },
         { key: 'informed_by', header: 'Informado Por', value: (r: NoMarcacion) => r.informed_by },
@@ -167,7 +168,7 @@ export const NoMarcacionesPage = () => {
                                 <div className="grid grid-cols-2 gap-2 text-sm border-t border-b border-slate-100 py-3">
                                     <div>
                                         <span className="text-xs text-slate-400 block">Fecha</span>
-                                        <span className="font-medium text-slate-700">{row.date}</span>
+                                        <span className="font-medium text-slate-700">{formatDateDDMMYYYY(row.date)}</span>
                                     </div>
                                     <div>
                                         <span className="text-xs text-slate-400 block">Estado</span>
@@ -243,7 +244,7 @@ export const NoMarcacionesPage = () => {
                                         <td className="table-cell">{row.cabezal || '-'}</td>
                                         <td className="table-cell">{row.incident_state || '-'}</td>
                                         <td className="table-cell">{row.schedule_in_out || '-'}</td>
-                                        <td className="table-cell">{row.date}</td>
+                                        <td className="table-cell">{formatDateDDMMYYYY(row.date)}</td>
                                         <td className="table-cell">{row.time_range || '-'}</td>
                                         <td className="table-cell max-w-[150px] truncate" title={row.observations || ''}>{row.observations || '-'}</td>
                                         <td className="table-cell">{row.informed_by || '-'}</td>

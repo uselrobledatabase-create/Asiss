@@ -10,6 +10,7 @@ import { useSessionStore } from '../../../shared/state/sessionStore';
 import { exportToXlsx } from '../../../shared/utils/exportToXlsx';
 import { displayTerminal } from '../../../shared/utils/terminal';
 import { formatRut } from '../../personal/utils/rutUtils';
+import { formatDateDDMMYYYY } from '../../../shared/utils/dates';
 import { isAuthorizer } from '../utils/authorizers';
 import { AttendanceKPIs } from '../components/AttendanceKPIs';
 import { AuthorizeRejectModal } from '../components/AuthorizeRejectModal';
@@ -53,7 +54,7 @@ export const AutorizacionesPage = () => {
         { key: 'terminal', header: 'Terminal', value: (r: Autorizacion) => displayTerminal(r.terminal_code) },
         { key: 'turno', header: 'Turno', value: (r: Autorizacion) => r.turno },
         { key: 'horario', header: 'Horario', value: (r: Autorizacion) => r.horario },
-        { key: 'authorization_date', header: 'Fecha', value: (r: Autorizacion) => r.authorization_date },
+        { key: 'authorization_date', header: 'Fecha', value: (r: Autorizacion) => formatDateDDMMYYYY(r.authorization_date) },
         { key: 'entry_or_exit', header: 'Tipo', value: (r: Autorizacion) => getEntryExitLabel(r.entry_or_exit) },
         { key: 'motivo', header: 'Motivo', value: (r: Autorizacion) => r.motivo },
         { key: 'auth_status', header: 'Autorización', value: (r: Autorizacion) => r.auth_status },
@@ -171,7 +172,7 @@ export const AutorizacionesPage = () => {
                                 <div className="border-t border-b border-slate-100 py-3 space-y-2">
                                     <div className="flex justify-between items-center">
                                         {getTypeBadge(row.entry_or_exit)}
-                                        <span className="text-sm font-medium text-slate-700">{row.authorization_date}</span>
+                                        <span className="text-sm font-medium text-slate-700">{formatDateDDMMYYYY(row.authorization_date)}</span>
                                     </div>
                                     <div>
                                         <span className="text-xs text-slate-400 block">Motivo</span>
@@ -230,7 +231,7 @@ export const AutorizacionesPage = () => {
                                         <td className="table-cell font-mono text-sm">{formatRut(row.rut)}</td>
                                         <td className="table-cell font-medium">{row.nombre}</td>
                                         <td className="table-cell">{displayTerminal(row.terminal_code)}</td>
-                                        <td className="table-cell">{row.authorization_date}</td>
+                                        <td className="table-cell">{formatDateDDMMYYYY(row.authorization_date)}</td>
                                         <td className="table-cell">{getTypeBadge(row.entry_or_exit)}</td>
                                         <td className="table-cell max-w-[200px] truncate" title={row.motivo}>{row.motivo}</td>
                                         <td className="table-cell">{getStatusBadge(row.auth_status)}</td>

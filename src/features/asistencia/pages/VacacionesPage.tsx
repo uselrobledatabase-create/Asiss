@@ -10,6 +10,7 @@ import { useSessionStore } from '../../../shared/state/sessionStore';
 import { exportToXlsx } from '../../../shared/utils/exportToXlsx';
 import { displayTerminal } from '../../../shared/utils/terminal';
 import { formatRut } from '../../personal/utils/rutUtils';
+import { formatDateDDMMYYYY } from '../../../shared/utils/dates';
 import { isAuthorizer } from '../utils/authorizers';
 import { AttendanceKPIs } from '../components/AttendanceKPIs';
 import { AuthorizeRejectModal } from '../components/AuthorizeRejectModal';
@@ -52,9 +53,9 @@ export const VacacionesPage = () => {
         { key: 'cargo', header: 'Cargo', value: (r: Vacacion) => r.cargo },
         { key: 'terminal', header: 'Terminal', value: (r: Vacacion) => displayTerminal(r.terminal_code) },
         { key: 'turno', header: 'Turno', value: (r: Vacacion) => r.turno },
-        { key: 'start_date', header: 'Fecha Inicio', value: (r: Vacacion) => r.start_date },
-        { key: 'end_date', header: 'Fecha Término', value: (r: Vacacion) => r.end_date },
-        { key: 'return_date', header: 'Fecha Vuelta', value: (r: Vacacion) => r.return_date },
+        { key: 'start_date', header: 'Fecha Inicio', value: (r: Vacacion) => formatDateDDMMYYYY(r.start_date) },
+        { key: 'end_date', header: 'Fecha Término', value: (r: Vacacion) => formatDateDDMMYYYY(r.end_date) },
+        { key: 'return_date', header: 'Fecha Vuelta', value: (r: Vacacion) => formatDateDDMMYYYY(r.return_date) },
         { key: 'calendar_days', header: 'Días Calendario', value: (r: Vacacion) => r.calendar_days.toString() },
         { key: 'business_days', header: 'Días Hábiles', value: (r: Vacacion) => r.business_days.toString() },
         { key: 'has_conflict', header: 'Conflicto', value: (r: Vacacion) => r.has_conflict ? 'Sí' : 'No' },
@@ -112,8 +113,7 @@ export const VacacionesPage = () => {
     };
 
     const formatDateShort = (date: string) => {
-        const d = new Date(date + 'T12:00:00');
-        return d.toLocaleDateString('es-CL', { day: '2-digit', month: 'short' });
+        return formatDateDDMMYYYY(date);
     };
 
     return (

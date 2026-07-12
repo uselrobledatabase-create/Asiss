@@ -10,6 +10,7 @@ import { useSessionStore } from '../../../shared/state/sessionStore';
 import { exportToXlsx } from '../../../shared/utils/exportToXlsx';
 import { displayTerminal } from '../../../shared/utils/terminal';
 import { formatRut } from '../../personal/utils/rutUtils';
+import { formatDateDDMMYYYY } from '../../../shared/utils/dates';
 import { isAuthorizer } from '../utils/authorizers';
 import { AttendanceKPIs } from '../components/AttendanceKPIs';
 import { AuthorizeRejectModal } from '../components/AuthorizeRejectModal';
@@ -57,8 +58,8 @@ export const CambiosDeDiaPage = () => {
         { key: 'nombre', header: 'NOMBRE', value: (r: CambioDia) => r.nombre },
         { key: 'terminal', header: 'TERMINAL', value: (r: CambioDia) => displayTerminal(r.terminal_code) },
         { key: 'cabezal', header: 'CABEZAL', value: (r: CambioDia) => r.cabezal || '-' },
-        { key: 'day_off_date', header: 'FECHA ORIGINAL', value: (r: CambioDia) => r.day_off_date },
-        { key: 'day_on_date', header: 'FECHA NUEVO', value: (r: CambioDia) => r.day_on_date },
+        { key: 'day_off_date', header: 'FECHA ORIGINAL', value: (r: CambioDia) => formatDateDDMMYYYY(r.day_off_date) },
+        { key: 'day_on_date', header: 'FECHA NUEVO', value: (r: CambioDia) => formatDateDDMMYYYY(r.day_on_date) },
         { key: 'day_on_start', header: 'INICIO NUEVO', value: (r: CambioDia) => r.day_on_start || r.reprogram_start },
         { key: 'day_on_end', header: 'TÉRMINO NUEVO', value: (r: CambioDia) => r.day_on_end || r.reprogram_end },
         { key: 'cargo', header: 'CARGO', value: (r: CambioDia) => getCargo(r.rut) },
@@ -183,7 +184,7 @@ export const CambiosDeDiaPage = () => {
                                 <div className="grid grid-cols-2 gap-2 text-sm border-t border-b border-slate-100 py-3">
                                     <div>
                                         <span className="text-xs text-slate-400 block">Fecha</span>
-                                        <span className="font-medium text-slate-700">{row.date}</span>
+                                        <span className="font-medium text-slate-700">{formatDateDDMMYYYY(row.date)}</span>
                                     </div>
                                     <div>
                                         <span className="text-xs text-slate-400 block">Documento</span>
@@ -263,8 +264,8 @@ export const CambiosDeDiaPage = () => {
                                         <td className="table-cell font-medium">{row.nombre}</td>
                                         <td className="table-cell">{displayTerminal(row.terminal_code)}</td>
                                         <td className="table-cell">{row.cabezal || '-'}</td>
-                                        <td className="table-cell">{row.day_off_date}</td>
-                                        <td className="table-cell">{row.day_on_date}</td>
+                                        <td className="table-cell">{formatDateDDMMYYYY(row.day_off_date)}</td>
+                                        <td className="table-cell">{formatDateDDMMYYYY(row.day_on_date)}</td>
                                         <td className="table-cell">{row.day_on_start || row.reprogram_start || '-'}</td>
                                         <td className="table-cell">{row.day_on_end || row.reprogram_end || '-'}</td>
                                         <td className="table-cell">{getCargo(row.rut)}</td>
