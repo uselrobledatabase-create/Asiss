@@ -28,6 +28,7 @@ export interface DashboardFilters {
     terminal: TerminalCode | 'ALL';
     turno: TurnoType | 'TODOS';
     estado: EstadoTurno | 'TODOS';
+    cargo: string | 'TODOS';
 }
 
 export interface ProcessedStaff extends StaffWithShift {

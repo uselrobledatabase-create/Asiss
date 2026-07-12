@@ -37,7 +37,7 @@ export const DashboardTurnosList = ({ data }: Props) => {
                         No hay personal que coincida con los filtros
                     </div>
                 ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                    <div className="flex flex-col gap-4">
                         {filtered.map(staff => {
                             const cargoColor = CARGO_COLORS[staff.cargo as keyof typeof CARGO_COLORS];
                             const terminalColor = TERMINAL_COLORS[staff.terminal_code as keyof typeof TERMINAL_COLORS];

@@ -1,13 +1,15 @@
 import React, { useMemo } from 'react';
-import { ProcessedStaff } from './useDashboardTurnos';
+import { ProcessedStaff, DashboardFilters } from './useDashboardTurnos';
 import { STAFF_CARGOS } from '../../../personal/types';
 import { CARGO_COLORS } from '../../../asistencia2026/utils/colors';
 
 interface Props {
     data: ProcessedStaff[];
+    filters: DashboardFilters;
+    onFilterChange: (filters: DashboardFilters) => void;
 }
 
-export const DashboardTurnosStats = ({ data }: Props) => {
+export const DashboardTurnosStats = ({ data, filters, onFilterChange }: Props) => {
     // We want to count how many are in Turno vs Libre for each Cargo
     const stats = useMemo(() => {
         const counts: Record<string, { turno: number; libre: number; presentes: number; total: number }> = {};
@@ -41,8 +43,16 @@ export const DashboardTurnosStats = ({ data }: Props) => {
 
                 const colorConfig = CARGO_COLORS[cargo.value as keyof typeof CARGO_COLORS];
 
+                const isSelected = filters.cargo === cargo.value;
+
                 return (
-                    <div key={cargo.value} className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm flex flex-col hover:shadow-md transition-shadow">
+                    <div 
+                        key={cargo.value} 
+                        onClick={() => onFilterChange({ ...filters, cargo: isSelected ? 'TODOS' : cargo.value })}
+                        className={`bg-white rounded-xl border p-4 shadow-sm flex flex-col hover:shadow-md transition-all cursor-pointer select-none ${
+                            isSelected ? 'ring-2 ring-brand-500 border-brand-500' : 'border-slate-200 opacity-90 hover:opacity-100'
+                        }`}
+                    >
                         <div className="flex items-center gap-2 mb-2">
                             <div className={`w-3 h-3 rounded-full ${colorConfig || 'bg-slate-300'}`}></div>
                             <span className="text-xs font-bold text-slate-600 uppercase">{cargo.label}</span>

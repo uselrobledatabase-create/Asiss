@@ -21,6 +21,7 @@ export const DashboardTurnosModal = ({ onClose }: Props) => {
         terminal: 'ALL',
         turno: 'TODOS',
         estado: 'TODOS',
+        cargo: 'TODOS',
     });
 
     const { data, isLoading } = useDashboardTurnos(date);
@@ -47,7 +48,7 @@ export const DashboardTurnosModal = ({ onClose }: Props) => {
         setFilters(f => ({ ...f, date: today }));
     };
 
-    const filteredData = useMemo(() => {
+    const statsData = useMemo(() => {
         return data.filter(staff => {
             if (filters.terminal !== 'ALL' && staff.terminal_code !== filters.terminal) return false;
             if (filters.turno !== 'TODOS' && staff.assignedTurno !== filters.turno) return false;
@@ -56,6 +57,13 @@ export const DashboardTurnosModal = ({ onClose }: Props) => {
             return true;
         });
     }, [data, filters]);
+
+    const filteredData = useMemo(() => {
+        return statsData.filter(staff => {
+            if (filters.cargo !== 'TODOS' && staff.cargo !== filters.cargo) return false;
+            return true;
+        });
+    }, [statsData, filters]);
 
     return (
         <AnimatePresence>
@@ -114,7 +122,7 @@ export const DashboardTurnosModal = ({ onClose }: Props) => {
                         ) : (
                             <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 items-start">
                                 <div className="lg:col-span-3 flex flex-col gap-6">
-                                    <DashboardTurnosStats data={filteredData} />
+                                    <DashboardTurnosStats data={statsData} filters={filters} onFilterChange={setFilters} />
                                     <DashboardTurnosList data={filteredData} />
                                 </div>
                                 <div className="lg:col-span-1">
