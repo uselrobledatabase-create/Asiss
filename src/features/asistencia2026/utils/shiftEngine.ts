@@ -248,8 +248,10 @@ export function getMonthDates(year: number, month: number): string[] {
     const dates: string[] = [];
 
     for (let day = 1; day <= daysInMonth; day++) {
-        const date = new Date(year, month, day);
-        dates.push(date.toISOString().split('T')[0]);
+        const yyyy = year.toString();
+        const mm = (month + 1).toString().padStart(2, '0');
+        const dd = day.toString().padStart(2, '0');
+        dates.push(`${yyyy}-${mm}-${dd}`);
     }
 
     return dates;

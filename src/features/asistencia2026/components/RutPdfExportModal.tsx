@@ -126,7 +126,7 @@ export const RutPdfExportModal = ({
             doc.setTextColor(255, 255, 255);
             doc.setFontSize(14); // Smaller title
             doc.setFont('helvetica', 'bold');
-            doc.text('ASISTENCIA MENSUAL', margin, 10);
+            doc.text('PROGRAMACIÓN MENSUAL', margin, 10);
 
             doc.setFontSize(8);
             doc.setFont('helvetica', 'normal');
@@ -218,7 +218,8 @@ export const RutPdfExportModal = ({
 
                     const date = new Date(dateStr + 'T12:00:00');
                     const dayNum = date.getDate();
-                    let cellText = `${dayNum}`;
+                    // Format Date as DD-MM-AAAA
+                    let cellText = dateStr.split('-').reverse().join('-');
                     let statusText = '';
                     let isSpecial = false;
 
@@ -353,7 +354,7 @@ export const RutPdfExportModal = ({
                     cellPadding: 2,
                     halign: 'center',
                     valign: 'middle',
-                    minCellHeight: 16, // Reduced height to fit page
+                    minCellHeight: 18, // slightly larger to accommodate big date
                     lineColor: [0, 0, 0],
                     lineWidth: 0.1,
                     textColor: [0, 0, 0],
@@ -365,21 +366,61 @@ export const RutPdfExportModal = ({
                 didParseCell: (data) => {
                     const text = data.cell.text.join('\n').toUpperCase();
                     data.cell.styles.fillColor = [255, 255, 255];
+                    
+                    let targetTextColor: [number, number, number] = [0, 0, 0];
+                    let targetFontStyle: 'normal' | 'bold' = 'normal';
 
                     if (text.includes('LIBRE')) {
                         data.cell.styles.fillColor = colors.bgOff;
                     } else if (text.includes('NO MARCACIÓN') || text.includes('AUSENTE')) {
                         data.cell.styles.fillColor = colors.bgAlert;
-                        data.cell.styles.textColor = [255, 255, 255];
-                        data.cell.styles.fontStyle = 'bold';
+                        targetTextColor = [255, 255, 255];
+                        targetFontStyle = 'bold';
                     } else if (text.includes('SIN CREDENCIAL')) {
                         data.cell.styles.fillColor = colors.bgWarning;
-                        data.cell.styles.fontStyle = 'bold';
+                        targetFontStyle = 'bold';
                     } else if (text.includes('LICENCIA') || text.includes('VACACIONES')) {
-                        data.cell.styles.fontStyle = 'bold';
+                        targetFontStyle = 'bold';
                     } else if (text.includes('PRESENTE')) {
-                        // Maybe bold?
-                        data.cell.styles.textColor = [0, 0, 0];
+                        targetTextColor = [0, 0, 0];
+                    }
+
+                    if (data.section === 'body' && data.cell.text.length > 0) {
+                        // @ts-ignore - Save custom properties to the cell object for didDrawCell
+                        data.cell.customData = {
+                            rawText: [...data.cell.text],
+                            textColor: targetTextColor,
+                            fontStyle: targetFontStyle
+                        };
+                        // Hide the text from autoTable by setting color same as background
+                        data.cell.styles.textColor = data.cell.styles.fillColor;
+                    }
+                },
+                didDrawCell: (data) => {
+                    // @ts-ignore
+                    const customData = data.cell.customData;
+                    if (data.section === 'body' && customData && customData.rawText.length > 0 && customData.rawText[0] !== '') {
+                        const lines = customData.rawText;
+                        const dateText = lines[0]; // DD-MM-AAAA
+                        const restText = lines.slice(1);
+                        
+                        const x = data.cell.x + data.cell.width / 2;
+                        let y = data.cell.y + 6; 
+                        
+                        // Draw Date (Bigger)
+                        doc.setFontSize(9); 
+                        doc.setFont('helvetica', 'bold');
+                        doc.setTextColor(...customData.textColor);
+                        doc.text(dateText, x, y, { align: 'center' });
+                        
+                        // Draw Rest of text (Smaller)
+                        doc.setFontSize(6); 
+                        doc.setFont('helvetica', customData.fontStyle);
+                        
+                        restText.forEach((line: string) => {
+                            y += 3.5;
+                            doc.text(line, x, y, { align: 'center' });
+                        });
                     }
                 },
                 margin: { left: margin, right: margin, bottom: 20 },
@@ -443,7 +484,7 @@ export const RutPdfExportModal = ({
                 {/* Header */}
                 <div className="flex items-center justify-between p-6 border-b bg-slate-50">
                     <div>
-                        <h2 className="text-xl font-bold text-slate-800">Exportar PDF Mensual</h2>
+                        <h2 className="text-xl font-bold text-slate-800">Exportar PROGRAMACIÓN MENSUAL</h2>
                         <p className="text-sm text-slate-500">Reporte Compacto (1 Hoja)</p>
                     </div>
                     <button onClick={onClose} className="p-2 hover:bg-slate-200 rounded-lg transition-colors text-slate-500">

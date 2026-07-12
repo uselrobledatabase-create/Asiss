@@ -643,7 +643,7 @@ export const Asistencia2026Page = () => {
                             className={`px-3 py-2 rounded-lg text-sm font-medium flex items-center gap-1 ${BUTTON_VARIANTS.secondary}`}
                         >
                             <Icon name="file-text" size={16} />
-                            <span className="hidden sm:inline">PDF por RUT</span>
+                            <span className="hidden sm:inline">PROGRAMACION MENSUAL PDF</span>
                         </button>
                         <button
                             onClick={handleExportXlsx}
