@@ -26,6 +26,9 @@ export const useAutoAdmonition = () => {
 
             // 2. Format Data for PDF Generator
             const formattedDate = date.split('-').reverse().join('/'); // YYYY-MM-DD to DD/MM/YYYY
+            // Get start time from timeRange (e.g. "08:00 a 16:00" -> "08:00")
+            const startTimeMatch = timeRange.match(/(\d{1,2}:\d{2})/);
+            const startTime = startTimeMatch ? startTimeMatch[1] : "00:00";
             
             const formData: AmonestacionFormData = {
                 worker_rut: staff.rut,
@@ -34,7 +37,7 @@ export const useAutoAdmonition = () => {
                 worker_base: staff.terminal_code || '',
                 shift_schedule: timeRange,
                 date: formattedDate,
-                time: "00:00",
+                time: startTime,
                 place_terminal: staff.terminal_code || '',
                 place_public_way: '',
                 place_vehicle: '',
@@ -50,8 +53,8 @@ export const useAutoAdmonition = () => {
                 witness2_name: '',
                 witness2_rut: '',
                 witness2_cargo: '',
-                responsible_name: testigoNombre,
-                responsible_cargo: testigoCargo,
+                responsible_name: "LURASCHI MUÑOZ, CRISTIAN MARCELO",
+                responsible_cargo: "JEFE DE TERMINAL",
                 sanction_code_id: 24, // Faltar sin aviso
             };
 
