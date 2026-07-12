@@ -1,6 +1,14 @@
 import { supabase } from '../../../shared/lib/supabaseClient';
 import { AmonestacionFormData } from '../types';
 
+type SupabaseLikeError = {
+    code?: string;
+    message?: string;
+};
+
+const isMissingTableError = (error: SupabaseLikeError | null | undefined, table: string) =>
+    error?.code === 'PGRST205' && error.message?.includes(`'public.${table}'`);
+
 export interface AmonestacionRecord extends AmonestacionFormData {
     id: string;
     created_at: string;
@@ -50,6 +58,9 @@ export const createAmonestacion = async (data: AmonestacionFormData) => {
         .single();
 
     if (error) {
+        if (isMissingTableError(error, 'amonestaciones')) {
+            throw new Error('La tabla amonestaciones no existe en la base conectada.');
+        }
         console.error('Error creating amonestacion:', error);
         throw error;
     }
@@ -63,6 +74,9 @@ export const deleteAmonestacion = async (id: string): Promise<void> => {
         .eq('id', id);
 
     if (error) {
+        if (isMissingTableError(error, 'amonestaciones')) {
+            return;
+        }
         console.error('Error deleting amonestacion:', error);
         throw error;
     }
@@ -75,6 +89,9 @@ export const fetchAmonestaciones = async () => {
         .order('created_at', { ascending: false });
 
     if (error) {
+        if (isMissingTableError(error, 'amonestaciones')) {
+            return [];
+        }
         console.error('Error fetching amonestaciones:', error);
         throw error;
     }

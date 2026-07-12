@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { Icon, IconName } from '../common/Icon';
+import { SidebarCredit } from './SidebarCredit';
 
 interface Props {
     isOpen: boolean;
@@ -175,6 +176,7 @@ export const InspectorSidebar = ({ isOpen, isCollapsed, onClose, onToggleCollaps
                             )}
                         </div>
                     </div>
+                    <SidebarCredit isCollapsed={isCollapsed} />
                 </div>
             </aside>
         </>

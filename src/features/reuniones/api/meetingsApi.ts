@@ -2,7 +2,7 @@ import { supabase, isSupabaseConfigured } from '../../../shared/lib/supabaseClie
 import { TerminalContext } from '../../../shared/types/terminal';
 import { resolveTerminalsForContext } from '../../../shared/utils/terminal';
 import { emailService } from '../../../shared/services/emailService';
-import { showSuccessToast, showErrorToast } from '../../../shared/state/toastStore';
+import { showSuccessToast, showErrorToast, showWarningToast } from '../../../shared/state/toastStore';
 import {
     Meeting,
     MeetingFormValues,
@@ -16,6 +16,82 @@ import {
     MeetingWithCounts,
     ActionStatus,
 } from '../types';
+
+type SupabaseLikeError = {
+    code?: string;
+    message?: string;
+};
+
+let legacyMeetingsSchemaWarned = false;
+
+const isMissingTableError = (error: SupabaseLikeError | null | undefined, table: string) =>
+    error?.code === 'PGRST205' && error.message?.includes(`'public.${table}'`);
+
+const isMissingColumnError = (error: SupabaseLikeError | null | undefined, table: string, column: string) =>
+    error?.code === '42703' && error.message?.includes(`${table}.${column}`);
+
+const isLegacyMeetingsSchemaError = (error: SupabaseLikeError | null | undefined) =>
+    isMissingColumnError(error, 'meetings', 'starts_at') ||
+    isMissingColumnError(error, 'meetings', 'terminal_code') ||
+    isMissingTableError(error, 'meeting_invitees');
+
+const warnLegacyMeetingsSchema = () => {
+    if (legacyMeetingsSchemaWarned) return;
+    legacyMeetingsSchemaWarned = true;
+    showWarningToast(
+        'Esquema antiguo de reuniones',
+        'La base conectada usa un esquema anterior para reuniones. Se cargara un modo compatible con datos limitados.'
+    );
+};
+
+const mapMeetingRecord = (meeting: Record<string, any>): MeetingWithCounts => ({
+    id: meeting.id,
+    title: meeting.title ?? 'Sin titulo',
+    terminal_code: (meeting.terminal_code ?? 'EL_ROBLE') as Meeting['terminal_code'],
+    starts_at: meeting.starts_at ?? meeting.scheduled_at ?? meeting.created_at ?? new Date().toISOString(),
+    duration_minutes: typeof meeting.duration_minutes === 'number' ? meeting.duration_minutes : 30,
+    location: meeting.location ?? null,
+    meeting_link: meeting.meeting_link ?? null,
+    status: (meeting.status ?? 'PROGRAMADA') as Meeting['status'],
+    cancel_reason: meeting.cancel_reason ?? null,
+    agenda_json: Array.isArray(meeting.agenda_json) ? meeting.agenda_json : [],
+    minutes_text: meeting.minutes_text ?? null,
+    created_by_supervisor: meeting.created_by_supervisor ?? String(meeting.created_by ?? 'Sistema'),
+    created_at: meeting.created_at ?? new Date().toISOString(),
+    updated_at: meeting.updated_at ?? meeting.created_at ?? new Date().toISOString(),
+    invitees_count: meeting.meeting_invitees?.[0]?.count || 0,
+    files_count: meeting.meeting_files?.[0]?.count || 0,
+    actions_count: meeting.meeting_actions?.[0]?.count || 0,
+});
+
+const fetchLegacyMeetings = async (filters?: MeetingFilters): Promise<MeetingWithCounts[]> => {
+    let query = supabase
+        .from('meetings')
+        .select('*')
+        .order('scheduled_at', { ascending: false });
+
+    if (filters?.search) {
+        query = query.ilike('title', `%${filters.search}%`);
+    }
+
+    if (filters?.date_from) {
+        query = query.gte('scheduled_at', filters.date_from);
+    }
+
+    if (filters?.date_to) {
+        query = query.lte('scheduled_at', filters.date_to + 'T23:59:59');
+    }
+
+    const { data, error } = await query;
+    if (error) throw error;
+
+    return (data || [])
+        .filter((meeting: Record<string, any>) => {
+            if (!filters?.status || filters.status === 'todos') return true;
+            return (meeting.status ?? 'PROGRAMADA') === filters.status;
+        })
+        .map((meeting: Record<string, any>) => mapMeetingRecord(meeting));
+};
 
 // ==========================================
 // MEETINGS CRUD
@@ -58,14 +134,15 @@ export const fetchMeetings = async (
     }
 
     const { data, error } = await query;
-    if (error) throw error;
+    if (error) {
+        if (isLegacyMeetingsSchemaError(error)) {
+            warnLegacyMeetingsSchema();
+            return fetchLegacyMeetings(filters);
+        }
+        throw error;
+    }
 
-    return (data || []).map((m: any) => ({
-        ...m,
-        invitees_count: m.meeting_invitees?.[0]?.count || 0,
-        files_count: m.meeting_files?.[0]?.count || 0,
-        actions_count: m.meeting_actions?.[0]?.count || 0,
-    }));
+    return (data || []).map((meeting: Record<string, any>) => mapMeetingRecord(meeting));
 };
 
 export const fetchMeetingById = async (id: string): Promise<Meeting | null> => {
@@ -79,7 +156,26 @@ export const fetchMeetingById = async (id: string): Promise<Meeting | null> => {
         if (error.code === 'PGRST116') return null;
         throw error;
     }
-    return data;
+
+    if (!data) return null;
+
+    const normalized = mapMeetingRecord(data);
+    return {
+        id: normalized.id,
+        title: normalized.title,
+        terminal_code: normalized.terminal_code,
+        starts_at: normalized.starts_at,
+        duration_minutes: normalized.duration_minutes,
+        location: normalized.location,
+        meeting_link: normalized.meeting_link,
+        status: normalized.status,
+        cancel_reason: normalized.cancel_reason,
+        agenda_json: normalized.agenda_json,
+        minutes_text: normalized.minutes_text,
+        created_by_supervisor: normalized.created_by_supervisor,
+        created_at: normalized.created_at,
+        updated_at: normalized.updated_at,
+    };
 };
 
 export const createMeeting = async (

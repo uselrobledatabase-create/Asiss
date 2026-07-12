@@ -18,6 +18,9 @@ interface Props {
     rut: string;
 }
 
+const isMissingTableError = (error: { code?: string; message?: string } | null | undefined, table: string) =>
+    error?.code === 'PGRST205' && error.message?.includes(`'public.${table}'`);
+
 export const AseoInfoSection = ({ rut }: Props) => {
     // Current week navigation state
     const todayStr = getLocalTodayStr();
@@ -123,12 +126,19 @@ export const AseoInfoSection = ({ rut }: Props) => {
                 .lte('override_date', sundayStr);
 
             // Get day changes
-            const { data: dayChanges } = await supabase
-                .from('attendance_schedule_changes')
-                .select('*')
-                .eq('rut', rut)
-                .gte('date', mondayStr)
-                .lte('date', sundayStr);
+            const fetchDayChanges = async (table: 'attendance_schedule_changes' | 'attendance_cambios_dia') =>
+                supabase
+                    .from(table)
+                    .select('*')
+                    .eq('rut', rut)
+                    .gte('date', mondayStr)
+                    .lte('date', sundayStr);
+
+            const legacyDayChanges = await fetchDayChanges('attendance_schedule_changes');
+            const { data: dayChanges } =
+                !legacyDayChanges.error || !isMissingTableError(legacyDayChanges.error, 'attendance_schedule_changes')
+                    ? legacyDayChanges
+                    : await fetchDayChanges('attendance_cambios_dia');
 
             // Get incidences
             const [noMarks, noCredentials] = await Promise.all([

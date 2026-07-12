@@ -2,7 +2,7 @@ import { supabase, isSupabaseConfigured } from '../../shared/lib/supabaseClient'
 import { TerminalCode, TerminalContext } from '../../shared/types/terminal';
 import { resolveTerminalsForContext } from '../../shared/utils/terminal';
 import { normalizeName } from './utils/authorizers';
-import { showSuccessToast, showErrorToast } from '../../shared/state/toastStore';
+import { showSuccessToast, showErrorToast, showWarningToast } from '../../shared/state/toastStore';
 import {
     NoMarcacion,
     NoMarcacionFormValues,
@@ -30,6 +30,25 @@ type AttendanceTable =
     | 'attendance_cambios_dia'
     | 'attendance_autorizaciones'
     | 'attendance_vacaciones';
+
+type SupabaseLikeError = {
+    code?: string;
+    message?: string;
+};
+
+let missingAttendanceSchemaWarned = false;
+
+const isMissingTableError = (error: SupabaseLikeError | null | undefined, table: string) =>
+    error?.code === 'PGRST205' && error.message?.includes(`'public.${table}'`);
+
+const warnMissingAttendanceSchema = () => {
+    if (missingAttendanceSchemaWarned) return;
+    missingAttendanceSchemaWarned = true;
+    showWarningToast(
+        'Esquema incompleto en asistencia',
+        'La base conectada no tiene las tablas de asistencia clasica. Esa seccion se mostrara vacia hasta restaurarlas.'
+    );
+};
 
 // ==========================================
 // NO MARCACIONES
@@ -67,7 +86,13 @@ export const fetchNoMarcaciones = async (
     }
 
     const { data, error } = await query;
-    if (error) throw error;
+    if (error) {
+        if (isMissingTableError(error, 'attendance_no_marcaciones')) {
+            warnMissingAttendanceSchema();
+            return [];
+        }
+        throw error;
+    }
     return data || [];
 };
 
@@ -171,7 +196,13 @@ export const fetchSinCredenciales = async (
     }
 
     const { data, error } = await query;
-    if (error) throw error;
+    if (error) {
+        if (isMissingTableError(error, 'attendance_sin_credenciales')) {
+            warnMissingAttendanceSchema();
+            return [];
+        }
+        throw error;
+    }
     return data || [];
 };
 
@@ -273,7 +304,13 @@ export const fetchCambiosDia = async (
     }
 
     const { data, error } = await query;
-    if (error) throw error;
+    if (error) {
+        if (isMissingTableError(error, 'attendance_cambios_dia')) {
+            warnMissingAttendanceSchema();
+            return [];
+        }
+        throw error;
+    }
     return data || [];
 };
 
@@ -452,7 +489,13 @@ export const fetchAutorizaciones = async (
     }
 
     const { data, error } = await query;
-    if (error) throw error;
+    if (error) {
+        if (isMissingTableError(error, 'attendance_autorizaciones')) {
+            warnMissingAttendanceSchema();
+            return [];
+        }
+        throw error;
+    }
     return data || [];
 };
 
@@ -582,33 +625,47 @@ export const fetchKPIs = async (
     const terminals = resolveTerminalsForContext(terminalContext);
     const today = new Date().toISOString().split('T')[0];
 
-    const { count: pendingToday } = await supabase
+    const { count: pendingToday, error: pendingTodayError } = await supabase
         .from(table)
         .select('*', { count: 'exact', head: true })
         .in('terminal_code', terminals)
         .eq('auth_status', 'PENDIENTE')
         .eq(dateColumn, today);
 
-    const { count: pendingTotal } = await supabase
+    if (pendingTodayError) {
+        if (isMissingTableError(pendingTodayError, table)) {
+            warnMissingAttendanceSchema();
+            return { pendingToday: 0, pendingTotal: 0, authorizedRange: 0, rejectedRange: 0 };
+        }
+        throw pendingTodayError;
+    }
+
+    const { count: pendingTotal, error: pendingTotalError } = await supabase
         .from(table)
         .select('*', { count: 'exact', head: true })
         .in('terminal_code', terminals)
         .eq('auth_status', 'PENDIENTE');
 
+    if (pendingTotalError) throw pendingTotalError;
+
     const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-    const { count: authorizedRange } = await supabase
+    const { count: authorizedRange, error: authorizedRangeError } = await supabase
         .from(table)
         .select('*', { count: 'exact', head: true })
         .in('terminal_code', terminals)
         .eq('auth_status', 'AUTORIZADO')
         .gte(dateColumn, thirtyDaysAgo);
 
-    const { count: rejectedRange } = await supabase
+    if (authorizedRangeError) throw authorizedRangeError;
+
+    const { count: rejectedRange, error: rejectedRangeError } = await supabase
         .from(table)
         .select('*', { count: 'exact', head: true })
         .in('terminal_code', terminals)
         .eq('auth_status', 'RECHAZADO')
         .gte(dateColumn, thirtyDaysAgo);
+
+    if (rejectedRangeError) throw rejectedRangeError;
 
     return {
         pendingToday: pendingToday ?? 0,
@@ -798,7 +855,13 @@ export const fetchVacaciones = async (
     }
 
     const { data, error } = await query;
-    if (error) throw error;
+    if (error) {
+        if (isMissingTableError(error, 'attendance_vacaciones')) {
+            warnMissingAttendanceSchema();
+            return [];
+        }
+        throw error;
+    }
     return data || [];
 };
 
