@@ -6,7 +6,6 @@
 
 import { useState, useMemo } from 'react';
 import { jsPDF } from 'jspdf';
-import autoTable from 'jspdf-autotable';
 import { Icon } from '../../../shared/components/common/Icon';
 import {
     StaffWithShift,
@@ -20,10 +19,6 @@ import {
     getMonthDates,
     getMonthName,
     isOffDay,
-    getWeekStart,
-    parseDateToUTC,
-    getDayOfWeekUTC,
-    getWeekInCycle,
     getSpecialShiftDetails,
 } from '../utils/shiftEngine';
 import { useShiftTypes, useAllSpecialTemplates } from '../hooks';
@@ -103,82 +98,98 @@ export const RutPdfExportModal = ({
 
             const pageWidth = doc.internal.pageSize.getWidth();
             const pageHeight = doc.internal.pageSize.getHeight();
-            const margin = 10; // Tighter margin
+            const margin = 12;
 
-            // B&W Palette - High Contrast
-            const colors = {
-                headerBg: [240, 240, 240] as [number, number, number],
-                textMain: [0, 0, 0] as [number, number, number],
-                textLight: [80, 80, 80] as [number, number, number],
-                border: [0, 0, 0] as [number, number, number],
-
-                // Status Backgrounds
-                bgOff: [235, 235, 235] as [number, number, number],    // Light Gray
-                bgAlert: [50, 50, 50] as [number, number, number],     // Dark (for white text)
-                bgWarning: [200, 200, 200] as [number, number, number],// Medium Gray
-                bgWhite: [255, 255, 255] as [number, number, number],
+            // Rounded rect helper (jsPDF sometimes throws on radius > half-size)
+            const rrect = (
+                x: number, y: number, w: number, h: number,
+                r: number, style: 'F' | 'S' | 'FD'
+            ) => {
+                const rad = Math.min(r, w / 2, h / 2);
+                doc.roundedRect(x, y, w, h, rad, rad, style);
             };
 
-            // --- HEADER (Compact) ---
-            doc.setFillColor(0, 0, 0);
-            doc.rect(0, 0, pageWidth, 18, 'F'); // Reduced height
+            // --- Professional color palette (light, print-friendly tints) ---
+            type RGB = [number, number, number];
+            const ink: RGB = [15, 23, 42];        // slate-900
+            const inkSoft: RGB = [71, 85, 105];    // slate-600
+            const inkFaint: RGB = [148, 163, 184]; // slate-400
+            const lineCol: RGB = [226, 232, 240];  // slate-200
+            const white: RGB = [255, 255, 255];
 
-            doc.setTextColor(255, 255, 255);
-            doc.setFontSize(14); // Smaller title
+            interface Palette { bg: RGB; accent: RGB; text: RGB; }
+            const CAT: Record<string, Palette> = {
+                trabajo:    { bg: [255, 255, 255], accent: [37, 99, 235],  text: [30, 64, 175] },   // blue
+                presente:   { bg: [240, 253, 244], accent: [22, 163, 74],  text: [21, 128, 61] },   // green
+                ausente:    { bg: [254, 242, 242], accent: [220, 38, 38],  text: [185, 28, 28] },   // red
+                nomarca:    { bg: [254, 242, 242], accent: [220, 38, 38],  text: [185, 28, 28] },   // red
+                sincred:    { bg: [255, 251, 235], accent: [217, 119, 6],  text: [180, 83, 9] },    // amber
+                licencia:   { bg: [239, 246, 255], accent: [37, 99, 235],  text: [29, 78, 216] },   // blue
+                vacaciones: { bg: [236, 254, 255], accent: [8, 145, 178],  text: [14, 116, 144] },  // cyan
+                permiso:    { bg: [250, 245, 255], accent: [147, 51, 234], text: [126, 34, 206] },  // purple
+                cambio:     { bg: [238, 242, 255], accent: [79, 70, 229],  text: [67, 56, 202] },   // indigo
+                libre:      { bg: [241, 245, 249], accent: [148, 163, 184], text: [100, 116, 139] },// slate
+            };
+
+            // ============ HEADER BANNER ============
+            const headerH = 20;
+            doc.setFillColor(...ink);
+            doc.rect(0, 0, pageWidth, headerH, 'F');
+            // Accent underline
+            doc.setFillColor(37, 99, 235);
+            doc.rect(0, headerH, pageWidth, 1.2, 'F');
+
+            doc.setTextColor(...white);
+            doc.setFontSize(16);
             doc.setFont('helvetica', 'bold');
-            doc.text('PROGRAMACIÓN MENSUAL', margin, 10);
-
+            doc.text('PROGRAMACIÓN MENSUAL', margin, 9);
             doc.setFontSize(8);
             doc.setFont('helvetica', 'normal');
-            doc.text('REPORTE OFICIAL', margin, 15);
+            doc.setTextColor(203, 213, 225);
+            doc.text('Calendario oficial de asistencia  ·  Ley 40 Horas', margin, 15);
 
-            doc.setFontSize(11);
+            doc.setTextColor(...white);
+            doc.setFontSize(15);
+            doc.setFont('helvetica', 'bold');
             doc.text(`${getMonthName(selectedMonth).toUpperCase()} ${selectedYear}`, pageWidth - margin, 10, { align: 'right' });
-            doc.setFontSize(7);
-            doc.text('Ley 40 Horas', pageWidth - margin, 15, { align: 'right' });
 
-
-            // --- INFO CARD (Compact) ---
-            const infoY = 22;
-            doc.setDrawColor(...colors.border);
-            doc.setLineWidth(0.2);
-            doc.rect(margin, infoY, pageWidth - 2 * margin, 18, 'S');
-
-            // Line 1: Name and RUT
-            doc.setTextColor(...colors.textMain);
-            doc.setFontSize(10);
-            doc.setFont('helvetica', 'bold');
-            doc.text(selectedStaff.nombre.toUpperCase(), margin + 4, infoY + 6);
-
-            doc.setFontSize(8);
-            doc.setFont('helvetica', 'normal');
-            doc.text(`RUT: ${selectedStaff.rut}`, margin + 120, infoY + 6);
-
-            // Line 2: Details
-            doc.setFontSize(8);
-            doc.text('CARGO:', margin + 4, infoY + 12);
-            doc.setFont('helvetica', 'bold');
-            doc.text(selectedStaff.cargo.substring(0, 25), margin + 18, infoY + 12);
-            doc.setFont('helvetica', 'normal');
-
-            doc.text('TERMINAL:', margin + 70, infoY + 12);
-            doc.setFont('helvetica', 'bold');
-            doc.text(selectedStaff.terminal_code, margin + 88, infoY + 12);
-            doc.setFont('helvetica', 'normal');
-
-            // Shift info
+            // ============ WORKER INFO CARD ============
             const shiftType = selectedStaff.shift ? shiftTypesMap.get(selectedStaff.shift.shift_type_code) : null;
-            doc.text('TURNO:', margin + 120, infoY + 12);
+            const infoY = headerH + 5;
+            const infoH = 17;
+            doc.setFillColor(248, 250, 252);
+            doc.setDrawColor(...lineCol);
+            doc.setLineWidth(0.3);
+            rrect(margin, infoY, pageWidth - 2 * margin, infoH, 2, 'FD');
+
+            // Name (prominent)
+            doc.setTextColor(...ink);
+            doc.setFontSize(12);
             doc.setFont('helvetica', 'bold');
-            doc.text(shiftType?.name || 'Base', margin + 135, infoY + 12);
+            doc.text(selectedStaff.nombre.toUpperCase(), margin + 5, infoY + 7);
+            doc.setFontSize(8);
             doc.setFont('helvetica', 'normal');
+            doc.setTextColor(...inkSoft);
+            doc.text(`RUT ${selectedStaff.rut}`, margin + 5, infoY + 13);
 
-            doc.text('HORARIO:', margin + 180, infoY + 12);
-            doc.setFont('helvetica', 'bold');
-            doc.text(selectedStaff.horario || 'N/A', margin + 198, infoY + 12);
+            // Detail fields (label above value)
+            const field = (label: string, value: string, fx: number) => {
+                doc.setFontSize(6.5);
+                doc.setFont('helvetica', 'normal');
+                doc.setTextColor(...inkFaint);
+                doc.text(label, fx, infoY + 6);
+                doc.setFontSize(9);
+                doc.setFont('helvetica', 'bold');
+                doc.setTextColor(...ink);
+                doc.text(value || '—', fx, infoY + 12);
+            };
+            const usableW = pageWidth - 2 * margin;
+            field('CARGO', (selectedStaff.cargo || '—').substring(0, 22), margin + usableW * 0.42);
+            field('TERMINAL', selectedStaff.terminal_code || '—', margin + usableW * 0.62);
+            field('TURNO', shiftType?.name || 'Base', margin + usableW * 0.74);
+            field('HORARIO BASE', selectedStaff.horario || 'N/A', margin + usableW * 0.88);
 
-
-            // --- DATA PREP ---
+            // ============ DATA PREP ============
             const monthDates = getMonthDates(selectedYear, selectedMonth);
             const weeks: string[][] = [];
             let currentWeek: string[] = [];
@@ -203,30 +214,34 @@ export const RutPdfExportModal = ({
                 auth: new Set(incidences.autorizaciones.filter(i => i.rut === selectedStaff.rut).map(i => i.date)),
             };
 
-            const tableBody: string[][] = [];
+            interface DayInfo {
+                empty: boolean;
+                dayNum: number;
+                dateLabel: string;   // DD-MM-AAAA
+                horario: string;     // '' when not working
+                status: string;      // short badge label
+                note: string;        // secondary line (e.g. AUTORIZADO / target day)
+                category: keyof typeof CAT;
+            }
+            const EMPTY: DayInfo = { empty: true, dayNum: 0, dateLabel: '', horario: '', status: '', note: '', category: 'libre' };
+
+            const weeksData: DayInfo[][] = [];
+            const stats = { trabajo: 0, libre: 0, ausencia: 0, licencia: 0, vacaciones: 0, permiso: 0 };
+            const todayStr = new Date().toISOString().split('T')[0];
 
             for (const week of weeks) {
-                const row: string[] = [];
-                const weekStart = week.find(d => d !== '') || '';
-                const weekStartFormatted = weekStart ? getWeekStart(weekStart) : '';
-
+                const rowData: DayInfo[] = [];
                 for (const dateStr of week) {
-                    if (!dateStr) {
-                        row.push('');
-                        continue;
-                    }
+                    if (!dateStr) { rowData.push(EMPTY); continue; }
 
                     const date = new Date(dateStr + 'T12:00:00');
                     const dayNum = date.getDate();
-                    // Format Date as DD-MM-AAAA
-                    let cellText = dateStr.split('-').reverse().join('-');
-                    let statusText = '';
-                    let isSpecial = false;
+                    const dateLabel = dateStr.split('-').reverse().join('-');
 
-                    // 1. Core Shift Logic (Always calc shift first)
+                    // --- shift / off-day ---
                     let isOff = false;
                     let displayHorario = '';
-                    const shiftPattern = shiftType?.pattern_json; // Define at this level for reuse
+                    const shiftPattern = shiftType?.pattern_json;
 
                     if (selectedStaff.shift) {
                         if (shiftPattern) {
@@ -245,35 +260,29 @@ export const RutPdfExportModal = ({
                     }
 
                     if (!isOff) {
-                        displayHorario = (selectedStaff.horario || '10:00-20:00').replace('-', '-');
-
-                        // [NEW] Apply Early Exit in PDF
+                        displayHorario = selectedStaff.horario || '10:00-20:00';
                         if (selectedStaff.shift?.shift_type_code === 'ESPECIAL') {
                             const specialTemplate = specialTemplatesMap.get(selectedStaff.id);
                             if (specialTemplate) {
                                 const details = getSpecialShiftDetails(dateStr, specialTemplate);
-
-                                // Apply custom Day/Night times
                                 const schedules = specialTemplate.settings_json?.custom_schedules;
                                 if (details.type && schedules) {
-                                    if (details.type === 'DIA' && schedules.dia) {
-                                        displayHorario = schedules.dia;
-                                    } else if (details.type === 'NOCHE' && schedules.noche) {
-                                        displayHorario = schedules.noche;
-                                    }
+                                    if (details.type === 'DIA' && schedules.dia) displayHorario = schedules.dia;
+                                    else if (details.type === 'NOCHE' && schedules.noche) displayHorario = schedules.noche;
                                 }
-
                                 if (details.earlyExit) {
-                                    const match = displayHorario?.match(/^(\d{1,2}:\d{2})/); // Use current displayHorario to respect custom start time
+                                    const match = displayHorario?.match(/^(\d{1,2}:\d{2})/);
                                     const startTime = match ? match[1] : '08:00';
                                     displayHorario = `${startTime}-${details.earlyExit}`;
                                 }
                             }
                         }
                     }
+                    const horarioFmt = displayHorario
+                        ? displayHorario.split('-').map(s => s.trim()).join(' - ')
+                        : '';
 
-
-                    // 2. Incident/Status Overrides
+                    // --- status resolution ---
                     const dayChange = incidentsMap.dayChange.get(dateStr);
                     const hasLicense = licenses.some(l => l.staff_id === selectedStaff.id && dateStr >= l.start_date && dateStr <= l.end_date);
                     const hasVacation = vacations.some(v => v.staff_id === selectedStaff.id && dateStr >= v.start_date && dateStr <= v.end_date);
@@ -283,191 +292,193 @@ export const RutPdfExportModal = ({
                     const hasAuth = incidentsMap.auth.has(dateStr);
                     const mark = marks.find(m => m.staff_id === selectedStaff.id && m.mark_date === dateStr);
 
-                    // Build display stack
+                    let category: keyof typeof CAT = 'trabajo';
+                    let status = '';
+                    let note = '';
+                    let showHorario = !isOff;
+
                     if (dayChange) {
-                        // Show the target date info for the change
-                        const targetInfo = dayChange.day_on_date ? ` →  ${new Date(dayChange.day_on_date).toLocaleDateString('es-CL', { weekday: 'short' })}` : '';
-                        statusText = `CAMBIO DÍA${targetInfo}`;
-                        // Use original day's horario if day change doesn't override
+                        category = 'cambio';
+                        status = 'CAMBIO DE DÍA';
+                        note = dayChange.day_on_date
+                            ? `» ${new Date(dayChange.day_on_date + 'T12:00:00').toLocaleDateString('es-CL', { weekday: 'short', day: '2-digit' })}`
+                            : '';
+                        stats.trabajo++;
                     } else if (hasLicense) {
-                        statusText = 'LICENCIA';
+                        category = 'licencia'; status = 'LICENCIA'; showHorario = false; stats.licencia++;
                     } else if (hasVacation) {
-                        statusText = 'VACACIONES';
+                        category = 'vacaciones'; status = 'VACACIONES'; showHorario = false; stats.vacaciones++;
                     } else if (hasPerm) {
-                        statusText = 'PERMISO';
+                        category = 'permiso'; status = 'PERMISO'; showHorario = false; stats.permiso++;
                     } else if (hasNoMark) {
-                        statusText = 'NO MARCACIÓN';
+                        category = 'nomarca'; status = 'NO MARCACIÓN'; stats.ausencia++;
                     } else if (hasNoCred) {
-                        statusText = 'SIN CREDENCIAL';
+                        category = 'sincred'; status = 'SIN CREDENCIAL'; stats.trabajo++;
                     } else if (isOff) {
-                        statusText = 'LIBRE';
+                        category = 'libre'; status = 'LIBRE'; stats.libre++;
                     } else {
-                        // Regular day - check attendance
-                        if (mark) {
-                            if (mark.mark === 'P') statusText = 'PRESENTE';
-                            else if (mark.mark === 'A') statusText = 'AUSENTE';
-                        } else {
-                            // No mark, past date?
-                            const today = new Date().toISOString().split('T')[0];
-                            if (dateStr < today) statusText = 'AUSENTE'; // Infer absence if pending
-                        }
+                        if (mark?.mark === 'P') { category = 'presente'; status = 'PRESENTE'; stats.trabajo++; }
+                        else if (mark?.mark === 'A') { category = 'ausente'; status = 'AUSENTE'; stats.ausencia++; }
+                        else if (dateStr < todayStr) { category = 'ausente'; status = 'AUSENTE'; stats.ausencia++; }
+                        else { category = 'trabajo'; status = 'PROGRAMADO'; stats.trabajo++; }
                     }
 
-                    // Append Auth if exists and space permits
-                    if (hasAuth) statusText += '\n(AUTORIZADO)';
+                    if (hasAuth) note = note ? `${note} · AUTORIZADO` : 'AUTORIZADO';
 
-                    // Combine:
-                    // [Day]
-                    // [Time] (if not off)
-                    // [Status]
-
-                    if (!isOff && displayHorario && !['LICENCIA', 'VACACIONES'].includes(statusText)) {
-                        cellText += `\n${displayHorario}`;
-                    }
-                    if (statusText) {
-                        cellText += `\n${statusText}`;
-                    }
-
-                    row.push(cellText);
+                    rowData.push({
+                        empty: false,
+                        dayNum,
+                        dateLabel,
+                        horario: showHorario ? horarioFmt : '',
+                        status,
+                        note,
+                        category,
+                    });
                 }
-                tableBody.push(row);
+                weeksData.push(rowData);
             }
 
+            // ============ CALENDAR GRID ============
+            const dayNames = ['LUNES', 'MARTES', 'MIÉRCOLES', 'JUEVES', 'VIERNES', 'SÁBADO', 'DOMINGO'];
+            const gridTop = infoY + infoH + 5;
+            const gridW = pageWidth - 2 * margin;
+            const colW = gridW / 7;
+            const dowH = 8;
+            const bottomReserve = 20; // legend + footer
+            const availH = pageHeight - bottomReserve - (gridTop + dowH);
+            const rowH = availH / weeksData.length;
 
-            // --- TABLE RENDER ---
-            autoTable(doc, {
-                startY: 45, // Moved up
-                head: [['LUN', 'MAR', 'MIÉ', 'JUE', 'VIE', 'SÁB', 'DOM']],
-                body: tableBody,
-                theme: 'grid',
-                headStyles: {
-                    fillColor: [0, 0, 0],
-                    textColor: [255, 255, 255],
-                    fontSize: 8,
-                    fontStyle: 'bold',
-                    halign: 'center',
-                    cellPadding: 2,
-                    lineWidth: 0.1,
-                },
-                styles: {
-                    fontSize: 7, // Smaller font for density
-                    cellPadding: 2,
-                    halign: 'center',
-                    valign: 'middle',
-                    minCellHeight: 18, // slightly larger to accommodate big date
-                    lineColor: [0, 0, 0],
-                    lineWidth: 0.1,
-                    textColor: [0, 0, 0],
-                    overflow: 'linebreak',
-                },
-                columnStyles: {
-                    // evenly distributed
-                },
-                didParseCell: (data) => {
-                    const text = data.cell.text.join('\n').toUpperCase();
-                    data.cell.styles.fillColor = [255, 255, 255];
-                    
-                    let targetTextColor: [number, number, number] = [0, 0, 0];
-                    let targetFontStyle: 'normal' | 'bold' = 'normal';
+            // Day-of-week header
+            for (let c = 0; c < 7; c++) {
+                const x = margin + c * colW;
+                const weekend = c >= 5;
+                doc.setFillColor(weekend ? 51 : 30, weekend ? 65 : 41, weekend ? 85 : 59);
+                doc.rect(x, gridTop, colW, dowH, 'F');
+                doc.setTextColor(...white);
+                doc.setFontSize(8);
+                doc.setFont('helvetica', 'bold');
+                doc.text(dayNames[c], x + colW / 2, gridTop + dowH / 2 + 1.2, { align: 'center' });
+            }
 
-                    if (text.includes('LIBRE')) {
-                        data.cell.styles.fillColor = colors.bgOff;
-                    } else if (text.includes('NO MARCACIÓN') || text.includes('AUSENTE')) {
-                        data.cell.styles.fillColor = colors.bgAlert;
-                        targetTextColor = [255, 255, 255];
-                        targetFontStyle = 'bold';
-                    } else if (text.includes('SIN CREDENCIAL')) {
-                        data.cell.styles.fillColor = colors.bgWarning;
-                        targetFontStyle = 'bold';
-                    } else if (text.includes('LICENCIA') || text.includes('VACACIONES')) {
-                        targetFontStyle = 'bold';
-                    } else if (text.includes('PRESENTE')) {
-                        targetTextColor = [0, 0, 0];
+            // Cells
+            const cellTop = gridTop + dowH;
+            for (let r = 0; r < weeksData.length; r++) {
+                for (let c = 0; c < 7; c++) {
+                    const cell = weeksData[r][c];
+                    const x = margin + c * colW;
+                    const y = cellTop + r * rowH;
+
+                    if (cell.empty) {
+                        doc.setFillColor(250, 250, 251);
+                        doc.setDrawColor(...lineCol);
+                        doc.setLineWidth(0.2);
+                        doc.rect(x, y, colW, rowH, 'FD');
+                        continue;
                     }
 
-                    if (data.section === 'body' && data.cell.text.length > 0) {
-                        // @ts-ignore - Save custom properties to the cell object for didDrawCell
-                        data.cell.customData = {
-                            rawText: [...data.cell.text],
-                            textColor: targetTextColor,
-                            fontStyle: targetFontStyle
-                        };
-                        // Hide the text from autoTable by setting color same as background
-                        data.cell.styles.textColor = data.cell.styles.fillColor;
-                    }
-                },
-                didDrawCell: (data) => {
-                    // @ts-ignore
-                    const customData = data.cell.customData;
-                    if (data.section === 'body' && customData && customData.rawText.length > 0 && customData.rawText[0] !== '') {
-                        const lines = customData.rawText;
-                        const dateText = lines[0]; // DD-MM-AAAA
-                        const restText = lines.slice(1);
-                        
-                        const x = data.cell.x + data.cell.width / 2;
-                        let y = data.cell.y + 6; 
-                        
-                        // Draw Date (Bigger)
-                        doc.setFontSize(9); 
+                    const pal = CAT[cell.category];
+                    // background
+                    doc.setFillColor(...pal.bg);
+                    doc.rect(x, y, colW, rowH, 'F');
+                    // top accent strip
+                    doc.setFillColor(...pal.accent);
+                    doc.rect(x, y, colW, 1.6, 'F');
+                    // border
+                    doc.setDrawColor(...lineCol);
+                    doc.setLineWidth(0.2);
+                    doc.rect(x, y, colW, rowH, 'S');
+
+                    // Day number (big, top-left)
+                    doc.setTextColor(...ink);
+                    doc.setFont('helvetica', 'bold');
+                    doc.setFontSize(16);
+                    doc.text(String(cell.dayNum), x + 3.5, y + 9);
+
+                    // Full date (small, top-right)
+                    doc.setFont('helvetica', 'normal');
+                    doc.setFontSize(6.5);
+                    doc.setTextColor(...inkFaint);
+                    doc.text(cell.dateLabel, x + colW - 2.5, y + 6, { align: 'right' });
+
+                    // Horario (centered, prominent) when working.
+                    // Anchor to the free zone between the day-number row (~y+11) and the badge (~y+rowH-9).
+                    const cx = x + colW / 2;
+                    const midY = y + (11 + (rowH - 9)) / 2;
+                    if (cell.horario) {
+                        doc.setFontSize(5.5);
+                        doc.setFont('helvetica', 'normal');
+                        doc.setTextColor(...inkFaint);
+                        doc.text('HORARIO', cx, midY - 3, { align: 'center' });
+                        doc.setFontSize(10);
                         doc.setFont('helvetica', 'bold');
-                        doc.setTextColor(customData.textColor[0], customData.textColor[1], customData.textColor[2]);
-                        doc.text(dateText, x, y, { align: 'center' });
-                        
-                        // Draw Rest of text (Smaller)
-                        doc.setFontSize(6); 
-                        doc.setFont('helvetica', customData.fontStyle);
-                        
-                        restText.forEach((line: string) => {
-                            y += 3.5;
-                            doc.text(line, x, y, { align: 'center' });
-                        });
+                        doc.setTextColor(...ink);
+                        doc.text(cell.horario, cx, midY + 2, { align: 'center' });
                     }
-                },
-                margin: { left: margin, right: margin, bottom: 20 },
-            });
 
+                    // Note line (authorized / target)
+                    if (cell.note) {
+                        doc.setFontSize(5.5);
+                        doc.setFont('helvetica', 'italic');
+                        doc.setTextColor(...inkSoft);
+                        doc.text(cell.note, cx, y + rowH - 8.5, { align: 'center' });
+                    }
 
-            // --- LEGEND (Footer) ---
-            const finalY = pageHeight - 15; // Force to bottom
-
-            doc.setDrawColor(0, 0, 0);
-            doc.setLineWidth(0.5);
-            doc.line(margin, finalY - 5, pageWidth - margin, finalY - 5);
-
-            doc.setFontSize(7);
-            doc.setFont('helvetica', 'normal');
-
-            // Legend Row
-            const lY = finalY;
-            const gap = 35;
-            let currentX = margin;
-
-            // Helper
-            const leg = (name: string, fill: [number, number, number] | null, textCol: [number, number, number]) => {
-                if (fill) {
-                    doc.setFillColor(...fill);
-                    doc.rect(currentX, lY - 2, 3, 3, 'F');
-                    doc.rect(currentX, lY - 2, 3, 3, 'S'); // border
-                } else {
-                    doc.rect(currentX, lY - 2, 3, 3, 'S');
+                    // Status badge (bottom, pill)
+                    if (cell.status) {
+                        doc.setFontSize(7);
+                        doc.setFont('helvetica', 'bold');
+                        const tw = doc.getTextWidth(cell.status);
+                        const pillW = Math.min(tw + 6, colW - 4);
+                        const pillH = 5;
+                        const px = cx - pillW / 2;
+                        const py = y + rowH - pillH - 2;
+                        doc.setFillColor(...pal.accent);
+                        rrect(px, py, pillW, pillH, 2.5, 'F');
+                        doc.setTextColor(...white);
+                        doc.text(cell.status, cx, py + 3.4, { align: 'center' });
+                    }
                 }
-                doc.setTextColor(...textCol);
-                doc.text(name, currentX + 5, lY);
-                currentX += gap;
-            };
+            }
 
-            // Items
-            leg('Día Libre', colors.bgOff, colors.textMain);
-            leg('No Marca/Ausente', colors.bgAlert, colors.textMain);
-            leg('Sin Credencial', colors.bgWarning, colors.textMain);
-            leg('Asistencia OK', colors.bgWhite, colors.textMain); // Just plain white
+            // ============ LEGEND + FOOTER ============
+            const legendY = pageHeight - 12;
+            doc.setDrawColor(...lineCol);
+            doc.setLineWidth(0.3);
+            doc.line(margin, legendY - 5, pageWidth - margin, legendY - 5);
 
-            doc.setTextColor(80, 80, 80);
-            doc.text(`Generado: ${new Date().toLocaleString('es-CL')}`, pageWidth - margin, lY, { align: 'right' });
+            const legendItems: [string, keyof typeof CAT][] = [
+                ['Trabaja / Presente', 'presente'],
+                ['Día libre', 'libre'],
+                ['Ausente / No marcación', 'ausente'],
+                ['Sin credencial', 'sincred'],
+                ['Licencia', 'licencia'],
+                ['Vacaciones', 'vacaciones'],
+                ['Permiso', 'permiso'],
+                ['Cambio de día', 'cambio'],
+            ];
+            let lx = margin;
+            doc.setFontSize(6.5);
+            doc.setFont('helvetica', 'normal');
+            for (const [label, cat] of legendItems) {
+                doc.setFillColor(...CAT[cat].accent);
+                rrect(lx, legendY - 2.6, 3.2, 3.2, 0.8, 'F');
+                doc.setTextColor(...inkSoft);
+                doc.text(label, lx + 4.5, legendY);
+                lx += doc.getTextWidth(label) + 12;
+            }
 
+            // Stats summary (right side of footer)
+            const summary = `Trabajo ${stats.trabajo}  ·  Libres ${stats.libre}  ·  Ausencias ${stats.ausencia}  ·  Licencia ${stats.licencia}  ·  Vac. ${stats.vacaciones}  ·  Permiso ${stats.permiso}`;
+            doc.setFontSize(6.5);
+            doc.setFont('helvetica', 'bold');
+            doc.setTextColor(...ink);
+            doc.text(summary, pageWidth - margin, legendY - 4.5, { align: 'right' });
+            doc.setFont('helvetica', 'normal');
+            doc.setTextColor(...inkFaint);
+            doc.text(`Generado: ${new Date().toLocaleString('es-CL')}`, pageWidth - margin, legendY, { align: 'right' });
 
             // Save
-            const fileName = `Asistencia_${selectedStaff.rut.replace(/\./g, '')}_${months[selectedMonth]}_${selectedYear}.pdf`;
+            const fileName = `Programacion_${selectedStaff.rut.replace(/\./g, '')}_${months[selectedMonth]}_${selectedYear}.pdf`;
             doc.save(fileName);
 
         } catch (error) {
