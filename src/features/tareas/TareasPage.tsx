@@ -53,6 +53,7 @@ export const TareasPage = () => {
   const kpisQuery = useTaskKPIs();
   const tasksQuery = useTasks();
   const canManage = isTaskManager(session?.supervisorName ?? '');
+  const visibleTabs = TABS.filter((tab) => canManage || tab.id !== 'config');
 
   const handleOpenWorkspace = (taskId: string) => {
     setSelectedTaskId(taskId);
@@ -118,7 +119,7 @@ export const TareasPage = () => {
       case 'reportes':
         return <ReportsView />;
       case 'config':
-        return <SettingsView />;
+        return canManage ? <SettingsView /> : null;
       default:
         return null;
     }
@@ -170,8 +171,8 @@ export const TareasPage = () => {
       </section>
 
       <div className="flex gap-2 overflow-x-auto pb-1">
-        {TABS.map((tab) => (
-          <button
+        {visibleTabs.map((tab) => (
+            <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
             title={tab.description}

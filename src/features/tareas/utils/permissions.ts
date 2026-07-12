@@ -2,34 +2,23 @@
  * Permission utilities for Tasks module
  * Only authorized managers can create, edit, reassign, and evaluate tasks
  */
-
-const TASK_MANAGERS = [
-    'ISAAC AVILA',
-    'CLAUDIO ARRIAGADA',
-    'CRISTIAN LURASCHI',
-];
-
-const normalizeName = (name: string): string => {
-    return name.toUpperCase().trim().replace(/\s+/g, ' ');
-};
+import {
+    isAuthorizedSupervisor,
+    normalizeSupervisorName,
+} from '../../../shared/utils/authorizedSupervisors';
 
 /**
  * Check if a user is a task manager (can create, edit, reassign, evaluate)
  */
 export const isTaskManager = (supervisorName: string): boolean => {
-    const normalized = normalizeName(supervisorName);
-    return TASK_MANAGERS.some(manager =>
-        normalizeName(manager) === normalized ||
-        normalized.includes(normalizeName(manager)) ||
-        normalizeName(manager).includes(normalized)
-    );
+    return isAuthorizedSupervisor(supervisorName);
 };
 
 /**
  * Check if user is assigned to a task
  */
 export const isTaskAssigned = (supervisorName: string, assignedName: string): boolean => {
-    return normalizeName(supervisorName) === normalizeName(assignedName);
+    return normalizeSupervisorName(supervisorName) === normalizeSupervisorName(assignedName);
 };
 
 /**
