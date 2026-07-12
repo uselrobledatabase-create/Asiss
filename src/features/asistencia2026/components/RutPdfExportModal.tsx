@@ -362,7 +362,7 @@ export const RutPdfExportModal = ({
             const gridW = pageWidth - 2 * margin;
             const colW = gridW / 7;
             const dowH = 8;
-            const bottomReserve = 20; // legend + footer
+            const bottomReserve = 15; // footer only (color legend removed)
             const availH = pageHeight - bottomReserve - (gridTop + dowH);
             const rowH = availH / weeksData.length;
 
@@ -416,82 +416,71 @@ export const RutPdfExportModal = ({
                     doc.setTextColor(...inkFaint);
                     doc.text(cell.dateLabel, x + colW - 2.5, y + 6, { align: 'right' });
 
-                    // Horario (centered, prominent) when working.
-                    // Anchor to the free zone between the day-number row (~y+11) and the badge (~y+rowH-9).
                     const cx = x + colW / 2;
-                    const midY = y + (11 + (rowH - 9)) / 2;
-                    if (cell.horario) {
-                        doc.setFontSize(5.5);
-                        doc.setFont('helvetica', 'normal');
-                        doc.setTextColor(...inkFaint);
-                        doc.text('HORARIO', cx, midY - 3, { align: 'center' });
-                        doc.setFontSize(10);
-                        doc.setFont('helvetica', 'bold');
-                        doc.setTextColor(...numCol);
-                        doc.text(cell.horario, cx, midY + 2, { align: 'center' });
-                    }
 
-                    // Note line (authorized / target)
-                    if (cell.note) {
-                        doc.setFontSize(5.5);
-                        doc.setFont('helvetica', 'italic');
-                        doc.setTextColor(...inkSoft);
-                        doc.text(cell.note, cx, y + rowH - 8.5, { align: 'center' });
-                    }
-
-                    // Status badge (bottom, pill)
-                    if (cell.status) {
-                        doc.setFontSize(7);
+                    if (cell.category === 'libre') {
+                        // Free day: one big, centered word so it never blends with worked days.
                         doc.setFont('helvetica', 'bold');
-                        const tw = doc.getTextWidth(cell.status);
-                        const pillW = Math.min(tw + 6, colW - 4);
-                        const pillH = 5;
-                        const px = cx - pillW / 2;
-                        const py = y + rowH - pillH - 2;
-                        doc.setFillColor(...pillCol);
-                        rrect(px, py, pillW, pillH, 2.5, 'F');
-                        doc.setTextColor(...white);
-                        doc.text(cell.status, cx, py + 3.4, { align: 'center' });
+                        doc.setFontSize(20);
+                        doc.setTextColor(...(dim ? inkFaint : inkSoft));
+                        doc.text('LIBRE', cx, y + rowH / 2 + 4.5, { align: 'center' });
+                    } else {
+                        // Horario (centered, prominent) when working.
+                        // Anchor to the free zone between the day-number row (~y+11) and the badge (~y+rowH-9).
+                        const midY = y + (11 + (rowH - 9)) / 2;
+                        if (cell.horario) {
+                            doc.setFontSize(5.5);
+                            doc.setFont('helvetica', 'normal');
+                            doc.setTextColor(...inkFaint);
+                            doc.text('HORARIO', cx, midY - 3, { align: 'center' });
+                            doc.setFontSize(10);
+                            doc.setFont('helvetica', 'bold');
+                            doc.setTextColor(...numCol);
+                            doc.text(cell.horario, cx, midY + 2, { align: 'center' });
+                        }
+
+                        // Note line (authorized / target)
+                        if (cell.note) {
+                            doc.setFontSize(5.5);
+                            doc.setFont('helvetica', 'italic');
+                            doc.setTextColor(...inkSoft);
+                            doc.text(cell.note, cx, y + rowH - 8.5, { align: 'center' });
+                        }
+
+                        // Status badge (bottom, pill)
+                        if (cell.status) {
+                            doc.setFontSize(7);
+                            doc.setFont('helvetica', 'bold');
+                            const tw = doc.getTextWidth(cell.status);
+                            const pillW = Math.min(tw + 6, colW - 4);
+                            const pillH = 5;
+                            const px = cx - pillW / 2;
+                            const py = y + rowH - pillH - 2;
+                            doc.setFillColor(...pillCol);
+                            rrect(px, py, pillW, pillH, 2.5, 'F');
+                            doc.setTextColor(...white);
+                            doc.text(cell.status, cx, py + 3.4, { align: 'center' });
+                        }
                     }
                 }
             }
 
-            // ============ LEGEND + FOOTER ============
-            const legendY = pageHeight - 12;
+            // ============ FOOTER ============
+            const footY = pageHeight - 9;
             doc.setDrawColor(...lineCol);
             doc.setLineWidth(0.3);
-            doc.line(margin, legendY - 5, pageWidth - margin, legendY - 5);
+            doc.line(margin, footY - 5, pageWidth - margin, footY - 5);
 
-            const legendItems: [string, keyof typeof CAT][] = [
-                ['Trabaja / Presente', 'presente'],
-                ['Día libre', 'libre'],
-                ['Ausente / No marcación', 'ausente'],
-                ['Sin credencial', 'sincred'],
-                ['Licencia', 'licencia'],
-                ['Vacaciones', 'vacaciones'],
-                ['Permiso', 'permiso'],
-                ['Cambio de día', 'cambio'],
-            ];
-            let lx = margin;
-            doc.setFontSize(6.5);
-            doc.setFont('helvetica', 'normal');
-            for (const [label, cat] of legendItems) {
-                doc.setFillColor(...CAT[cat].accent);
-                rrect(lx, legendY - 2.6, 3.2, 3.2, 0.8, 'F');
-                doc.setTextColor(...inkSoft);
-                doc.text(label, lx + 4.5, legendY);
-                lx += doc.getTextWidth(label) + 12;
-            }
-
-            // Stats summary (right side of footer)
-            const summary = `Trabajo ${stats.trabajo}  ·  Libres ${stats.libre}  ·  Ausencias ${stats.ausencia}  ·  Licencia ${stats.licencia}  ·  Vac. ${stats.vacaciones}  ·  Permiso ${stats.permiso}`;
-            doc.setFontSize(6.5);
+            const summary = `RESUMEN DEL MES   Trabajo ${stats.trabajo}   ·   Libres ${stats.libre}   ·   Ausencias ${stats.ausencia}   ·   Licencia ${stats.licencia}   ·   Vacaciones ${stats.vacaciones}   ·   Permiso ${stats.permiso}`;
+            doc.setFontSize(8);
             doc.setFont('helvetica', 'bold');
             doc.setTextColor(...ink);
-            doc.text(summary, pageWidth - margin, legendY - 4.5, { align: 'right' });
+            doc.text(summary, margin, footY);
+
+            doc.setFontSize(6.5);
             doc.setFont('helvetica', 'normal');
             doc.setTextColor(...inkFaint);
-            doc.text(`Generado: ${new Date().toLocaleString('es-CL')}`, pageWidth - margin, legendY, { align: 'right' });
+            doc.text(`Generado: ${new Date().toLocaleString('es-CL')}`, pageWidth - margin, footY, { align: 'right' });
 
             // Save
             const fileName = `Programacion_${selectedStaff.rut.replace(/\./g, '')}_${months[selectedMonth]}_${selectedYear}.pdf`;
