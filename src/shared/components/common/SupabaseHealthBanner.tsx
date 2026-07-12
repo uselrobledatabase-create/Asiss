@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { buildSupabaseAuthUrl } from '../../lib/supabaseConfig';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -19,7 +20,7 @@ export const SupabaseHealthBanner = () => {
             return;
         }
         let cancelled = false;
-        fetch(`${supabaseUrl}/auth/v1/health`, {
+        fetch(`${buildSupabaseAuthUrl(supabaseUrl)}/health`, {
             headers: { apikey: supabaseAnonKey },
         })
             .then((res) => {

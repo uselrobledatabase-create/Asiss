@@ -17,16 +17,29 @@ export interface FlotaVehiculo {
 
 // ── PPU autocomplete from flota table ────────────────────────────────────────
 
+const isMissingTableError = (error: { code?: string; message?: string } | null | undefined, table: string) =>
+    error?.code === 'PGRST205' && error.message?.includes(`'public.${table}'`);
+
 export const fetchFlotaPPUs = async (search: string): Promise<FlotaVehiculo[]> => {
     if (!search || search.length < 2) return [];
-    const { data, error } = await supabase
-        .from('flota')
-        .select('ppu, terminal')
-        .ilike('ppu', `%${search}%`)
-        .order('ppu')
-        .limit(15);
-    if (error) return [];
-    return (data ?? []) as FlotaVehiculo[];
+
+    const fetchFromTable = async (table: 'flota' | 'fleet_vehicles') =>
+        supabase
+            .from(table)
+            .select('ppu, terminal')
+            .ilike('ppu', `%${search}%`)
+            .order('ppu')
+            .limit(15);
+
+    const { data, error } = await fetchFromTable('flota');
+    if (!error) return (data ?? []) as FlotaVehiculo[];
+
+    if (isMissingTableError(error, 'flota')) {
+        const fallback = await fetchFromTable('fleet_vehicles');
+        if (!fallback.error) return (fallback.data ?? []) as FlotaVehiculo[];
+    }
+
+    return [];
 };
 
 // ── Save / Fetch inspecciones ICA ─────────────────────────────────────────────
