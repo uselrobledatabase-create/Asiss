@@ -191,20 +191,30 @@ export const RutPdfExportModal = ({
 
             // ============ DATA PREP ============
             const monthDates = getMonthDates(selectedYear, selectedMonth);
+
+            // Build a full Monday->Sunday grid. Instead of blank padding cells,
+            // fill the leading/trailing slots with the REAL dates of the previous
+            // and next month, so every displayed week is complete (Lun a Dom).
+            const fmt = (d: Date) => {
+                const y = d.getFullYear();
+                const m = String(d.getMonth() + 1).padStart(2, '0');
+                const dd = String(d.getDate()).padStart(2, '0');
+                return `${y}-${m}-${dd}`;
+            };
+            const firstDate = new Date(monthDates[0] + 'T12:00:00');
+            const lastDate = new Date(monthDates[monthDates.length - 1] + 'T12:00:00');
+            const leadOffset = (firstDate.getDay() + 6) % 7;            // days back to Monday
+            const trailOffset = 6 - ((lastDate.getDay() + 6) % 7);      // days forward to Sunday
+            const gridStart = new Date(firstDate);
+            gridStart.setDate(firstDate.getDate() - leadOffset);
+            const gridEnd = new Date(lastDate);
+            gridEnd.setDate(lastDate.getDate() + trailOffset);
+
             const weeks: string[][] = [];
             let currentWeek: string[] = [];
-            const firstDate = new Date(monthDates[0] + 'T12:00:00');
-            const firstDayOfWeek = firstDate.getDay();
-            const mondayFirst = firstDayOfWeek === 0 ? 6 : firstDayOfWeek - 1;
-
-            for (let i = 0; i < mondayFirst; i++) currentWeek.push('');
-            for (const date of monthDates) {
-                currentWeek.push(date);
+            for (const d = new Date(gridStart); d <= gridEnd; d.setDate(d.getDate() + 1)) {
+                currentWeek.push(fmt(d));
                 if (currentWeek.length === 7) { weeks.push(currentWeek); currentWeek = []; }
-            }
-            if (currentWeek.length > 0) {
-                while (currentWeek.length < 7) currentWeek.push('');
-                weeks.push(currentWeek);
             }
 
             const incidentsMap = {
@@ -215,7 +225,7 @@ export const RutPdfExportModal = ({
             };
 
             interface DayInfo {
-                empty: boolean;
+                inMonth: boolean;    // false = date belongs to prev/next month
                 dayNum: number;
                 dateLabel: string;   // DD-MM-AAAA
                 horario: string;     // '' when not working
@@ -223,7 +233,6 @@ export const RutPdfExportModal = ({
                 note: string;        // secondary line (e.g. AUTORIZADO / target day)
                 category: keyof typeof CAT;
             }
-            const EMPTY: DayInfo = { empty: true, dayNum: 0, dateLabel: '', horario: '', status: '', note: '', category: 'libre' };
 
             const weeksData: DayInfo[][] = [];
             const stats = { trabajo: 0, libre: 0, ausencia: 0, licencia: 0, vacaciones: 0, permiso: 0 };
@@ -232,11 +241,10 @@ export const RutPdfExportModal = ({
             for (const week of weeks) {
                 const rowData: DayInfo[] = [];
                 for (const dateStr of week) {
-                    if (!dateStr) { rowData.push(EMPTY); continue; }
-
                     const date = new Date(dateStr + 'T12:00:00');
                     const dayNum = date.getDate();
                     const dateLabel = dateStr.split('-').reverse().join('-');
+                    const inMonth = date.getMonth() === selectedMonth && date.getFullYear() === selectedYear;
 
                     // --- shift / off-day ---
                     let isOff = false;
@@ -303,30 +311,40 @@ export const RutPdfExportModal = ({
                         note = dayChange.day_on_date
                             ? `» ${new Date(dayChange.day_on_date + 'T12:00:00').toLocaleDateString('es-CL', { weekday: 'short', day: '2-digit' })}`
                             : '';
-                        stats.trabajo++;
                     } else if (hasLicense) {
-                        category = 'licencia'; status = 'LICENCIA'; showHorario = false; stats.licencia++;
+                        category = 'licencia'; status = 'LICENCIA'; showHorario = false;
                     } else if (hasVacation) {
-                        category = 'vacaciones'; status = 'VACACIONES'; showHorario = false; stats.vacaciones++;
+                        category = 'vacaciones'; status = 'VACACIONES'; showHorario = false;
                     } else if (hasPerm) {
-                        category = 'permiso'; status = 'PERMISO'; showHorario = false; stats.permiso++;
+                        category = 'permiso'; status = 'PERMISO'; showHorario = false;
                     } else if (hasNoMark) {
-                        category = 'nomarca'; status = 'NO MARCACIÓN'; stats.ausencia++;
+                        category = 'nomarca'; status = 'NO MARCACIÓN';
                     } else if (hasNoCred) {
-                        category = 'sincred'; status = 'SIN CREDENCIAL'; stats.trabajo++;
+                        category = 'sincred'; status = 'SIN CREDENCIAL';
                     } else if (isOff) {
-                        category = 'libre'; status = 'LIBRE'; stats.libre++;
+                        category = 'libre'; status = 'LIBRE';
                     } else {
-                        if (mark?.mark === 'P') { category = 'presente'; status = 'PRESENTE'; stats.trabajo++; }
-                        else if (mark?.mark === 'A') { category = 'ausente'; status = 'AUSENTE'; stats.ausencia++; }
-                        else if (dateStr < todayStr) { category = 'ausente'; status = 'AUSENTE'; stats.ausencia++; }
-                        else { category = 'trabajo'; status = 'PROGRAMADO'; stats.trabajo++; }
+                        if (mark?.mark === 'P') { category = 'presente'; status = 'PRESENTE'; }
+                        else if (mark?.mark === 'A') { category = 'ausente'; status = 'AUSENTE'; }
+                        else if (dateStr < todayStr) { category = 'ausente'; status = 'AUSENTE'; }
+                        else { category = 'trabajo'; status = 'PROGRAMADO'; }
                     }
 
                     if (hasAuth) note = note ? `${note} · AUTORIZADO` : 'AUTORIZADO';
 
+                    // Summary counters reflect ONLY the current month (adjacent-month
+                    // days are shown for context but excluded from the totals).
+                    if (inMonth) {
+                        const bucket: Record<keyof typeof CAT, keyof typeof stats> = {
+                            trabajo: 'trabajo', presente: 'trabajo', sincred: 'trabajo', cambio: 'trabajo',
+                            libre: 'libre', ausente: 'ausencia', nomarca: 'ausencia',
+                            licencia: 'licencia', vacaciones: 'vacaciones', permiso: 'permiso',
+                        };
+                        stats[bucket[category]]++;
+                    }
+
                     rowData.push({
-                        empty: false,
+                        inMonth,
                         dayNum,
                         dateLabel,
                         horario: showHorario ? horarioFmt : '',
@@ -368,20 +386,18 @@ export const RutPdfExportModal = ({
                     const x = margin + c * colW;
                     const y = cellTop + r * rowH;
 
-                    if (cell.empty) {
-                        doc.setFillColor(250, 250, 251);
-                        doc.setDrawColor(...lineCol);
-                        doc.setLineWidth(0.2);
-                        doc.rect(x, y, colW, rowH, 'FD');
-                        continue;
-                    }
-
                     const pal = CAT[cell.category];
+                    const dim = !cell.inMonth; // adjacent-month day -> recessed styling
+                    const bgCol: RGB = dim ? [250, 250, 251] : pal.bg;
+                    const accentCol: RGB = dim ? [203, 213, 225] : pal.accent;
+                    const numCol: RGB = dim ? inkFaint : ink;
+                    const pillCol: RGB = dim ? inkFaint : pal.accent;
+
                     // background
-                    doc.setFillColor(...pal.bg);
+                    doc.setFillColor(...bgCol);
                     doc.rect(x, y, colW, rowH, 'F');
                     // top accent strip
-                    doc.setFillColor(...pal.accent);
+                    doc.setFillColor(...accentCol);
                     doc.rect(x, y, colW, 1.6, 'F');
                     // border
                     doc.setDrawColor(...lineCol);
@@ -389,7 +405,7 @@ export const RutPdfExportModal = ({
                     doc.rect(x, y, colW, rowH, 'S');
 
                     // Day number (big, top-left)
-                    doc.setTextColor(...ink);
+                    doc.setTextColor(...numCol);
                     doc.setFont('helvetica', 'bold');
                     doc.setFontSize(16);
                     doc.text(String(cell.dayNum), x + 3.5, y + 9);
@@ -411,7 +427,7 @@ export const RutPdfExportModal = ({
                         doc.text('HORARIO', cx, midY - 3, { align: 'center' });
                         doc.setFontSize(10);
                         doc.setFont('helvetica', 'bold');
-                        doc.setTextColor(...ink);
+                        doc.setTextColor(...numCol);
                         doc.text(cell.horario, cx, midY + 2, { align: 'center' });
                     }
 
@@ -432,7 +448,7 @@ export const RutPdfExportModal = ({
                         const pillH = 5;
                         const px = cx - pillW / 2;
                         const py = y + rowH - pillH - 2;
-                        doc.setFillColor(...pal.accent);
+                        doc.setFillColor(...pillCol);
                         rrect(px, py, pillW, pillH, 2.5, 'F');
                         doc.setTextColor(...white);
                         doc.text(cell.status, cx, py + 3.4, { align: 'center' });
