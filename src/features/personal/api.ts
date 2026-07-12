@@ -377,7 +377,7 @@ export const createAdmonition = async (
 
     // Upload file
     const { error: uploadError } = await supabase.storage
-        .from('staff-docs')
+        .from('attendance-docs')
         .upload(filePath, file);
 
     if (uploadError) {
@@ -403,7 +403,7 @@ export const createAdmonition = async (
 
 export const getAdmonitionDocumentUrl = async (path: string): Promise<string> => {
     const { data, error } = await supabase.storage
-        .from('staff-docs')
+        .from('attendance-docs')
         .createSignedUrl(path, 3600); // 1 hour
 
     if (error) throw error;

@@ -85,8 +85,9 @@ export const useAutoAdmonition = () => {
             const fileExt = file.name.split('.').pop();
             const filePath = `staff/${staff.id}/admonitions/${Date.now()}.${fileExt}`;
 
+            // Upload PDF to Supabase Storage
             const { error: uploadError } = await supabase.storage
-                .from('staff-docs')
+                .from('attendance-docs')
                 .upload(filePath, file);
 
             if (uploadError) {
