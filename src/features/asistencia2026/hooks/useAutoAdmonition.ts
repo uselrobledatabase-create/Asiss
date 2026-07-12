@@ -45,17 +45,20 @@ export const useAutoAdmonition = () => {
             }
             const nameFormatted = apellidos ? `${apellidos}, ${nombres}` : staff.nombre;
 
-            const fullDescription = `${nameFormatted}, RUT: ${staff.rut}, ${staff.cargo}, TERMINAL ${staff.terminal_code}, CON TURNO PROGRAMADO DE ${timeRange}, EL DÍA ${formattedDate}.\n\nSE CONSTATA QUE EL/LA COLABORADOR(A) NO SE PRESENTA A SU TURNO EN LA FECHA INDICADA, INCURRIENDO EN AUSENCIA INJUSTIFICADA. ASIMISMO, NO REALIZA AVISO PREVIO NI DEJA CONSTANCIA FORMAL A SU JEFATURA DIRECTA RESPECTO DE SU INASISTENCIA, IMPIDIENDO LA COORDINACIÓN OPORTUNA DE LA CONTINUIDAD OPERATIVA.\n\nESTA SITUACIÓN OBLIGA A REORGANIZAR Y REPROGRAMAR PERSONAL PARA CUBRIR LAS FUNCIONES ASIGNADAS, GENERANDO SOBRECARGA DE LABORES, RETRASOS EN LAS TAREAS DIARIAS Y AFECTACIÓN DIRECTA EN LA OPERACIÓN DEL TERMINAL.\n\nCAYENDO EN FALTA GRAVE (CÓDIGO 24).`;
+            const cleanCargo = staff.cargo.replace(/_/g, ' ');
+            const cleanTerminal = (staff.terminal_code || '').replace(/_/g, ' ');
+
+            const fullDescription = `${nameFormatted}, RUT: ${staff.rut}, ${cleanCargo}, TERMINAL ${cleanTerminal}, CON TURNO PROGRAMADO DE ${timeRange}, EL DÍA ${formattedDate}.\n\nSE CONSTATA QUE EL COLABORADOR NO SE PRESENTA A SU TURNO EN LA FECHA INDICADA, INCURRIENDO EN AUSENCIA INJUSTIFICADA. ASIMISMO, NO REALIZA AVISO PREVIO NI DEJA CONSTANCIA FORMAL A SU JEFATURA DIRECTA RESPECTO DE SU INASISTENCIA, IMPIDIENDO LA COORDINACIÓN OPORTUNA DE LA CONTINUIDAD OPERATIVA.\n\nESTA SITUACIÓN OBLIGA A REORGANIZAR Y REPROGRAMAR PERSONAL PARA CUBRIR LAS FUNCIONES ASIGNADAS, GENERANDO SOBRECARGA DE LABORES, RETRASOS EN LAS TAREAS DIARIAS Y AFECTACIÓN DIRECTA EN LA OPERACIÓN DEL TERMINAL.\n\nCAYENDO EN FALTA GRAVE (CÓDIGO 24).`;
             
             const formData: AmonestacionFormData = {
                 worker_rut: staff.rut,
                 worker_name: staff.nombre,
-                worker_cargo: staff.cargo,
-                worker_base: staff.terminal_code || '',
+                worker_cargo: cleanCargo,
+                worker_base: cleanTerminal,
                 shift_schedule: timeRange,
                 date: formattedDate,
                 time: startTime,
-                place_terminal: staff.terminal_code || '',
+                place_terminal: cleanTerminal,
                 place_public_way: '',
                 place_vehicle: '',
                 place_ppu: '',
