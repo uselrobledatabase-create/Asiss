@@ -1,0 +1,6 @@
+--- src/features/asistencia2026/api/asistencia2026Api.ts
++++ src/features/asistencia2026/api/asistencia2026Api.ts
+@@ -2,2 +2,3 @@
+ import { getFallbackShiftType, isOffDay } from '../utils/shiftEngine';
++import { NoMarcacion, SinCredencial, CambioDia } from '../../asistencia/types';
+ 

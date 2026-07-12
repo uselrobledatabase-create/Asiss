@@ -1,0 +1,30 @@
+--- src/features/asistencia2026/api/asistencia2026Api.ts
++++ src/features/asistencia2026/api/asistencia2026Api.ts
+@@ -3,2 +3,3 @@
+ import { getFallbackShiftType, isOffDay } from '../utils/shiftEngine';
++import { NoMarcacion, SinCredencial, CambioDia } from '../../asistencia/types';
+ 
+@@ -539,5 +540,5 @@
+ ): Promise<{
+-    noMarcaciones: { rut: string; date: string }[];
+-    sinCredenciales: { rut: string; date: string }[];
+-    cambiosDia: { rut: string; date: string; target_date: string }[];
++    noMarcaciones: NoMarcacion[];
++    sinCredenciales: SinCredencial[];
++    cambiosDia: CambioDia[];
+     autorizaciones: { rut: string; date: string }[];
+@@ -551,3 +552,3 @@
+             .from('attendance_no_marcaciones')
+-            .select('rut, date')
++            .select('*')
+             .in('terminal_code', terminalCodes)
+@@ -557,3 +558,3 @@
+             .from('attendance_sin_credenciales')
+-            .select('rut, date')
++            .select('*')
+             .in('terminal_code', terminalCodes)
+@@ -563,3 +564,3 @@
+             .from('attendance_cambios_dia')
+-            .select('rut, date, day_on_date')
++            .select('*')
+             .in('terminal_code', terminalCodes)

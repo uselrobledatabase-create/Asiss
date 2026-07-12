@@ -45,6 +45,7 @@ export const CambiosDeDiaPage = () => {
     const rejectMutation = useReject();
     useAttendanceRealtime();
 
+    const exportColumns = [
         { key: 'rut', header: 'RUT', value: (r: CambioDia) => formatRut(r.rut) },
         { key: 'nombre', header: 'NOMBRE', value: (r: CambioDia) => r.nombre },
         { key: 'terminal', header: 'TERMINAL', value: (r: CambioDia) => displayTerminal(r.terminal_code) },
@@ -57,7 +58,8 @@ export const CambiosDeDiaPage = () => {
         { key: 'autoriza', header: 'Autoriza', value: (r: CambioDia) => r.authorized_by || '-' },
         { key: 'area', header: 'Área', value: () => '-' },
         { key: 'responsable', header: 'Responsable', value: () => '-' },
-        { key: 'motivo_cambio', header: 'Motivo Cambio', value: (r: CambioDia) => r.observations || '-' },
+        { key: 'motivo_cambio', header: 'Motivo Cambio', value: () => '-' },
+    ];
 
     const handleCreate = async (values: CambioDiaFormValues) => {
         await createMutation.mutateAsync({ values, createdBy: supervisorName });
@@ -262,7 +264,7 @@ export const CambiosDeDiaPage = () => {
                                         <td className="table-cell">{row.authorized_by || '-'}</td>
                                         <td className="table-cell">-</td>
                                         <td className="table-cell">-</td>
-                                        <td className="table-cell max-w-[150px] truncate" title={row.observations || ''}>{row.observations || '-'}</td>
+                                        <td className="table-cell max-w-[150px] truncate" title={''}>-</td>
                                         <td className="table-cell">
                                             {row.document_path ? (
                                                 <button onClick={() => handleViewDocument(row.document_path!)} className="btn btn-ghost btn-icon text-brand-600" title="Ver documento">

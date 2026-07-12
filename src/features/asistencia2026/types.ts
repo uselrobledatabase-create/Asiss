@@ -1,4 +1,4 @@
-import { TerminalCode, ShiftTypeCode, ShiftVariantCode } from '../../shared/types/terminal';
+import { TerminalCode } from '../../shared/types/terminal';
 import { NoMarcacion, SinCredencial, CambioDia } from '../asistencia/types';
 
 // ==========================================

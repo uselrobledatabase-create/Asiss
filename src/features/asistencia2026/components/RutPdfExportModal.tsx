@@ -285,7 +285,7 @@ export const RutPdfExportModal = ({
                     // Build display stack
                     if (dayChange) {
                         // Show the target date info for the change
-                        const targetInfo = dayChange.target_date ? ` →  ${new Date(dayChange.target_date).toLocaleDateString('es-CL', { weekday: 'short' })}` : '';
+                        const targetInfo = dayChange.day_on_date ? ` →  ${new Date(dayChange.day_on_date).toLocaleDateString('es-CL', { weekday: 'short' })}` : '';
                         statusText = `CAMBIO DÍA${targetInfo}`;
                         // Use original day's horario if day change doesn't override
                     } else if (hasLicense) {
