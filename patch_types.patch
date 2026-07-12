@@ -1,0 +1,39 @@
+--- src/features/asistencia2026/types.ts
++++ src/features/asistencia2026/types.ts
+@@ -2,2 +2,3 @@
+ import { ShiftVariantCode, ShiftTypeCode, TerminalCode } from '../../shared/types/terminal';
++import { NoMarcacion, SinCredencial, CambioDia, AttendanceAuthorization } from '../asistencia/types';
+ 
+@@ -113,29 +114,8 @@
+ 
+-export interface AttendanceNoMark {
+-    rut: string;
+-    date: string;
+-}
+-
+-export interface AttendanceNoCredential {
+-    rut: string;
+-    date: string;
+-}
+-
+-export interface AttendanceDayChange {
+-    rut: string;
+-    date: string;
+-    target_date?: string; // Optional as API currently only returns 'date'
+-}
+-
+-export interface AttendanceAuthorization {
+-    rut: string;
+-    date: string;
+-}
+-
+ export interface AttendanceIncidences {
+-    noMarcaciones: AttendanceNoMark[];
+-    sinCredenciales: AttendanceNoCredential[];
+-    cambiosDia: AttendanceDayChange[];
+-    autorizaciones: AttendanceAuthorization[];
++    noMarcaciones: NoMarcacion[];
++    sinCredenciales: SinCredencial[];
++    cambiosDia: CambioDia[];
++    autorizaciones: AttendanceAuthorization[]; // Assuming this is defined correctly or we keep it as is. Wait, `AttendanceAuthorization` was defined here. I'll remove it from the top and let it keep its local definition.
+ }

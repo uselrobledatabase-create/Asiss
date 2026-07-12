@@ -53,7 +53,11 @@ export const NoMarcacionesPage = () => {
         { key: 'terminal', header: 'Terminal', value: (r: NoMarcacion) => displayTerminal(r.terminal_code) },
         { key: 'cabezal', header: 'Cabezal', value: (r: NoMarcacion) => r.cabezal },
         { key: 'incident_state', header: 'Estado', value: (r: NoMarcacion) => r.incident_state },
+        { key: 'schedule_in_out', header: 'Marcacion', value: (r: NoMarcacion) => r.schedule_in_out },
         { key: 'date', header: 'Fecha', value: (r: NoMarcacion) => r.date },
+        { key: 'time_range', header: 'Horario', value: (r: NoMarcacion) => r.time_range },
+        { key: 'observations', header: 'Observaciones', value: (r: NoMarcacion) => r.observations },
+        { key: 'informed_by', header: 'Informado Por', value: (r: NoMarcacion) => r.informed_by },
         { key: 'auth_status', header: 'Autorización', value: (r: NoMarcacion) => r.auth_status },
     ];
 
@@ -212,9 +216,17 @@ export const NoMarcacionesPage = () => {
                                 <tr>
                                     <th className="table-header-cell">RUT</th>
                                     <th className="table-header-cell">Nombre</th>
+                                    <th className="table-header-cell">Área</th>
+                                    <th className="table-header-cell">Cargo</th>
+                                    <th className="table-header-cell">Jefe Terminal</th>
                                     <th className="table-header-cell">Terminal</th>
-                                    <th className="table-header-cell">Fecha</th>
+                                    <th className="table-header-cell">Cabezal</th>
                                     <th className="table-header-cell">Estado</th>
+                                    <th className="table-header-cell">Marcacion</th>
+                                    <th className="table-header-cell">Fecha</th>
+                                    <th className="table-header-cell">Horario</th>
+                                    <th className="table-header-cell">Observaciones</th>
+                                    <th className="table-header-cell">Informado Por</th>
                                     <th className="table-header-cell">Autorización</th>
                                     <th className="table-header-cell text-right">Acciones</th>
                                 </tr>
@@ -224,9 +236,17 @@ export const NoMarcacionesPage = () => {
                                     <tr key={row.id} className="table-row">
                                         <td className="table-cell font-mono text-sm">{formatRut(row.rut)}</td>
                                         <td className="table-cell font-medium">{row.nombre}</td>
+                                        <td className="table-cell">{row.area || '-'}</td>
+                                        <td className="table-cell">{row.cargo || '-'}</td>
+                                        <td className="table-cell">{row.jefe_terminal || '-'}</td>
                                         <td className="table-cell">{displayTerminal(row.terminal_code)}</td>
-                                        <td className="table-cell">{row.date}</td>
+                                        <td className="table-cell">{row.cabezal || '-'}</td>
                                         <td className="table-cell">{row.incident_state || '-'}</td>
+                                        <td className="table-cell">{row.schedule_in_out || '-'}</td>
+                                        <td className="table-cell">{row.date}</td>
+                                        <td className="table-cell">{row.time_range || '-'}</td>
+                                        <td className="table-cell max-w-[150px] truncate" title={row.observations || ''}>{row.observations || '-'}</td>
+                                        <td className="table-cell">{row.informed_by || '-'}</td>
                                         <td className="table-cell">{getStatusBadge(row.auth_status)}</td>
                                         <td className="table-cell">
                                             <div className="flex items-center justify-end gap-1">

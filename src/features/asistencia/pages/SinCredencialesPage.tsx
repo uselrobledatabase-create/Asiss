@@ -54,6 +54,9 @@ export const SinCredencialesPage = () => {
         { key: 'end_time', header: 'Hora Fin', value: (r: SinCredencial) => r.end_time },
         { key: 'cargo', header: 'Cargo', value: (r: SinCredencial) => r.cargo },
         { key: 'supervisor_autoriza', header: 'Supervisor Autoriza', value: (r: SinCredencial) => r.supervisor_autoriza },
+        { key: 'area', header: 'Area', value: (r: SinCredencial) => r.area },
+        { key: 'responsable', header: 'Responsable', value: (r: SinCredencial) => r.responsable },
+        { key: 'motivo', header: 'Motivo', value: (r: SinCredencial) => r.observacion },
         { key: 'auth_status', header: 'Autorización', value: (r: SinCredencial) => r.auth_status },
     ];
 
@@ -215,7 +218,13 @@ export const SinCredencialesPage = () => {
                                     <th className="table-header-cell">Terminal</th>
                                     <th className="table-header-cell">Cabezal</th>
                                     <th className="table-header-cell">Fecha</th>
-                                    <th className="table-header-cell">Hora</th>
+                                    <th className="table-header-cell">Hora Inicio</th>
+                                    <th className="table-header-cell">Hora Fin</th>
+                                    <th className="table-header-cell">Cargo</th>
+                                    <th className="table-header-cell">Sup. Autoriza</th>
+                                    <th className="table-header-cell">Area</th>
+                                    <th className="table-header-cell">Responsable</th>
+                                    <th className="table-header-cell">Motivo</th>
                                     <th className="table-header-cell">Autorización</th>
                                     <th className="table-header-cell text-right">Acciones</th>
                                 </tr>
@@ -228,7 +237,13 @@ export const SinCredencialesPage = () => {
                                         <td className="table-cell">{displayTerminal(row.terminal_code)}</td>
                                         <td className="table-cell">{row.cabezal || '-'}</td>
                                         <td className="table-cell">{row.date}</td>
-                                        <td className="table-cell">{row.start_time} - {row.end_time}</td>
+                                        <td className="table-cell">{row.start_time}</td>
+                                        <td className="table-cell">{row.end_time}</td>
+                                        <td className="table-cell">{row.cargo || '-'}</td>
+                                        <td className="table-cell">{row.supervisor_autoriza || '-'}</td>
+                                        <td className="table-cell">{row.area || '-'}</td>
+                                        <td className="table-cell">{row.responsable || '-'}</td>
+                                        <td className="table-cell max-w-[150px] truncate" title={row.observacion || ''}>{row.observacion || '-'}</td>
                                         <td className="table-cell">{getStatusBadge(row.auth_status)}</td>
                                         <td className="table-cell">
                                             <div className="flex items-center justify-end gap-1">

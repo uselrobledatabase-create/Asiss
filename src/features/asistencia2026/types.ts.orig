@@ -1,5 +1,4 @@
-import { TerminalCode, ShiftTypeCode, ShiftVariantCode } from '../../shared/types/terminal';
-import { NoMarcacion, SinCredencial, CambioDia } from '../asistencia/types';
+import { TerminalCode } from '../../shared/types/terminal';
 
 // ==========================================
 // SHIFT TYPES
@@ -112,15 +111,31 @@ export interface AttendancePermission {
     created_at: string;
 }
 
+export interface AttendanceNoMark {
+    rut: string;
+    date: string;
+}
+
+export interface AttendanceNoCredential {
+    rut: string;
+    date: string;
+}
+
+export interface AttendanceDayChange {
+    rut: string;
+    date: string;
+    target_date?: string; // Optional as API currently only returns 'date'
+}
+
 export interface AttendanceAuthorization {
     rut: string;
     date: string;
 }
 
 export interface AttendanceIncidences {
-    noMarcaciones: NoMarcacion[];
-    sinCredenciales: SinCredencial[];
-    cambiosDia: CambioDia[];
+    noMarcaciones: AttendanceNoMark[];
+    sinCredenciales: AttendanceNoCredential[];
+    cambiosDia: AttendanceDayChange[];
     autorizaciones: AttendanceAuthorization[];
 }
 

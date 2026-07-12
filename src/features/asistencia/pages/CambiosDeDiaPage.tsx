@@ -45,18 +45,19 @@ export const CambiosDeDiaPage = () => {
     const rejectMutation = useReject();
     useAttendanceRealtime();
 
-    const exportColumns = [
         { key: 'rut', header: 'RUT', value: (r: CambioDia) => formatRut(r.rut) },
-        { key: 'nombre', header: 'Nombre', value: (r: CambioDia) => r.nombre },
-        { key: 'terminal', header: 'Terminal', value: (r: CambioDia) => displayTerminal(r.terminal_code) },
-        { key: 'cabezal', header: 'Cabezal', value: (r: CambioDia) => r.cabezal },
-        { key: 'date', header: 'Fecha', value: (r: CambioDia) => r.date },
-        { key: 'prog_start', header: 'Prog. Inicio', value: (r: CambioDia) => r.prog_start },
-        { key: 'prog_end', header: 'Prog. Fin', value: (r: CambioDia) => r.prog_end },
-        { key: 'reprogram_start', header: 'Reprog. Inicio', value: (r: CambioDia) => r.reprogram_start },
-        { key: 'reprogram_end', header: 'Reprog. Fin', value: (r: CambioDia) => r.reprogram_end },
-        { key: 'auth_status', header: 'Autorización', value: (r: CambioDia) => r.auth_status },
-    ];
+        { key: 'nombre', header: 'NOMBRE', value: (r: CambioDia) => r.nombre },
+        { key: 'terminal', header: 'TERMINAL', value: (r: CambioDia) => displayTerminal(r.terminal_code) },
+        { key: 'cabezal', header: 'CABEZAL', value: (r: CambioDia) => r.cabezal || '-' },
+        { key: 'day_off_date', header: 'FECHA ORIGINAL', value: (r: CambioDia) => r.day_off_date },
+        { key: 'day_on_date', header: 'FECHA NUEVO', value: (r: CambioDia) => r.day_on_date },
+        { key: 'day_on_start', header: 'INICIO NUEVO', value: (r: CambioDia) => r.day_on_start || r.reprogram_start },
+        { key: 'day_on_end', header: 'TÉRMINO NUEVO', value: (r: CambioDia) => r.day_on_end || r.reprogram_end },
+        { key: 'cargo', header: 'CARGO', value: () => '-' },
+        { key: 'autoriza', header: 'Autoriza', value: (r: CambioDia) => r.authorized_by || '-' },
+        { key: 'area', header: 'Área', value: () => '-' },
+        { key: 'responsable', header: 'Responsable', value: () => '-' },
+        { key: 'motivo_cambio', header: 'Motivo Cambio', value: (r: CambioDia) => r.observations || '-' },
 
     const handleCreate = async (values: CambioDiaFormValues) => {
         await createMutation.mutateAsync({ values, createdBy: supervisorName });
@@ -231,9 +232,16 @@ export const CambiosDeDiaPage = () => {
                                     <th className="table-header-cell">RUT</th>
                                     <th className="table-header-cell">Nombre</th>
                                     <th className="table-header-cell">Terminal</th>
-                                    <th className="table-header-cell">Fecha</th>
-                                    <th className="table-header-cell">Jornada Prog.</th>
-                                    <th className="table-header-cell">Jornada Reprog.</th>
+                                    <th className="table-header-cell">Cabezal</th>
+                                    <th className="table-header-cell">Fecha Original</th>
+                                    <th className="table-header-cell">Fecha Nuevo</th>
+                                    <th className="table-header-cell">Inicio Nuevo</th>
+                                    <th className="table-header-cell">Término Nuevo</th>
+                                    <th className="table-header-cell">Cargo</th>
+                                    <th className="table-header-cell">Autoriza</th>
+                                    <th className="table-header-cell">Área</th>
+                                    <th className="table-header-cell">Responsable</th>
+                                    <th className="table-header-cell">Motivo Cambio</th>
                                     <th className="table-header-cell">Doc</th>
                                     <th className="table-header-cell">Autorización</th>
                                     <th className="table-header-cell text-right">Acciones</th>
@@ -245,15 +253,22 @@ export const CambiosDeDiaPage = () => {
                                         <td className="table-cell font-mono text-sm">{formatRut(row.rut)}</td>
                                         <td className="table-cell font-medium">{row.nombre}</td>
                                         <td className="table-cell">{displayTerminal(row.terminal_code)}</td>
-                                        <td className="table-cell">{row.date}</td>
-                                        <td className="table-cell text-xs">{row.prog_start} - {row.prog_end}</td>
-                                        <td className="table-cell text-xs">{row.reprogram_start} - {row.reprogram_end}</td>
+                                        <td className="table-cell">{row.cabezal || '-'}</td>
+                                        <td className="table-cell">{row.day_off_date}</td>
+                                        <td className="table-cell">{row.day_on_date}</td>
+                                        <td className="table-cell">{row.day_on_start || row.reprogram_start || '-'}</td>
+                                        <td className="table-cell">{row.day_on_end || row.reprogram_end || '-'}</td>
+                                        <td className="table-cell">-</td>
+                                        <td className="table-cell">{row.authorized_by || '-'}</td>
+                                        <td className="table-cell">-</td>
+                                        <td className="table-cell">-</td>
+                                        <td className="table-cell max-w-[150px] truncate" title={row.observations || ''}>{row.observations || '-'}</td>
                                         <td className="table-cell">
                                             {row.document_path ? (
-                                                <button onClick={() => handleViewDocument(row.document_path!)} className="text-brand-600 hover:underline">
+                                                <button onClick={() => handleViewDocument(row.document_path!)} className="btn btn-ghost btn-icon text-brand-600" title="Ver documento">
                                                     <Icon name="image" size={16} />
                                                 </button>
-                                            ) : '-'}
+                                            ) : <span className="text-slate-300">-</span>}
                                         </td>
                                         <td className="table-cell">{getStatusBadge(row.auth_status)}</td>
                                         <td className="table-cell">

@@ -1,0 +1,66 @@
+--- src/features/asistencia2026/pages/Asistencia2026Page.tsx
++++ src/features/asistencia2026/pages/Asistencia2026Page.tsx
+@@ -434,2 +434,60 @@
+ 
++    const handleDownloadIncidencesXlsx = () => {
++        const wb = XLSX.utils.book_new();
++        const weekRange = formatWeekRange(weekStart);
++
++        const formatDate = (dateStr: string) => {
++            if (!dateStr) return '';
++            const parts = dateStr.split('-');
++            if (parts.length === 3) return `${parts[2]}-${parts[1]}-${parts[0]}`;
++            return dateStr;
++        };
++
++        // Helper to format data
++        const mapIncidenceData = (dataArray: { rut: string; date: string }[]) => {
++            return dataArray
++                .filter(item => item.date >= startDate && item.date <= endDate)
++                .map(item => {
++                    const s = staff.find(st => st.rut === item.rut);
++                    return {
++                        'FECHA': formatDate(item.date),
++                        'RUT': item.rut,
++                        'NOMBRE': s?.nombre || 'N/A',
++                        'CARGO': s?.cargo || 'N/A',
++                        'TERMINAL': s?.terminal_code || 'N/A',
++                    };
++                });
++        };
++
++        // SHEET 1: No Marcaciones
++        const nmData = mapIncidenceData(incidences?.noMarcaciones || []);
++        const wsNM = XLSX.utils.json_to_sheet(nmData.length > 0 ? nmData : [{ 'Status': 'Sin Registros' }]);
++        wsNM['!cols'] = [{ wch: 15 }, { wch: 15 }, { wch: 30 }, { wch: 15 }, { wch: 20 }];
++        XLSX.utils.book_append_sheet(wb, wsNM, 'No Marcacion');
++
++        // SHEET 2: Sin Credenciales
++        const ncData = mapIncidenceData(incidences?.sinCredenciales || []);
++        const wsNC = XLSX.utils.json_to_sheet(ncData.length > 0 ? ncData : [{ 'Status': 'Sin Registros' }]);
++        wsNC['!cols'] = [{ wch: 15 }, { wch: 15 }, { wch: 30 }, { wch: 15 }, { wch: 20 }];
++        XLSX.utils.book_append_sheet(wb, wsNC, 'Sin Credencial');
++
++        // SHEET 3: Cambios de Dia
++        const cdData = mapIncidenceData(incidences?.cambiosDia || []);
++        const wsCD = XLSX.utils.json_to_sheet(cdData.length > 0 ? cdData : [{ 'Status': 'Sin Registros' }]);
++        wsCD['!cols'] = [{ wch: 15 }, { wch: 15 }, { wch: 30 }, { wch: 15 }, { wch: 20 }];
++        XLSX.utils.book_append_sheet(wb, wsCD, 'Cambios de Dia');
++
++        // Save
++        const fileName = `Incidencias_${weekRange.replace(/\s/g, '_').replace(/\//g, '-')}.xlsx`;
++        XLSX.writeFile(wb, fileName);
++    };
++
+     // Offboarding
+@@ -549,2 +607,9 @@
+                         <button
++                            onClick={handleDownloadIncidencesXlsx}
++                            className={`px-3 py-2 rounded-lg text-sm font-medium flex items-center gap-1 bg-amber-100 text-amber-800 hover:bg-amber-200 transition-colors border border-amber-200`}
++                            title="Descargar Incidencias (Excel)"
++                        >
++                            <Icon name="alert-triangle" size={16} />
++                            Incidencias
++                        </button>
++                        <button
+                             onClick={() => setIsPdfModalOpen(true)}

@@ -6,6 +6,7 @@
 import { supabase, isSupabaseConfigured } from '../../../shared/lib/supabaseClient';
 import { TerminalContext } from '../../../shared/types/terminal';
 import { resolveTerminalsForContext } from '../../../shared/utils/terminal';
+import { NoMarcacion, SinCredencial, CambioDia } from '../../asistencia/types';
 import {
     ShiftType,
     StaffShift,
@@ -538,10 +539,10 @@ export async function fetchIncidencesForRange(
     startDate: string,
     endDate: string
 ): Promise<{
-    noMarcaciones: { rut: string; date: string }[];
-    sinCredenciales: { rut: string; date: string }[];
-    cambiosDia: { rut: string; date: string; target_date: string }[];
-    autorizaciones: { rut: string; date: string }[];
+    noMarcaciones: NoMarcacion[];
+    sinCredenciales: SinCredencial[];
+    cambiosDia: CambioDia[];
+    autorizaciones: any[];
 }> {
     if (!isSupabaseConfigured()) {
         return { noMarcaciones: [], sinCredenciales: [], cambiosDia: [], autorizaciones: [] };
@@ -550,35 +551,35 @@ export async function fetchIncidencesForRange(
     const [nm, sc, cd, aut] = await Promise.all([
         supabase
             .from('attendance_no_marcaciones')
-            .select('rut, date')
+            .select('*')
             .in('terminal_code', terminalCodes)
             .gte('date', startDate)
             .lte('date', endDate),
         supabase
             .from('attendance_sin_credenciales')
-            .select('rut, date')
+            .select('*')
             .in('terminal_code', terminalCodes)
             .gte('date', startDate)
             .lte('date', endDate),
         supabase
             .from('attendance_cambios_dia')
-            .select('rut, date, day_on_date')
+            .select('*')
             .in('terminal_code', terminalCodes)
             .gte('date', startDate)
             .lte('date', endDate),
         supabase
             .from('attendance_autorizaciones')
-            .select('rut, authorization_date')
+            .select('*')
             .in('terminal_code', terminalCodes)
             .gte('authorization_date', startDate)
             .lte('authorization_date', endDate),
     ]);
 
     return {
-        noMarcaciones: (nm.data || []).map(r => ({ rut: r.rut, date: r.date })),
-        sinCredenciales: (sc.data || []).map(r => ({ rut: r.rut, date: r.date })),
-        cambiosDia: (cd.data || []).map(r => ({ rut: r.rut, date: r.date, target_date: r.day_on_date })),
-        autorizaciones: (aut.data || []).map(r => ({ rut: r.rut, date: r.authorization_date })),
+        noMarcaciones: (nm.data || []) as NoMarcacion[],
+        sinCredenciales: (sc.data || []) as SinCredencial[],
+        cambiosDia: (cd.data || []) as CambioDia[],
+        autorizaciones: (aut.data || []),
     };
 }
 

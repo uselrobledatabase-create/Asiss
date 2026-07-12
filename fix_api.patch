@@ -1,0 +1,20 @@
+--- src/features/asistencia2026/api/asistencia2026Api.ts
++++ src/features/asistencia2026/api/asistencia2026Api.ts
+@@ -403,3 +403,4 @@
+         .in('staff_id', staffIds)
+-        .or(`start_date.lte.${endDate},end_date.gte.${startDate}`);
++        .lte('start_date', endDate)
++        .gte('end_date', startDate);
+ 
+@@ -460,3 +460,4 @@
+         .in('staff_id', staffIds)
+-        .or(`start_date.lte.${endDate},end_date.gte.${startDate}`);
++        .lte('start_date', endDate)
++        .gte('end_date', startDate);
+ 
+@@ -516,3 +517,4 @@
+         .eq('auth_status', 'AUTORIZADO')
+-        .or(`start_date.lte.${endDate},end_date.gte.${startDate}`);
++        .lte('start_date', endDate)
++        .gte('end_date', startDate);
+ 
