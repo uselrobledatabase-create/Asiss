@@ -17,7 +17,7 @@ import { CambiosDeDiaForm } from '../forms/CambiosDeDiaForm';
 import { useCambiosDia, useAttendanceKPIs, useCreateCambioDia, useUpdateCambioDia, useAuthorize, useReject, useAttendanceRealtime } from '../hooks';
 import { getDocumentUrl } from '../api';
 import { AttendanceFilters, AUTH_STATUS_OPTIONS, CambioDia, CambioDiaFormValues } from '../types';
-import { useStaff } from '../../personal/hooks/useStaff';
+import { useStaffList } from '../../personal/hooks';
 
 type ModalState =
     | { type: 'none' }
@@ -46,9 +46,9 @@ export const CambiosDeDiaPage = () => {
     const rejectMutation = useReject();
     useAttendanceRealtime();
 
-    const staffQuery = useStaff(terminalContext);
+    const staffQuery = useStaffList(terminalContext);
     const getCargo = (rut: string) => {
-        const person = staffQuery.data?.find(s => s.rut === rut);
+        const person = staffQuery.data?.find((s: any) => s.rut === rut);
         return person?.cargo || '-';
     };
 
