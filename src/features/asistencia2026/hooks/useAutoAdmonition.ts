@@ -30,6 +30,23 @@ export const useAutoAdmonition = () => {
             const startTimeMatch = timeRange.match(/(\d{1,2}:\d{2})/);
             const startTime = startTimeMatch ? startTimeMatch[1] : "00:00";
             
+            // Format name to [APELLIDOS], [NOMBRES]
+            const nameParts = staff.nombre.split(' ');
+            let apellidos = '';
+            let nombres = '';
+            if (nameParts.length > 2) {
+                apellidos = nameParts.slice(nameParts.length - 2).join(' ');
+                nombres = nameParts.slice(0, nameParts.length - 2).join(' ');
+            } else if (nameParts.length === 2) {
+                nombres = nameParts[0];
+                apellidos = nameParts[1];
+            } else {
+                nombres = staff.nombre;
+            }
+            const nameFormatted = apellidos ? `${apellidos}, ${nombres}` : staff.nombre;
+
+            const fullDescription = `${nameFormatted}, RUT: ${staff.rut}, ${staff.cargo}, TERMINAL ${staff.terminal_code}, CON TURNO PROGRAMADO DE ${timeRange}, EL DÍA ${formattedDate}.\n\nSE CONSTATA QUE EL/LA COLABORADOR(A) NO SE PRESENTA A SU TURNO EN LA FECHA INDICADA, INCURRIENDO EN AUSENCIA INJUSTIFICADA. ASIMISMO, NO REALIZA AVISO PREVIO NI DEJA CONSTANCIA FORMAL A SU JEFATURA DIRECTA RESPECTO DE SU INASISTENCIA, IMPIDIENDO LA COORDINACIÓN OPORTUNA DE LA CONTINUIDAD OPERATIVA.\n\nESTA SITUACIÓN OBLIGA A REORGANIZAR Y REPROGRAMAR PERSONAL PARA CUBRIR LAS FUNCIONES ASIGNADAS, GENERANDO SOBRECARGA DE LABORES, RETRASOS EN LAS TAREAS DIARIAS Y AFECTACIÓN DIRECTA EN LA OPERACIÓN DEL TERMINAL.\n\nCAYENDO EN FALTA GRAVE (CÓDIGO 24).`;
+            
             const formData: AmonestacionFormData = {
                 worker_rut: staff.rut,
                 worker_name: staff.nombre,
@@ -46,7 +63,7 @@ export const useAutoAdmonition = () => {
                 involved_jefatura: '',
                 involved_companeros: '',
                 involved_other: '',
-                description: 'SE CONSTATA QUE EL/LA COLABORADOR(A) NO SE PRESENTA A SU TURNO EN LA FECHA INDICADA, INCURRIENDO EN AUSENCIA INJUSTIFICADA. ASIMISMO, NO REALIZA AVISO PREVIO NI DEJA CONSTANCIA FORMAL A SU JEFATURA DIRECTA RESPECTO DE SU INASISTENCIA, IMPIDIENDO LA COORDINACIÓN OPORTUNA DE LA CONTINUIDAD OPERATIVA.',
+                description: fullDescription,
                 witness1_name: testigoNombre,
                 witness1_rut: testigoRut,
                 witness1_cargo: testigoCargo,
