@@ -1,4 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { assertAuthorizedSupervisor } from '../../shared/utils/authorizedSupervisors';
 import { useTerminalStore } from '../../shared/state/terminalStore';
 import { useSessionStore } from '../../shared/state/sessionStore';
 import {
@@ -31,6 +32,11 @@ const taskKeys = {
     attachments: (taskId: string) => [...taskKeys.all, 'attachments', taskId] as const,
     staff: ['staff-for-assignment'] as const,
     emailSettings: (scope: string) => [...taskKeys.all, 'emailSettings', scope] as const,
+};
+
+const requireTaskManager = (supervisorName: string, actionLabel: string) => {
+    assertAuthorizedSupervisor(supervisorName, actionLabel);
+    return supervisorName;
 };
 
 // ==========================================
@@ -72,7 +78,7 @@ export const useCreateTask = () => {
 
     return useMutation({
         mutationFn: (values: TaskFormValues) =>
-            createTask(values, session?.supervisorName || ''),
+            createTask(values, requireTaskManager(session?.supervisorName || '', 'crear tareas')),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: taskKeys.all });
         },
@@ -81,10 +87,13 @@ export const useCreateTask = () => {
 
 export const useUpdateTask = () => {
     const queryClient = useQueryClient();
+    const session = useSessionStore((s) => s.session);
 
     return useMutation({
-        mutationFn: ({ id, values }: { id: string; values: Partial<TaskFormValues> }) =>
-            updateTask(id, values),
+        mutationFn: ({ id, values }: { id: string; values: Partial<TaskFormValues> }) => {
+            requireTaskManager(session?.supervisorName || '', 'editar tareas');
+            return updateTask(id, values);
+        },
         onSuccess: (_, { id }) => {
             queryClient.invalidateQueries({ queryKey: taskKeys.all });
             queryClient.invalidateQueries({ queryKey: taskKeys.detail(id) });
@@ -111,7 +120,13 @@ export const useEvaluateTask = () => {
 
     return useMutation({
         mutationFn: ({ id, accepted, note, reason }: { id: string; accepted: boolean; note?: string; reason?: string }) =>
-            evaluateTask(id, accepted, session?.supervisorName || '', note, reason),
+            evaluateTask(
+                id,
+                accepted,
+                requireTaskManager(session?.supervisorName || '', accepted ? 'aprobar tareas' : 'rechazar tareas'),
+                note,
+                reason
+            ),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: taskKeys.all });
         },
@@ -234,10 +249,13 @@ export const useTaskEmailSettings = (scopeType: 'GLOBAL' | 'TERMINAL', scopeCode
 
 export const useUpsertTaskEmailSettings = () => {
     const queryClient = useQueryClient();
+    const session = useSessionStore((s) => s.session);
 
     return useMutation({
-        mutationFn: (settings: Omit<TaskEmailSettings, 'id' | 'updated_at'>) =>
-            upsertEmailSettings(settings),
+        mutationFn: (settings: Omit<TaskEmailSettings, 'id' | 'updated_at'>) => {
+            requireTaskManager(session?.supervisorName || '', 'configurar correos de tareas');
+            return upsertEmailSettings(settings);
+        },
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: taskKeys.all });
         },

@@ -1,14 +1,15 @@
 import { TerminalCode } from '../../../shared/types/terminal';
+import {
+    AUTHORIZED_SUPERVISORS,
+    isAuthorizedSupervisor,
+    normalizeSupervisorName,
+} from '../../../shared/utils/authorizedSupervisors';
 
 /**
  * Authorized users who can approve/reject attendance records
  * Names are stored normalized (uppercase, trimmed, collapsed spaces)
  */
-export const AUTHORIZERS = [
-    'ISAAC AVILA',
-    'CLAUDIO ARRIAGADA',
-    'CRISTIAN LURASCHI',
-] as const;
+export const AUTHORIZERS = AUTHORIZED_SUPERVISORS;
 
 export type AuthorizerName = typeof AUTHORIZERS[number];
 
@@ -28,18 +29,14 @@ export const TERMINAL_CHIEFS: Partial<Record<TerminalCode, string>> = {
  * - Convert to uppercase
  */
 export const normalizeName = (name: string): string => {
-    return name
-        .trim()
-        .replace(/\s+/g, ' ')
-        .toUpperCase();
+    return normalizeSupervisorName(name);
 };
 
 /**
  * Check if a supervisor is an authorized approver
  */
 export const isAuthorizer = (supervisorName: string): boolean => {
-    const normalized = normalizeName(supervisorName);
-    return AUTHORIZERS.includes(normalized as AuthorizerName);
+    return isAuthorizedSupervisor(supervisorName);
 };
 
 /**

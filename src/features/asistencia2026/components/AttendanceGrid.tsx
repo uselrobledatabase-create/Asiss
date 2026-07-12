@@ -30,6 +30,7 @@ import {
     getSpecialShiftDetails,
 } from '../utils/shiftEngine';
 import { useSessionStore } from '../../../shared/state/sessionStore';
+import { isAuthorizedSupervisor } from '../../../shared/utils/authorizedSupervisors';
 import {
     useCreateOrUpdateMark,
     useCreateLicense,
@@ -431,9 +432,7 @@ export const AttendanceGrid = ({
         setSelectedCell(null);
     };
 
-    const isManager = session && ['Isaac', 'Claudio', 'Cristian'].some(
-        (n) => session.supervisorName?.includes(n)
-    );
+    const isManager = Boolean(session?.supervisorName && isAuthorizedSupervisor(session.supervisorName));
 
     if (isLoading) {
         return (

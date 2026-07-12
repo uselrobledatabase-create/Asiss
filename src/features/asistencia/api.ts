@@ -1,4 +1,5 @@
 import { supabase, isSupabaseConfigured } from '../../shared/lib/supabaseClient';
+import { assertAuthorizedSupervisor } from '../../shared/utils/authorizedSupervisors';
 import { TerminalCode, TerminalContext } from '../../shared/types/terminal';
 import { resolveTerminalsForContext } from '../../shared/utils/terminal';
 import { normalizeName } from './utils/authorizers';
@@ -578,6 +579,8 @@ export const authorizeRecord = async (
     id: string,
     authorizedBy: string
 ): Promise<void> => {
+    assertAuthorizedSupervisor(authorizedBy, 'autorizar registros');
+
     const { error } = await supabase
         .from(table)
         .update({
@@ -596,6 +599,8 @@ export const rejectRecord = async (
     authorizedBy: string,
     reason: string
 ): Promise<void> => {
+    assertAuthorizedSupervisor(authorizedBy, 'rechazar registros');
+
     const { error } = await supabase
         .from(table)
         .update({

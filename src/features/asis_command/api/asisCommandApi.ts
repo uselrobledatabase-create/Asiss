@@ -4,6 +4,7 @@
  */
 
 import { supabase, isSupabaseConfigured } from '../../../shared/lib/supabaseClient';
+import { assertAuthorizedSupervisor } from '../../../shared/utils/authorizedSupervisors';
 import { emailService } from '../../../shared/services/emailService';
 import { CommandLog, CommandLogInsert, CommandEmailSetting, CommandIntent, ResolvedPerson } from '../types';
 
@@ -340,6 +341,7 @@ export async function executeAuthorization(
     createdBy: string
 ): Promise<{ success: boolean; error?: string }> {
     if (!isSupabaseConfigured()) return { success: false, error: 'Supabase no configurado' };
+    assertAuthorizedSupervisor(createdBy, 'autorizar registros desde Asis Command');
 
     // Determine authorization type for DB enum
     const entryOrExit = type === 'LLEGADA' ? 'ENTRADA' : 'SALIDA';
