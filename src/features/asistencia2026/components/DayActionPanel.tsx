@@ -1,5 +1,6 @@
 /**
- * DayActionPanel - Slide-over panel for day actions
+ * DayActionPanel - Modal central para marcar asistencia de un día
+ * (presente/ausente, licencia e incidencias relacionadas)
  */
 
 import { useState } from 'react';
@@ -7,7 +8,6 @@ import { Icon } from '../../../shared/components/common/Icon';
 import { useSessionStore } from '../../../shared/state/sessionStore';
 import { useAutoAdmonition } from '../hooks/useAutoAdmonition';
 import { StaffWithShift, AttendanceMarkType, IncidenceCode } from '../types';
-import { DAY_COLORS, BUTTON_VARIANTS } from '../utils/colors';
 import { formatDayOfWeek } from '../utils/shiftEngine';
 
 interface DayActionPanelProps {
@@ -27,6 +27,13 @@ interface DayActionPanelProps {
     isManager?: boolean;
 }
 
+const INCIDENCE_LABELS: Record<IncidenceCode, { label: string; cls: string }> = {
+    NM: { label: 'No Marcación', cls: 'bg-yellow-100 text-yellow-800 border-yellow-200' },
+    NC: { label: 'Sin Credencial', cls: 'bg-orange-100 text-orange-800 border-orange-200' },
+    CD: { label: 'Cambio de Día', cls: 'bg-blue-100 text-blue-800 border-blue-200' },
+    AUT: { label: 'Autorización', cls: 'bg-green-100 text-green-800 border-green-200' },
+};
+
 export const DayActionPanel = ({
     isOpen,
     onClose,
@@ -38,9 +45,6 @@ export const DayActionPanel = ({
     onMarkPresent,
     onMarkAbsent,
     onRegisterLicense,
-    onRegisterPermission,
-    onRequestOffboarding,
-    isManager = false,
 }: DayActionPanelProps) => {
     const session = useSessionStore((s) => s.session);
     const autoAdmonition = useAutoAdmonition();
@@ -52,8 +56,20 @@ export const DayActionPanel = ({
     if (!isOpen || !staff) return null;
 
     const dayOfWeek = formatDayOfWeek(date);
-    const dayNumber = new Date(date + 'T12:00:00').getDate();
+    const dateLabel = `${dayOfWeek} ${date.split('-').reverse().join('-')}`;
     const isDesvinculado = staff.status === 'DESVINCULADO';
+    const initials = staff.nombre
+        .split(' ')
+        .filter(Boolean)
+        .slice(0, 2)
+        .map((w) => w[0])
+        .join('')
+        .toUpperCase();
+
+    const handleClose = () => {
+        setActiveForm('none');
+        onClose();
+    };
 
     const handleRegisterLicense = () => {
         onRegisterLicense(licenseStart, licenseEnd, licenseNote || undefined);
@@ -68,19 +84,17 @@ export const DayActionPanel = ({
         } else {
             if (!session) return;
             try {
-                // Generate and upload PDF
+                // Generar y subir la amonestación automática (Código 24)
                 const pdfUrl = await autoAdmonition.mutateAsync({
                     staff,
                     supervisorName: session.supervisorName,
                     date,
                     timeRange: staff.horario
                 });
-                
-                // Mark as absent
+
                 onMarkAbsent('Ausencia Injustificada');
                 setActiveForm('none');
-                
-                // Open PDF in new tab to print
+
                 window.open(pdfUrl, '_blank');
             } catch (error) {
                 console.error(error);
@@ -90,155 +104,190 @@ export const DayActionPanel = ({
     };
 
     return (
-        <>
-            {/* Backdrop */}
+        <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm"
+            onClick={handleClose}
+        >
             <div
-                className="fixed inset-0 bg-black/30 z-40 transition-opacity"
-                onClick={onClose}
-            />
-
-            {/* Panel */}
-            <div className="fixed right-0 top-0 h-full w-full max-w-md bg-white shadow-xl z-50 flex flex-col overflow-hidden">
-                {/* Header */}
-                <div className="flex items-center justify-between p-4 border-b bg-slate-50">
-                    <div>
-                        <h3 className="font-semibold text-slate-900">{staff.nombre}</h3>
-                        <p className="text-sm text-slate-500">
-                            {staff.rut} | {staff.cargo} | {dayOfWeek} {dayNumber}
-                        </p>
+                className="w-full max-w-md overflow-hidden rounded-2xl bg-white shadow-2xl"
+                onClick={(e) => e.stopPropagation()}
+            >
+                {/* ===== Header ===== */}
+                <div className="bg-gradient-to-r from-slate-800 to-slate-700 px-5 py-4">
+                    <div className="flex items-start justify-between gap-3">
+                        <div className="flex items-center gap-3 min-w-0">
+                            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-brand-500 to-brand-700 text-sm font-bold text-white">
+                                {initials}
+                            </div>
+                            <div className="min-w-0">
+                                <h3 className="truncate font-bold text-white">{staff.nombre}</h3>
+                                <p className="truncate text-xs text-slate-300">
+                                    {staff.rut} · {staff.cargo}
+                                </p>
+                            </div>
+                        </div>
+                        <button
+                            onClick={handleClose}
+                            className="rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-white/10 hover:text-white"
+                        >
+                            <Icon name="x" size={18} />
+                        </button>
                     </div>
-                    <button
-                        onClick={onClose}
-                        className="p-2 hover:bg-slate-200 rounded-lg transition-colors"
-                    >
-                        <Icon name="x" size={20} />
-                    </button>
+                    {/* Fecha */}
+                    <div className="mt-3 inline-flex items-center gap-2 rounded-lg bg-white/10 px-3 py-1.5">
+                        <Icon name="calendar" size={14} className="text-brand-300" />
+                        <span className="text-xs font-bold capitalize text-white">{dateLabel}</span>
+                        {staff.horario && (
+                            <span className="text-xs text-slate-300">· {staff.horario}</span>
+                        )}
+                    </div>
                 </div>
 
-                {/* Content */}
-                <div className="flex-1 overflow-y-auto p-4 space-y-6">
-                    {/* Status info */}
+                {/* ===== Contenido ===== */}
+                <div className="max-h-[60vh] space-y-5 overflow-y-auto p-5">
                     {isDesvinculado && (
-                        <div className="p-3 bg-slate-100 rounded-lg text-slate-600 text-sm">
-                            <Icon name="alert-triangle" size={16} className="inline mr-2" />
+                        <div className="flex items-center gap-2.5 rounded-xl border border-slate-200 bg-slate-100 px-4 py-3 text-sm text-slate-600">
+                            <Icon name="alert-triangle" size={16} className="shrink-0" />
                             Este trabajador está desvinculado. No se permiten nuevas marcaciones.
                         </div>
                     )}
 
-                    {/* Current mark */}
+                    {/* Marca actual */}
                     {currentMark && (
-                        <div className={`p-3 rounded-lg flex items-center gap-2 ${currentMark === 'P' ? DAY_COLORS.PRESENTE.bg : DAY_COLORS.AUSENTE.bg
+                        <div className={`flex items-center gap-2.5 rounded-xl border px-4 py-3 ${currentMark === 'P'
+                            ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
+                            : 'border-red-200 bg-red-50 text-red-800'
                             }`}>
-                            <Icon name={currentMark === 'P' ? 'check-circle' : 'x-circle'} size={20} />
-                            <span className="font-medium">
-                                {currentMark === 'P' ? 'Presente' : 'Ausente'}
-                            </span>
-                            {currentNote && <span className="text-sm opacity-75">- {currentNote}</span>}
+                            <Icon name={currentMark === 'P' ? 'check-circle' : 'x-circle'} size={20} className="shrink-0" />
+                            <div>
+                                <p className="text-sm font-bold">
+                                    Ya registrado: {currentMark === 'P' ? 'Presente' : 'Ausente'}
+                                </p>
+                                {currentNote && <p className="text-xs opacity-75">{currentNote}</p>}
+                            </div>
                         </div>
                     )}
 
-                    {/* Quick marks */}
+                    {/* Acciones rápidas */}
                     {!isDesvinculado && activeForm === 'none' && (
-                        <div className="space-y-2">
-                            <h4 className="text-sm font-medium text-slate-700">Marcar asistencia</h4>
-                            <div className="flex gap-2">
+                        <div>
+                            <p className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-400">
+                                Marcar asistencia
+                            </p>
+                            <div className="grid grid-cols-2 gap-3">
                                 <button
                                     type="button"
                                     onClick={() => onMarkPresent()}
-                                    className={`flex-1 py-2 rounded-lg font-medium transition-colors ${BUTTON_VARIANTS.success}`}
+                                    className="flex flex-col items-center gap-1.5 rounded-xl border-2 border-emerald-200 bg-emerald-50 py-4 transition-all hover:border-emerald-400 hover:bg-emerald-100"
                                 >
-                                    <Icon name="check" size={16} className="inline mr-1" />
-                                    Presente (P)
+                                    <span className="flex h-9 w-9 items-center justify-center rounded-full bg-emerald-500">
+                                        <Icon name="check" size={18} className="text-white" />
+                                    </span>
+                                    <span className="text-sm font-bold text-emerald-800">Presente</span>
                                 </button>
                                 <button
                                     onClick={() => setActiveForm('absent_confirm')}
-                                    className={`flex-1 py-2 rounded-lg font-medium transition-colors ${BUTTON_VARIANTS.danger}`}
+                                    className="flex flex-col items-center gap-1.5 rounded-xl border-2 border-red-200 bg-red-50 py-4 transition-all hover:border-red-400 hover:bg-red-100"
                                 >
-                                    <Icon name="x" size={16} className="inline mr-1" />
-                                    Ausente (A)
+                                    <span className="flex h-9 w-9 items-center justify-center rounded-full bg-red-500">
+                                        <Icon name="x" size={18} className="text-white" />
+                                    </span>
+                                    <span className="text-sm font-bold text-red-800">Ausente</span>
                                 </button>
                             </div>
                         </div>
                     )}
 
-                    {/* Absent confirmation */}
+                    {/* Confirmación de ausencia */}
                     {activeForm === 'absent_confirm' && (
-                        <div className="space-y-3 p-4 bg-rose-50 rounded-xl border border-rose-100">
+                        <div className="space-y-3 rounded-xl border border-rose-200 bg-rose-50 p-4">
                             <div className="flex items-center gap-2 text-rose-800">
                                 <Icon name="alert-circle" size={20} />
                                 <h4 className="font-bold">Confirmar Ausencia</h4>
                             </div>
-                            <p className="text-sm text-rose-700 font-medium">¿La ausencia de este trabajador está justificada?</p>
-                            <p className="text-xs text-rose-600/80 leading-tight">Si indica "No", se generará e imprimirá automáticamente una amonestación por falta grave (Código 24).</p>
-                            
-                            <div className="flex flex-col gap-2 mt-4">
+                            <p className="text-sm font-medium text-rose-700">
+                                ¿La ausencia de este trabajador está justificada?
+                            </p>
+                            <p className="text-xs leading-snug text-rose-600/80">
+                                Si indica "No", se generará e imprimirá automáticamente una
+                                amonestación por falta grave (Código 24).
+                            </p>
+
+                            <div className="mt-2 flex flex-col gap-2">
                                 <button
                                     onClick={() => handleConfirmAbsent(true)}
-                                    className="w-full py-2.5 rounded-lg font-bold bg-white text-rose-700 border-2 border-rose-200 hover:bg-rose-100 transition-colors"
+                                    className="w-full rounded-xl border-2 border-rose-200 bg-white py-2.5 font-bold text-rose-700 transition-colors hover:bg-rose-100"
                                 >
                                     Sí, está justificada
                                 </button>
                                 <button
                                     onClick={() => handleConfirmAbsent(false)}
                                     disabled={autoAdmonition.isPending}
-                                    className="w-full py-2.5 rounded-lg font-bold bg-rose-600 text-white hover:bg-rose-700 transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
+                                    className="flex w-full items-center justify-center gap-2 rounded-xl bg-rose-600 py-2.5 font-bold text-white transition-colors hover:bg-rose-700 disabled:opacity-50"
                                 >
-                                    {autoAdmonition.isPending ? (
-                                        <Icon name="loader" size={16} className="animate-spin" />
-                                    ) : (
-                                        <Icon name="file-text" size={16} />
-                                    )}
+                                    <Icon
+                                        name={autoAdmonition.isPending ? 'loader' : 'file-text'}
+                                        size={16}
+                                        className={autoAdmonition.isPending ? 'animate-spin' : ''}
+                                    />
                                     No, generar amonestación
                                 </button>
                                 <button
                                     onClick={() => setActiveForm('none')}
                                     disabled={autoAdmonition.isPending}
-                                    className="w-full py-2 rounded-lg font-medium text-slate-500 hover:bg-slate-100 transition-colors mt-2 text-sm"
+                                    className="w-full rounded-xl py-2 text-sm font-medium text-slate-500 transition-colors hover:bg-slate-100"
                                 >
-                                    Cancelar
+                                    Volver
                                 </button>
                             </div>
                         </div>
                     )}
 
-
-
-                    {/* Register license */}
+                    {/* Registrar licencia */}
                     {!isDesvinculado && activeForm === 'none' && (
-                        <div className="space-y-2">
-                            <h4 className="text-sm font-medium text-slate-700">Registrar</h4>
-                            <div className="flex gap-2">
-                                <button
-                                    onClick={() => setActiveForm('license')}
-                                    className={`flex-1 py-2 px-3 rounded-lg text-sm font-medium ${DAY_COLORS.LIC.bg} ${DAY_COLORS.LIC.text} border ${DAY_COLORS.LIC.border}`}
-                                >
-                                    Licencia
-                                </button>
-                            </div>
+                        <div>
+                            <p className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-400">
+                                Registrar
+                            </p>
+                            <button
+                                onClick={() => setActiveForm('license')}
+                                className="flex w-full items-center justify-between rounded-xl border-2 border-purple-200 bg-purple-50 px-4 py-3 transition-all hover:border-purple-400 hover:bg-purple-100"
+                            >
+                                <span className="flex items-center gap-2.5">
+                                    <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-purple-500">
+                                        <Icon name="file-text" size={15} className="text-white" />
+                                    </span>
+                                    <span className="text-sm font-bold text-purple-800">Licencia Médica</span>
+                                </span>
+                                <Icon name="chevron-right" size={16} className="text-purple-400" />
+                            </button>
                         </div>
                     )}
 
-                    {/* License form */}
+                    {/* Formulario de licencia */}
                     {activeForm === 'license' && (
-                        <div className="space-y-3 p-3 bg-purple-50 rounded-lg border border-purple-100">
-                            <h4 className="text-sm font-medium text-purple-800">Registrar Licencia</h4>
-                            <div className="grid grid-cols-2 gap-2">
+                        <div className="space-y-3 rounded-xl border border-purple-200 bg-purple-50 p-4">
+                            <div className="flex items-center gap-2 text-purple-800">
+                                <Icon name="file-text" size={18} />
+                                <h4 className="font-bold">Registrar Licencia</h4>
+                            </div>
+                            <div className="grid grid-cols-2 gap-3">
                                 <div>
-                                    <label className="text-xs text-slate-600">Desde</label>
+                                    <label className="mb-1 block text-xs font-medium text-slate-600">Desde</label>
                                     <input
                                         type="date"
                                         value={licenseStart}
                                         onChange={(e) => setLicenseStart(e.target.value)}
-                                        className="w-full p-2 border rounded-lg text-sm"
+                                        className="w-full rounded-lg border border-slate-300 p-2 text-sm focus:ring-2 focus:ring-purple-500"
                                     />
                                 </div>
                                 <div>
-                                    <label className="text-xs text-slate-600">Hasta</label>
+                                    <label className="mb-1 block text-xs font-medium text-slate-600">Hasta</label>
                                     <input
                                         type="date"
                                         value={licenseEnd}
                                         onChange={(e) => setLicenseEnd(e.target.value)}
-                                        className="w-full p-2 border rounded-lg text-sm"
+                                        className="w-full rounded-lg border border-slate-300 p-2 text-sm focus:ring-2 focus:ring-purple-500"
                                     />
                                 </div>
                             </div>
@@ -246,81 +295,56 @@ export const DayActionPanel = ({
                                 value={licenseNote}
                                 onChange={(e) => setLicenseNote(e.target.value)}
                                 placeholder="Notas (opcional)"
-                                className="w-full p-2 border rounded-lg text-sm resize-none"
+                                className="w-full resize-none rounded-lg border border-slate-300 p-2 text-sm focus:ring-2 focus:ring-purple-500"
                                 rows={2}
                             />
                             <div className="flex gap-2">
                                 <button
                                     onClick={handleRegisterLicense}
-                                    className="flex-1 py-2 rounded-lg font-medium bg-purple-600 text-white"
+                                    className="flex-1 rounded-xl bg-purple-600 py-2.5 font-bold text-white transition-colors hover:bg-purple-700"
                                 >
                                     Guardar
                                 </button>
                                 <button
                                     onClick={() => setActiveForm('none')}
-                                    className="px-4 py-2 rounded-lg font-medium bg-slate-100 text-slate-600"
+                                    className="rounded-xl bg-white border border-slate-200 px-4 py-2.5 font-medium text-slate-600 transition-colors hover:bg-slate-100"
                                 >
-                                    Cancelar
+                                    Volver
                                 </button>
                             </div>
                         </div>
                     )}
 
-
-
-                    {/* Incidences */}
+                    {/* Incidencias relacionadas */}
                     {incidencies.length > 0 && (
-                        <div className="space-y-2">
-                            <h4 className="text-sm font-medium text-slate-700">Incidencias relacionadas</h4>
+                        <div>
+                            <p className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-400">
+                                Incidencias del día
+                            </p>
                             <div className="flex flex-wrap gap-2">
-                                {incidencies.includes('NM') && (
-                                    <span className="px-2 py-1 text-sm bg-yellow-100 text-yellow-800 rounded">
-                                        No Marcación
+                                {incidencies.map((code) => (
+                                    <span
+                                        key={code}
+                                        className={`rounded-full border px-3 py-1 text-xs font-semibold ${INCIDENCE_LABELS[code]?.cls || 'bg-slate-100 text-slate-600'}`}
+                                    >
+                                        {INCIDENCE_LABELS[code]?.label || code}
                                     </span>
-                                )}
-                                {incidencies.includes('NC') && (
-                                    <span className="px-2 py-1 text-sm bg-orange-100 text-orange-800 rounded">
-                                        Sin Credencial
-                                    </span>
-                                )}
-                                {incidencies.includes('CD') && (
-                                    <span className="px-2 py-1 text-sm bg-blue-100 text-blue-800 rounded">
-                                        Cambio de Día
-                                    </span>
-                                )}
-                                {incidencies.includes('AUT') && (
-                                    <span className="px-2 py-1 text-sm bg-green-100 text-green-800 rounded">
-                                        Autorización
-                                    </span>
-                                )}
+                                ))}
                             </div>
-                        </div>
-                    )}
-
-                    {/* Offboarding request (managers only) */}
-                    {isManager && !isDesvinculado && onRequestOffboarding && (
-                        <div className="pt-4 border-t">
-                            <button
-                                onClick={onRequestOffboarding}
-                                className="w-full py-2 rounded-lg text-sm font-medium text-red-600 border border-red-200 hover:bg-red-50 transition-colors"
-                            >
-                                <Icon name="user-x" size={16} className="inline mr-1" />
-                                Solicitar Desvinculación
-                            </button>
                         </div>
                     )}
                 </div>
 
-                {/* Footer */}
-                <div className="p-4 border-t bg-slate-50">
+                {/* ===== Footer ===== */}
+                <div className="border-t bg-slate-50 px-5 py-3.5">
                     <button
-                        onClick={onClose}
-                        className={`w-full py-2 rounded-lg font-medium ${BUTTON_VARIANTS.secondary}`}
+                        onClick={handleClose}
+                        className="w-full rounded-xl bg-slate-200 py-2.5 text-sm font-bold text-slate-700 transition-colors hover:bg-slate-300"
                     >
                         Cerrar
                     </button>
                 </div>
             </div>
-        </>
+        </div>
     );
 };
