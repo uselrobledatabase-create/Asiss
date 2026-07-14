@@ -40,6 +40,7 @@ export interface AmonestacionFormData {
 
     responsible_name: string; // "Responsable de la constatación"
     responsible_cargo: string;
+    document_path?: string;
 
     sanction_code_id: number;
 }

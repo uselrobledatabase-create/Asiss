@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { AmonestacionFormModal } from './components/AmonestacionFormModal';
 import { Icon } from '../../shared/components/common/Icon';
 import { ConfirmDialog } from '../../shared/components/common/ConfirmDialog';
-import { fetchAmonestaciones, deleteAmonestacion, AmonestacionRecord } from './api/amonestacionesApi';
+import { fetchAmonestaciones, deleteAmonestacion, AmonestacionRecord, resolveAmonestacionDocumentUrl } from './api/amonestacionesApi';
 import { generateAmonestacionPDF } from './utils/pdfGenerator';
 import { useToastStore } from '../../shared/state/toastStore';
 import { useSessionStore } from '../../shared/state/sessionStore';
@@ -41,6 +41,16 @@ export const AmonestacionesPage = () => {
         } catch (e) {
             console.error(e);
             addToast({ type: 'error', title: 'Error', message: 'Error al generar PDF' });
+        }
+    };
+
+    const handleViewEvidence = async (record: AmonestacionRecord) => {
+        try {
+            const signedUrl = await resolveAmonestacionDocumentUrl(record);
+            window.open(signedUrl, '_blank', 'noopener,noreferrer');
+        } catch (error) {
+            console.error(error);
+            addToast({ type: 'error', title: 'Error', message: 'No se pudo abrir la evidencia adjunta' });
         }
     };
 
@@ -131,6 +141,15 @@ export const AmonestacionesPage = () => {
                                                 >
                                                     <Icon name="download" size={16} />
                                                 </button>
+                                                {(r.document_path || r.sanction_code_id === 24) && (
+                                                    <button
+                                                        onClick={() => handleViewEvidence(r)}
+                                                        className="p-2 bg-brand-50 text-brand-600 hover:bg-brand-100 rounded-lg transition-colors"
+                                                        title="Ver evidencia"
+                                                    >
+                                                        <Icon name="image" size={16} />
+                                                    </button>
+                                                )}
                                                 <button
                                                     onClick={() => setRecordToDelete(r)}
                                                     className="p-2 bg-red-50 text-red-600 hover:bg-red-100 rounded-lg transition-colors"

@@ -1,9 +1,10 @@
 import { useMutation } from '@tanstack/react-query';
 import { supabase } from '../../../shared/lib/supabaseClient';
 import { StaffWithShift } from '../types';
-import { generateAmonestacionPDF } from '../../amonestaciones/utils/pdfGenerator';
+import { createAmonestacion, deleteAmonestacion } from '../../amonestaciones/api/amonestacionesApi';
 import { AmonestacionFormData } from '../../amonestaciones/types';
 import { formatRut } from '../../personal/utils/rutUtils';
+import { generateAmonestacionPDF } from '../../amonestaciones/utils/pdfGenerator';
 
 export const useAutoAdmonition = () => {
     return useMutation({
@@ -85,6 +86,8 @@ export const useAutoAdmonition = () => {
             
             const fileExt = file.name.split('.').pop();
             const filePath = `staff/${staff.id}/admonitions/${Date.now()}.${fileExt}`;
+            let createdAmonestacionId: string | null = null;
+            let createdStaffAdmonitionId: string | null = null;
 
             // Upload PDF to Supabase Storage
             const { error: uploadError } = await supabase.storage
@@ -96,17 +99,42 @@ export const useAutoAdmonition = () => {
                 throw new Error('Error al subir el documento de amonestación');
             }
 
-            // 4. Save record to DB
-            const { error: dbError } = await supabase
-                .from('staff_admonitions')
-                .insert({
-                    staff_id: staff.id,
-                    reason: 'Ausencia injustificada (Falta Grave - Código 24)',
-                    admonition_date: date,
-                    document_path: filePath,
+            try {
+                const amonestacionRecord = await createAmonestacion({
+                    ...formData,
+                    document_path: filePath
                 });
+                createdAmonestacionId = amonestacionRecord.id;
 
-            if (dbError) throw dbError;
+                const { data: staffAdmonitionRecord, error: dbError } = await supabase
+                    .from('staff_admonitions')
+                    .insert({
+                        staff_id: staff.id,
+                        reason: 'Ausencia injustificada (Falta Grave - Código 24)',
+                        admonition_date: date,
+                        document_path: filePath,
+                    })
+                    .select('id')
+                    .single();
+
+                if (dbError) throw dbError;
+                createdStaffAdmonitionId = staffAdmonitionRecord.id as string;
+            } catch (error) {
+                if (createdStaffAdmonitionId) {
+                    await supabase.from('staff_admonitions').delete().eq('id', createdStaffAdmonitionId).then(({ error: rollbackError }) => {
+                        if (rollbackError) console.error('Rollback error deleting staff_admonition:', rollbackError);
+                    });
+                }
+                if (createdAmonestacionId) {
+                    await deleteAmonestacion(createdAmonestacionId).catch((rollbackError) => {
+                        console.error('Rollback error deleting amonestacion:', rollbackError);
+                    });
+                }
+                await supabase.storage.from('attendance-docs').remove([filePath]).then(({ error: rollbackError }) => {
+                    if (rollbackError) console.error('Rollback error deleting uploaded PDF:', rollbackError);
+                });
+                throw error;
+            }
 
             // Return the blob URL so we can download/open it
             return URL.createObjectURL(pdfBlob);

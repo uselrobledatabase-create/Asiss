@@ -43,6 +43,7 @@ CREATE TABLE IF NOT EXISTS public.amonestaciones (
     responsible_cargo TEXT NOT NULL,
 
     -- Metadata
+    document_path TEXT,
     created_by UUID DEFAULT auth.uid(),
     status TEXT DEFAULT 'GENERATED'
 );
