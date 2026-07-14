@@ -72,6 +72,28 @@ export function resolveDay(
     );
     if (hasPermission) return { date, status: 'PERMISO', turno, horario: '' };
 
+    return resolveDayPattern(staff, date, ctx);
+}
+
+/**
+ * Resolución "limpia": SOLO patrón de turnos (LIBRE o TRABAJA + horario).
+ * Ignora licencias, vacaciones y permisos. Se usa para la programación
+ * mensual oficial, que debe ir sin incidencias.
+ */
+export function resolveDayPattern(
+    staff: StaffWithShift,
+    date: string,
+    ctx: ScheduleContext
+): ResolvedDay {
+    const turno = determineDailyShift(
+        staff.horario,
+        staff.shift,
+        date,
+        ctx.specialTemplates,
+        staff.id,
+        ctx.shiftTypes
+    );
+
     // Libre según patrón de turno (u override puntual)
     let isOff = false;
     if (staff.shift) {
@@ -206,4 +228,18 @@ export function monthName(month: number): string {
 /** DD-MM-YYYY */
 export function formatDateCL(date: string): string {
     return date.split('-').reverse().join('-');
+}
+
+/**
+ * Formato oficial de horario para programación mensual: "22:00_08:00_"
+ * Toma el horario del trabajador (ej: "22:00-08:00", "10:00 - 20:00")
+ * y lo normaliza. Si no hay horario definido, usa el estándar del turno.
+ */
+export function formatHorarioOficial(horario: string, turno: 'DIA' | 'NOCHE'): string {
+    const pad = (t: string) => (t.length === 4 ? `0${t}` : t);
+    const times = (horario || '').match(/\d{1,2}:\d{2}/g);
+    if (times && times.length >= 2) {
+        return `${pad(times[0])}_${pad(times[1])}_`;
+    }
+    return turno === 'NOCHE' ? '22:00_08:00_' : '08:00_18:00_';
 }

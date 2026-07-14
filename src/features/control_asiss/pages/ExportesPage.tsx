@@ -7,7 +7,7 @@
 import { useMemo, useState } from 'react';
 import { Icon } from '../../../shared/components/common/Icon';
 import { TERMINAL_LABELS } from '../../../shared/types/terminal';
-import { useControlAsissData } from '../hooks';
+import { useControlAsissExportData } from '../hooks';
 import { exportPersonScheduleXlsx, exportMonthlyScheduleXlsx } from '../utils/xlsxExports';
 import { getExtendedMonthRange, monthName, formatDateCL } from '../utils/scheduleEngine';
 
@@ -41,17 +41,17 @@ export const ExportesPage = () => {
     const dataStart = fromDate < extRange.startDate ? fromDate : extRange.startDate;
     const dataEnd = toDate > extRange.endDate ? toDate : extRange.endDate;
 
-    const { staff, scheduleContext, isLoading } = useControlAsissData(dataStart, dataEnd);
+    const { staff, activeStaff, scheduleContext, isLoading } = useControlAsissExportData(dataStart, dataEnd);
 
     const filteredStaff = useMemo(() => {
         const q = search.trim().toLowerCase();
-        if (!q) return staff;
-        return staff.filter(
+        if (!q) return activeStaff;
+        return activeStaff.filter(
             (s) => s.nombre.toLowerCase().includes(q) || s.rut.toLowerCase().includes(q)
         );
-    }, [staff, search]);
+    }, [activeStaff, search]);
 
-    const selectedStaff = staff.find((s) => s.id === selectedStaffId);
+    const selectedStaff = activeStaff.find((s) => s.id === selectedStaffId);
 
     const rangeDays = useMemo(() => {
         if (!fromDate || !toDate || fromDate > toDate) return 0;
@@ -277,15 +277,20 @@ export const ExportesPage = () => {
                         <ul className="space-y-1.5 text-xs text-slate-500">
                             <li className="flex items-center gap-2">
                                 <Icon name="check" size={14} className="text-emerald-600" />
-                                Una hoja por terminal: El Roble, La Reina y María Angélica
+                                Formato oficial: Nº, Nombre, RUT (con guión), Área, Cargo, Zona (ER/LR),
+                                Colación, Régimen de Turno, Jornada y Feriados
                             </li>
                             <li className="flex items-center gap-2">
                                 <Icon name="check" size={14} className="text-emerald-600" />
-                                Personal agrupado por cargo, con horario por día o estado (LIBRE, LICENCIA…)
+                                Programación limpia: solo horarios (formato 22:00_08:00_) y LIBRE — sin incidencias
                             </li>
                             <li className="flex items-center gap-2">
                                 <Icon name="check" size={14} className="text-emerald-600" />
-                                Colores, leyenda y paneles congelados para revisión rápida
+                                Detecta 5X2 FIJO_42 (Lun-Vie, feriados libres) vs 5X2 ROT_42 (feriados trabaja)
+                            </li>
+                            <li className="flex items-center gap-2">
+                                <Icon name="check" size={14} className="text-emerald-600" />
+                                Incluye personal suspendido con sus horarios asignados
                             </li>
                         </ul>
 
