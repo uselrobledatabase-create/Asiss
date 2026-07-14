@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Icon } from '../../../shared/components/common/Icon';
 import { RutLookupInput } from '../../asistencia/components/RutLookupInput';
 import { Staff } from '../../personal/types';
+import { formatRut } from '../../personal/utils/rutUtils';
 import { SANCTION_CODES } from '../constants';
 import { AmonestacionFormData } from '../types';
 import { generateAmonestacionPDF } from '../utils/pdfGenerator';
@@ -17,8 +18,49 @@ interface Props {
     onSuccess?: () => void; // Callback to refresh list
 }
 
+const normalizeSearchText = (value: string) =>
+    value
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase()
+        .trim();
+
+const getFormattedRutLabel = (rut?: string) => {
+    if (!rut) return '';
+    return /^[0-9kK.-]+$/.test(rut) ? formatRut(rut) : rut.toUpperCase();
+};
+
+const getSanctionMatchScore = (query: string, code: typeof SANCTION_CODES[number]) => {
+    const normalizedQuery = normalizeSearchText(query);
+    if (!normalizedQuery) return 1;
+
+    const terms = normalizedQuery.split(/\s+/).filter(Boolean);
+    const searchableCode = String(code.code);
+    const searchableSeverity = normalizeSearchText(code.severity);
+    const searchableDescription = normalizeSearchText(code.description);
+    const searchableEvidence = normalizeSearchText(code.evidence_required);
+
+    let score = 0;
+
+    if (searchableCode === normalizedQuery) score += 1200;
+    if (searchableCode.startsWith(normalizedQuery)) score += 700;
+    if (searchableDescription.includes(normalizedQuery)) score += 520;
+    if (searchableSeverity.includes(normalizedQuery)) score += 260;
+    if (searchableEvidence.includes(normalizedQuery)) score += 180;
+
+    for (const term of terms) {
+        if (searchableCode.includes(term)) score += 220;
+        if (searchableDescription.includes(term)) score += 160;
+        if (searchableSeverity.includes(term)) score += 80;
+        if (searchableEvidence.includes(term)) score += 50;
+    }
+
+    return score;
+};
+
 export const AmonestacionFormModal = ({ open, onClose, currentUserName, currentUserCargo, onSuccess }: Props) => {
     const [selectedCodeId, setSelectedCodeId] = useState<string>('');
+    const [sanctionSearch, setSanctionSearch] = useState('');
     const [worker, setWorker] = useState<Staff | null>(null);
     const [evidence, setEvidence] = useState('');
     const [manualFacts, setManualFacts] = useState('');
@@ -32,6 +74,14 @@ export const AmonestacionFormModal = ({ open, onClose, currentUserName, currentU
         responsible_name: 'Cristian Marcelo Luraschi Muñoz',
         responsible_cargo: 'Jefe de Terminal'
     });
+    const selectedCode = SANCTION_CODES.find(code => code.code.toString() === selectedCodeId);
+    const sanctionResults = SANCTION_CODES
+        .map(code => ({ code, score: getSanctionMatchScore(sanctionSearch, code) }))
+        .filter(({ score }) => score > 0)
+        .sort((a, b) => {
+            if (!sanctionSearch.trim()) return a.code.code - b.code.code;
+            return b.score - a.score || a.code.code - b.code.code;
+        });
 
     const handleWorkerFound = (s: Staff | null) => {
         setWorker(s);
@@ -55,18 +105,15 @@ export const AmonestacionFormModal = ({ open, onClose, currentUserName, currentU
     };
 
     useEffect(() => {
-        if (!selectedCodeId || !worker) return;
+        if (!selectedCodeId || !worker || !selectedCode) return;
 
-        const code = SANCTION_CODES.find(c => c.code.toString() === selectedCodeId);
-        if (!code) return;
-
-        setEvidence(code.evidence_required);
+        setEvidence(selectedCode.evidence_required);
 
         // --- SMART LEGAL NARRATIVE GENERATOR ---
         // Header: NAME, RUT, CARGO, EN TERMINAL [TERMINAL], CON TURNO PROGRAMADO DE [TURNO], EL DÍA [FECHA]
 
         const workerName = (formData.worker_name || "____________________").toUpperCase();
-        const workerRut = (formData.worker_rut || "____________________").toUpperCase();
+        const workerRut = getFormattedRutLabel(formData.worker_rut || "____________________");
         const workerCargo = (formData.worker_cargo || "CONDUCTOR").toUpperCase();
         const terminalStr = (formData.place_terminal || "[LUGAR/TERMINAL]").toUpperCase();
         const shiftStr = (formData.shift_schedule || "____________").toUpperCase();
@@ -83,13 +130,23 @@ export const AmonestacionFormModal = ({ open, onClose, currentUserName, currentU
         const body = `\n\nSE CONSTATA QUE ${factsEncoded}`;
 
         // 3. CLOSING
-        const closing = `\n\nCAYENDO EN FALTA GRAVE (CÓDIGO ${code.code}).`;
+        const closing = `\n\nCAYENDO EN FALTA GRAVE (CÓDIGO ${selectedCode.code}).`;
 
         const fullText = `${header}${body}${closing}`;
 
-        setFormData(prev => ({ ...prev, description: fullText, sanction_code_id: code.code }));
-
-    }, [selectedCodeId, worker, formData, manualFacts]);
+        setFormData(prev => ({ ...prev, description: fullText, sanction_code_id: selectedCode.code }));
+    }, [
+        selectedCodeId,
+        selectedCode,
+        worker,
+        manualFacts,
+        formData.worker_name,
+        formData.worker_rut,
+        formData.worker_cargo,
+        formData.place_terminal,
+        formData.shift_schedule,
+        formData.date
+    ]);
 
     const handleGenerate = async () => {
         if (!worker || !formData.sanction_code_id) return;
@@ -168,21 +225,89 @@ export const AmonestacionFormModal = ({ open, onClose, currentUserName, currentU
                                     <h3 className="font-bold mb-3 text-indigo-700 text-xs uppercase tracking-wide flex items-center gap-2">
                                         <Icon name="alert-triangle" size={14} /> 2. Falta
                                     </h3>
-                                    <select
-                                        className="input w-full text-xs"
-                                        onChange={(e) => setSelectedCodeId(e.target.value)}
-                                        value={selectedCodeId}
-                                    >
-                                        <option value="">-- Seleccionar --</option>
-                                        {SANCTION_CODES.map(code => (
-                                            <option key={code.code} value={code.code.toString()}>
-                                                ({code.code}) {code.severity}
-                                            </option>
-                                        ))}
-                                    </select>
-                                    {selectedCodeId && (
-                                        <div className="mt-2 p-2 bg-amber-50 text-amber-900 text-[10px] rounded border border-amber-200 leading-tight">
-                                            {SANCTION_CODES.find(c => c.code.toString() === selectedCodeId)?.description}
+                                    <div className="relative">
+                                        <Icon name="search" size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                                        <input
+                                            type="text"
+                                            className="input w-full pl-9 pr-24 text-xs"
+                                            value={sanctionSearch}
+                                            onChange={(e) => setSanctionSearch(e.target.value)}
+                                            placeholder="Buscar por código o palabras clave..."
+                                        />
+                                        {sanctionSearch && (
+                                            <button
+                                                type="button"
+                                                onClick={() => setSanctionSearch('')}
+                                                className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md px-2 py-1 text-[10px] font-semibold text-slate-500 hover:bg-slate-100"
+                                            >
+                                                Limpiar
+                                            </button>
+                                        )}
+                                    </div>
+
+                                    <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 overflow-hidden">
+                                        <div className="flex items-center justify-between border-b border-slate-200 px-3 py-2 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+                                            <span>{sanctionSearch.trim() ? 'Coincidencias' : 'Catálogo de faltas'}</span>
+                                            <span>{sanctionResults.length} resultado{sanctionResults.length === 1 ? '' : 's'}</span>
+                                        </div>
+                                        <div className="max-h-64 overflow-y-auto">
+                                            {sanctionResults.length > 0 ? (
+                                                sanctionResults.map(({ code, score }) => {
+                                                    const isSelected = selectedCodeId === code.code.toString();
+
+                                                    return (
+                                                        <button
+                                                            key={code.code}
+                                                            type="button"
+                                                            onClick={() => setSelectedCodeId(code.code.toString())}
+                                                            className={`w-full border-b border-slate-200 px-3 py-3 text-left transition-colors last:border-b-0 ${
+                                                                isSelected
+                                                                    ? 'bg-indigo-50 ring-1 ring-inset ring-indigo-200'
+                                                                    : 'hover:bg-white'
+                                                            }`}
+                                                        >
+                                                            <div className="flex items-start justify-between gap-3">
+                                                                <div>
+                                                                    <div className="flex items-center gap-2">
+                                                                        <span className="rounded-md bg-slate-900 px-2 py-1 text-[10px] font-bold text-white">
+                                                                            Cód. {code.code}
+                                                                        </span>
+                                                                        <span className="text-[11px] font-semibold text-indigo-700">{code.severity}</span>
+                                                                    </div>
+                                                                    <p className="mt-2 text-[11px] leading-relaxed text-slate-700">{code.description}</p>
+                                                                    <p className="mt-2 text-[10px] text-slate-500">
+                                                                        Evidencia: {code.evidence_required}
+                                                                    </p>
+                                                                </div>
+                                                                {sanctionSearch.trim() && score > 1 && (
+                                                                    <span className="rounded-full bg-emerald-50 px-2 py-1 text-[10px] font-semibold text-emerald-700">
+                                                                        Coincide
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                        </button>
+                                                    );
+                                                })
+                                            ) : (
+                                                <div className="px-3 py-4 text-[11px] text-slate-500">
+                                                    No encontramos faltas con esas palabras. Prueba con términos como `aviso`, `atraso`, `agresión` o el número del código.
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    {selectedCode && (
+                                        <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3">
+                                            <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-wide text-amber-800">
+                                                <Icon name="check-circle" size={12} /> Falta seleccionada
+                                            </div>
+                                            <p className="mt-2 text-xs font-semibold text-slate-800">
+                                                Cód. {selectedCode.code} · {selectedCode.severity}
+                                            </p>
+                                            <p className="mt-1 text-[11px] leading-relaxed text-amber-900">{selectedCode.description}</p>
+                                            <p className="mt-2 text-[10px] text-amber-800">
+                                                Evidencia requerida: {selectedCode.evidence_required}
+                                            </p>
                                         </div>
                                     )}
                                 </div>

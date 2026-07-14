@@ -1,6 +1,20 @@
 import jsPDF from 'jspdf';
 import { AmonestacionFormData } from '../types';
 import { LOGO_RBU_BASE64 } from './logos';
+import { formatRut, normalizeRut } from '../../personal/utils/rutUtils';
+
+const formatDocumentRut = (rut?: string) => {
+    if (!rut) return '';
+
+    const rawRut = rut.trim();
+    const normalizedRut = normalizeRut(rawRut);
+
+    if (normalizedRut.length >= 2 && /^[0-9kK]+$/.test(normalizedRut)) {
+        return formatRut(normalizedRut);
+    }
+
+    return rawRut.toUpperCase();
+};
 
 export const generateAmonestacionPDF = (data: AmonestacionFormData, returnBlob: boolean = false): Blob | void => {
     // Letter Size: 215.9mm x 279.4mm
@@ -124,7 +138,7 @@ export const generateAmonestacionPDF = (data: AmonestacionFormData, returnBlob: 
     const LABEL_W1 = 20;
     drawLabeledBox('Nombre', data.worker_name, MARGIN_X, y, CONTENT_W, LABEL_W1);
     y += 6.5;
-    drawLabeledBox('Rut', data.worker_rut, MARGIN_X, y, CONTENT_W, LABEL_W1);
+    drawLabeledBox('Rut', formatDocumentRut(data.worker_rut), MARGIN_X, y, CONTENT_W, LABEL_W1);
     y += 6.5;
     drawLabeledBox('Cargo', data.worker_cargo, MARGIN_X, y, CONTENT_W, LABEL_W1);
     y += 9;
@@ -292,8 +306,8 @@ export const generateAmonestacionPDF = (data: AmonestacionFormData, returnBlob: 
         cellLabel('Firma', ry);
     };
 
-    drawWitnessCol(MARGIN_X, data.witness1_name, data.witness1_rut, data.witness1_cargo);
-    drawWitnessCol(MARGIN_X + tColW, data.witness2_name, data.witness2_rut, data.witness2_cargo);
+    drawWitnessCol(MARGIN_X, data.witness1_name, formatDocumentRut(data.witness1_rut), data.witness1_cargo);
+    drawWitnessCol(MARGIN_X + tColW, data.witness2_name, formatDocumentRut(data.witness2_rut), data.witness2_cargo);
     y += tH + 4;
 
     // ============ VII. RESPONSABLE DE LA CONSTATACIÓN ============
@@ -318,5 +332,5 @@ export const generateAmonestacionPDF = (data: AmonestacionFormData, returnBlob: 
     if (returnBlob) {
         return doc.output('blob');
     }
-    doc.save(`Amonestacion_Acta_${data.worker_rut}.pdf`);
+    doc.save(`Amonestacion_Acta_${normalizeRut(data.worker_rut || 'sin_rut')}.pdf`);
 };

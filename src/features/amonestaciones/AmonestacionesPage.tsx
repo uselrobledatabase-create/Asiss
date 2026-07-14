@@ -6,6 +6,7 @@ import { fetchAmonestaciones, deleteAmonestacion, AmonestacionRecord } from './a
 import { generateAmonestacionPDF } from './utils/pdfGenerator';
 import { useToastStore } from '../../shared/state/toastStore';
 import { useSessionStore } from '../../shared/state/sessionStore';
+import { formatRut } from '../personal/utils/rutUtils';
 
 export const AmonestacionesPage = () => {
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -111,7 +112,7 @@ export const AmonestacionesPage = () => {
                                         </td>
                                         <td className="px-4 py-3">
                                             <div className="font-bold text-slate-700">{r.worker_name}</div>
-                                            <div className="text-xs text-slate-500">{r.worker_rut}</div>
+                                            <div className="text-xs text-slate-500">{formatRut(r.worker_rut)}</div>
                                         </td>
                                         <td className="px-4 py-3">
                                             <span className="inline-flex items-center px-2 py-1 rounded-md bg-amber-50 text-amber-700 text-xs font-bold border border-amber-100">

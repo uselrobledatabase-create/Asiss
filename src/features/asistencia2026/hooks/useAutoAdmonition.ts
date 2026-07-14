@@ -3,6 +3,7 @@ import { supabase } from '../../../shared/lib/supabaseClient';
 import { StaffWithShift } from '../types';
 import { generateAmonestacionPDF } from '../../amonestaciones/utils/pdfGenerator';
 import { AmonestacionFormData } from '../../amonestaciones/types';
+import { formatRut } from '../../personal/utils/rutUtils';
 
 export const useAutoAdmonition = () => {
     return useMutation({
@@ -48,7 +49,7 @@ export const useAutoAdmonition = () => {
             const cleanCargo = staff.cargo.replace(/_/g, ' ');
             const cleanTerminal = (staff.terminal_code || '').replace(/_/g, ' ');
 
-            const fullDescription = `${nameFormatted}, RUT: ${staff.rut}, ${cleanCargo}, TERMINAL ${cleanTerminal}, CON TURNO PROGRAMADO DE ${timeRange}, EL DÍA ${formattedDate}.\n\nSE CONSTATA QUE EL COLABORADOR NO SE PRESENTA A SU TURNO EN LA FECHA INDICADA, INCURRIENDO EN AUSENCIA INJUSTIFICADA. ASIMISMO, NO REALIZA AVISO PREVIO NI DEJA CONSTANCIA FORMAL A SU JEFATURA DIRECTA RESPECTO DE SU INASISTENCIA, IMPIDIENDO LA COORDINACIÓN OPORTUNA DE LA CONTINUIDAD OPERATIVA.\n\nESTA SITUACIÓN OBLIGA A REORGANIZAR Y REPROGRAMAR PERSONAL PARA CUBRIR LAS FUNCIONES ASIGNADAS, GENERANDO SOBRECARGA DE LABORES, RETRASOS EN LAS TAREAS DIARIAS Y AFECTACIÓN DIRECTA EN LA OPERACIÓN DEL TERMINAL.\n\nCAYENDO EN FALTA GRAVE (CÓDIGO 24).`;
+            const fullDescription = `${nameFormatted}, RUT: ${formatRut(staff.rut)}, ${cleanCargo}, TERMINAL ${cleanTerminal}, CON TURNO PROGRAMADO DE ${timeRange}, EL DÍA ${formattedDate}.\n\nSE CONSTATA QUE EL COLABORADOR NO SE PRESENTA A SU TURNO EN LA FECHA INDICADA, INCURRIENDO EN AUSENCIA INJUSTIFICADA. ASIMISMO, NO REALIZA AVISO PREVIO NI DEJA CONSTANCIA FORMAL A SU JEFATURA DIRECTA RESPECTO DE SU INASISTENCIA, IMPIDIENDO LA COORDINACIÓN OPORTUNA DE LA CONTINUIDAD OPERATIVA.\n\nESTA SITUACIÓN OBLIGA A REORGANIZAR Y REPROGRAMAR PERSONAL PARA CUBRIR LAS FUNCIONES ASIGNADAS, GENERANDO SOBRECARGA DE LABORES, RETRASOS EN LAS TAREAS DIARIAS Y AFECTACIÓN DIRECTA EN LA OPERACIÓN DEL TERMINAL.\n\nCAYENDO EN FALTA GRAVE (CÓDIGO 24).`;
             
             const formData: AmonestacionFormData = {
                 worker_rut: staff.rut,
