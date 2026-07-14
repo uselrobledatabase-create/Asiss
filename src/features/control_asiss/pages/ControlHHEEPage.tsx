@@ -299,28 +299,6 @@ export const ControlHHEEPage = () => {
                         })}
                     </div>
 
-                    {/* Info del archivo + exclusiones */}
-                    <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-                        <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-xs text-slate-600">
-                            <span className="flex items-center gap-1.5">
-                                <Icon name="file-text" size={14} className="text-blue-600" />
-                                <b>{analysis.fileName}</b> (hoja "{analysis.sheetName}")
-                            </span>
-                            <span>{analysis.rowsRead} filas leídas desde la fila 15</span>
-                            <span>{analysis.people.length} personas con cargo autorizado</span>
-                            {analysis.excludedCargos.length > 0 && (
-                                <span className="text-slate-400">
-                                    Excluidos: {analysis.excludedCargos.map((e) => `${e.cargo} (${e.count})`).join(' · ')}
-                                </span>
-                            )}
-                        </div>
-                        {analysis.warnings.map((w, i) => (
-                            <p key={i} className="mt-2 flex items-center gap-1.5 text-xs font-medium text-amber-700">
-                                <Icon name="alert-circle" size={14} /> {w}
-                            </p>
-                        ))}
-                    </div>
-
                     {/* Leyenda */}
                     <div className="flex flex-wrap items-center gap-3 text-xs text-slate-500">
                         <span className="font-bold text-slate-600">Leyenda:</span>
@@ -360,13 +338,14 @@ const PersonRow = ({ person: p, rank }: { person: HHEEPersonRow; rank: number })
             <span className={`w-7 shrink-0 text-center text-xs font-bold ${rank <= 3 ? 'text-slate-700' : 'text-slate-300'}`}>
                 {rank}
             </span>
-            <div className="w-60 min-w-0 shrink-0">
-                <p className="truncate text-sm font-semibold text-slate-800">{p.nombre}</p>
-                <p className="text-xs text-slate-400">{p.rut} · {p.terminal}</p>
+            {/* Nombre completo: usa todo el espacio disponible */}
+            <div className="min-w-0 flex-1">
+                <p className="break-words text-sm font-semibold text-slate-800">{p.nombre}</p>
+                <p className="text-xs text-slate-400">{p.rut} · {p.cargo} · {p.terminal}</p>
             </div>
 
             {/* Barra vs límite (marca roja en 40h) */}
-            <div className="relative hidden h-3 flex-1 overflow-hidden rounded-full bg-slate-100 sm:block">
+            <div className="relative hidden h-3 w-64 shrink-0 overflow-hidden rounded-full bg-slate-100 lg:block xl:w-80">
                 <div className={`h-full rounded-full ${meta.bar} transition-all`} style={{ width: `${barPct}%` }} />
                 <div
                     className="absolute top-0 h-full w-0.5 bg-red-600"

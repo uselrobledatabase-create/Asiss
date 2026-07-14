@@ -46,6 +46,79 @@ export const CARGOS_HHEE = [
     'CONDUCTOR DE PATIO 2',
 ] as const;
 
+/**
+ * Agrupación por familia de cargo, en el orden oficial de presentación
+ * (independiente del número de patio 1, 2 o 3).
+ */
+export const FAMILIAS_CARGO: { nombre: string; cargos: string[] }[] = [
+    { nombre: 'SUPERVISORES DE PATIO', cargos: ['SUPERVISOR DE PATIO 1', 'SUPERVISOR DE PATIO 2', 'SUPERVISOR DE PATIO 3'] },
+    { nombre: 'INSPECTORES DE PATIO', cargos: ['INSPECTOR DE PATIO 1', 'INSPECTOR DE PATIO 2', 'INSPECTOR DE PATIO 3'] },
+    { nombre: 'CONDUCTORES DE PATIO', cargos: ['CONDUCTOR DE PATIO 1', 'CONDUCTOR DE PATIO 2'] },
+    { nombre: 'PLANILLEROS', cargos: ['PLANILLERO'] },
+    { nombre: 'CLEANERS', cargos: ['CLEANER'] },
+    { nombre: 'MOVILIZADORES DE PATIO', cargos: ['MOVILIZADOR DE PATIO 3'] },
+];
+
+/** RUT para display: 12345678-9 (con guión) */
+export function rutDisplay(rut: string): string {
+    const clean = String(rut).replace(/[.\s-]/g, '').toUpperCase();
+    if (clean.length < 2) return rut;
+    return `${clean.slice(0, -1)}-${clean.slice(-1)}`;
+}
+
+/**
+ * Repara texto mal codificado (mojibake) frecuente en planillas exportadas:
+ * - UTF-8 leído como Latin-1 ("QUIÃ‘ONEZ" → "QUIÑONEZ")
+ * - Caracteres cirílicos/CJK incrustados en palabras latinas por doble
+ *   conversión de codificación (я → Ñ)
+ */
+// Caracteres cp1252 (0x80-0x9F) que aparecen cuando bytes UTF-8 se
+// decodifican como Windows-1252; se necesitan para revertir el mojibake
+const CP1252_REVERSE: Record<string, number> = {
+    '\u20AC': 0x80, '\u201A': 0x82, '\u0192': 0x83, '\u201E': 0x84, '\u2026': 0x85,
+    '\u2020': 0x86, '\u2021': 0x87, '\u02C6': 0x88, '\u2030': 0x89, '\u0160': 0x8A,
+    '\u2039': 0x8B, '\u0152': 0x8C, '\u017D': 0x8E, '\u2018': 0x91, '\u2019': 0x92,
+    '\u201C': 0x93, '\u201D': 0x94, '\u2022': 0x95, '\u2013': 0x96, '\u2014': 0x97,
+    '\u02DC': 0x98, '\u2122': 0x99, '\u0161': 0x9A, '\u203A': 0x9B, '\u0153': 0x9C,
+    '\u017E': 0x9E, '\u0178': 0x9F,
+};
+
+/** Revierte UTF-8 decodificado erroneamente como Windows-1252/Latin-1 */
+function undoUtf8AsCp1252(s: string): string | null {
+    const bytes = new Uint8Array(s.length);
+    for (let i = 0; i < s.length; i++) {
+        const code = s.charCodeAt(i);
+        if (code <= 0xff) bytes[i] = code;
+        else if (CP1252_REVERSE[s[i]] !== undefined) bytes[i] = CP1252_REVERSE[s[i]];
+        else return null; // caracter que no proviene de cp1252: no aplica
+    }
+    try {
+        const repaired = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+        return repaired.includes('\uFFFD') ? null : repaired;
+    } catch {
+        return null;
+    }
+}
+
+export function repairText(s: string): string {
+    if (!s) return s;
+    let out = s;
+
+    // Caso clasico: UTF-8 decodificado como Windows-1252/Latin-1 ("\u00C3\u2018" -> "\u00D1")
+    if (/[\u00C3\u00C2][\u0080-\u00FF\u0100-\u017F\u2000-\u206F\u20AC\u2122\u02C6\u02DC]/.test(out)) {
+        const repaired = undoUtf8AsCp1252(out);
+        if (repaired) out = repaired;
+    }
+
+    // Sustituciones puntuales observadas en archivos de HHEE
+    out = out
+        .replace(/\u044F/g, '\u00D1')                     // 'ya' cirilica incrustada -> N con tilde
+        .replace(/\u00F1(?=[A-Z\u00C1\u00C9\u00CD\u00D3\u00DA])/g, '\u00D1') // n~ minuscula dentro de palabra en mayusculas
+        .replace(/\uFFFD/g, '\u00D1');                    // caracter de reemplazo en nombres
+
+    return out;
+}
+
 export function normalizeRutKey(rut: string): string {
     return String(rut).replace(/[.\s-]/g, '').toUpperCase();
 }
@@ -224,7 +297,7 @@ export async function analyzeHHEEFile(
         const matched = staffByRut.get(rutKey);
         if (!matched) rutsNoEncontrados.add(rutRaw);
 
-        const nombre = matched?.nombre || cellText(row[COL_NOMBRE]) || rutRaw;
+        const nombre = repairText(matched?.nombre || cellText(row[COL_NOMBRE]) || rutRaw);
         const terminal = matched
             ? (TERMINAL_LABELS[matched.terminal_code as TerminalCode] || matched.terminal_code)
             : '—';
@@ -239,7 +312,7 @@ export async function analyzeHHEEFile(
 
         seenRuts.set(rutKey, people.length);
         people.push({
-            rut: matched?.rut || rutRaw,
+            rut: rutDisplay(matched?.rut || rutRaw),
             nombre,
             cargo,
             terminal,
@@ -257,15 +330,18 @@ export async function analyzeHHEEFile(
 
     people.sort((a, b) => b.totalHoras - a.totalHoras);
 
-    // ---- Resumen por cargo (orden oficial, luego por total desc) ----
-    const cargos: HHEECargoSummary[] = CARGOS_HHEE
-        .map((cargo): HHEECargoSummary | null => {
-            const del = people.filter((p) => p.cargo === cargo);
+    // ---- Resumen por FAMILIA de cargo, en orden oficial fijo:
+    // Supervisores → Inspectores → Conductores → Planilleros → Cleaners
+    // (independiente del patio 1, 2 o 3). Dentro de cada familia,
+    // personas de mayor a menor HHEE.
+    const cargos: HHEECargoSummary[] = FAMILIAS_CARGO
+        .map((familia): HHEECargoSummary | null => {
+            const del = people.filter((p) => familia.cargos.includes(p.cargo));
             if (del.length === 0) return null;
             const total = round2(del.reduce((acc, p) => acc + p.totalHoras, 0));
             const top = del[0]; // ya vienen ordenadas desc
             return {
-                cargo,
+                cargo: familia.nombre,
                 personas: del.length,
                 totalHoras: total,
                 promedio: round2(total / del.length),
@@ -276,8 +352,7 @@ export async function analyzeHHEEFile(
                 people: del,
             };
         })
-        .filter((c): c is HHEECargoSummary => c !== null)
-        .sort((a, b) => b.totalHoras - a.totalHoras);
+        .filter((c): c is HHEECargoSummary => c !== null);
 
     const totalHoras = round2(people.reduce((acc, p) => acc + p.totalHoras, 0));
     const sobreLimiteCount = people.filter((p) => p.totalHoras >= HHEE_LIMITE_SEMANAL).length;
