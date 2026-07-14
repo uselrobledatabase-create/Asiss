@@ -1,22 +1,50 @@
 /**
  * Control ASISS - Analizador de Excel de Horas Extra (HHEE)
  *
- * Lee un archivo Excel flexible: detecta automáticamente la fila de
- * encabezados y las columnas de RUT / Nombre / Fecha / Horas.
- * Soporta horas en decimal (1.5), texto HH:MM (01:30) y serial Excel.
+ * Layout fijo del archivo oficial:
+ * - Los datos parten en la FILA 15 hacia abajo
+ * - Columna A: RUT · Columna B: Nombre · Columna C: Cargo
+ * - Columna S: Total de HHEE del período consultado
+ *
+ * Solo se analizan los cargos autorizados (lista CARGOS_HHEE). El resto
+ * se reporta como excluido para transparencia.
+ *
+ * Límite de referencia: 40 horas semanales. Puede superarse solo de
+ * forma condicional según necesidad operacional, por eso se alerta
+ * desde las 40 hrs.
  */
 
 import * as XLSX from 'xlsx';
 import { StaffWithShift } from '../../asistencia2026/types';
 import { TERMINAL_LABELS, TerminalCode } from '../../../shared/types/terminal';
-import { HHEEAnalysis, HHEEPersonSummary, HHEERecord } from '../types';
+import { HHEEAnalysis, HHEECargoSummary, HHEEEstado, HHEEPersonRow } from '../types';
 
-const RUT_HEADER = /rut/i;
-const NAME_HEADER = /nombre|trabajador|funcionario|empleado/i;
-const DATE_HEADER = /fecha|d[ií]a/i;
-const HOURS_HEADER = /hh\s*\.?\s*ee|hora|extra|50\s*%|100\s*%|cantidad|total/i;
+// ---- Layout fijo ----
+const DATA_START_ROW = 14;  // índice 0-based → fila 15 del Excel
+const COL_RUT = 0;          // A
+const COL_NOMBRE = 1;       // B
+const COL_CARGO = 2;        // C
+const COL_TOTAL = 18;       // S
 
-const DAILY_LEGAL_LIMIT = 2; // hrs extra máximas por día (referencia legal Chile)
+// ---- Límites (horas del período consultado) ----
+export const HHEE_LIMITE_SEMANAL = 40;  // límite semanal — superable solo por necesidad operacional
+export const HHEE_UMBRAL_PROXIMO = 30;  // aviso preventivo
+export const HHEE_UMBRAL_CRITICO = 60;  // exceso severo
+
+/** Cargos autorizados para el análisis (orden oficial de presentación) */
+export const CARGOS_HHEE = [
+    'SUPERVISOR DE PATIO 1',
+    'SUPERVISOR DE PATIO 2',
+    'SUPERVISOR DE PATIO 3',
+    'INSPECTOR DE PATIO 1',
+    'INSPECTOR DE PATIO 2',
+    'INSPECTOR DE PATIO 3',
+    'PLANILLERO',
+    'CLEANER',
+    'MOVILIZADOR DE PATIO 3',
+    'CONDUCTOR DE PATIO 1',
+    'CONDUCTOR DE PATIO 2',
+] as const;
 
 export function normalizeRutKey(rut: string): string {
     return String(rut).replace(/[.\s-]/g, '').toUpperCase();
@@ -27,64 +55,68 @@ function cellText(v: unknown): string {
     return String(v).trim();
 }
 
-/** Convierte un valor de celda a horas decimales. Retorna null si no es interpretable. */
+/** Normaliza cargo: mayúsculas, sin tildes, espacios colapsados, sin "DE" */
+function normalizeCargo(cargo: string): string {
+    return cellText(cargo)
+        .toUpperCase()
+        .normalize('NFD')
+        .replace(/[̀-ͯ]/g, '')
+        .replace(/[^A-Z0-9\s]/g, ' ')
+        .split(/\s+/)
+        .filter((w) => w && w !== 'DE' && w !== 'DEL')
+        .join(' ');
+}
+
+const CARGO_CANONICO = new Map<string, string>(
+    CARGOS_HHEE.map((c) => [normalizeCargo(c), c])
+);
+
+function matchCargo(cargoRaw: string): string | null {
+    return CARGO_CANONICO.get(normalizeCargo(cargoRaw)) ?? null;
+}
+
+function looksLikeRut(s: string): boolean {
+    return /^\d{1,2}\.?\d{3}\.?\d{3}-?[\dkK]$/.test(s.trim()) || /^\d{7,8}-?[\dkK]$/.test(s.trim());
+}
+
+/** Convierte la celda de total a horas decimales (decimal, HH:MM o serial Excel). */
 function parseHours(v: unknown): number | null {
     if (v === null || v === undefined || v === '') return null;
 
     if (typeof v === 'number') {
         if (!isFinite(v) || v < 0) return null;
-        // Serial de tiempo Excel: fracción de día (0.0625 = 1:30)
-        if (v > 0 && v < 1) return Math.round(v * 24 * 100) / 100;
-        // Números grandes no son horas (probablemente otra columna)
-        if (v > 400) return null;
+        // Serial de tiempo Excel: fracción de día (ej: 1.6875 = 40:30)
+        if (v > 0 && v < 15) {
+            // Ambiguo: podría ser decimal directo (1.5 hrs) o serial (36 hrs).
+            // En la columna S de este archivo el valor viene en horas decimales.
+            return Math.round(v * 100) / 100;
+        }
+        if (v > 744) return null; // más de un mes de horas: no es HHEE
         return Math.round(v * 100) / 100;
     }
 
     const s = cellText(v).replace(',', '.');
     if (!s) return null;
 
-    // Formato HH:MM
+    // Formato HH:MM (ej: "42:30")
     const hm = s.match(/^(\d{1,3}):(\d{2})$/);
     if (hm) {
         return Math.round((parseInt(hm[1], 10) + parseInt(hm[2], 10) / 60) * 100) / 100;
     }
 
     const num = parseFloat(s);
-    if (!isNaN(num) && num >= 0 && num <= 400) return Math.round(num * 100) / 100;
+    if (!isNaN(num) && num >= 0 && num <= 744) return Math.round(num * 100) / 100;
     return null;
 }
 
-/** Convierte celda a fecha YYYY-MM-DD si es posible. */
-function parseDate(v: unknown): string | null {
-    if (v === null || v === undefined || v === '') return null;
-
-    if (typeof v === 'number' && v > 20000 && v < 70000) {
-        // Serial de fecha Excel
-        const parsed = XLSX.SSF.parse_date_code(v);
-        if (parsed) {
-            const mm = String(parsed.m).padStart(2, '0');
-            const dd = String(parsed.d).padStart(2, '0');
-            return `${parsed.y}-${mm}-${dd}`;
-        }
-    }
-
-    const s = cellText(v);
-    // DD-MM-YYYY o DD/MM/YYYY
-    let m = s.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})/);
-    if (m) {
-        return `${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`;
-    }
-    // YYYY-MM-DD
-    m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
-    if (m) {
-        return `${m[1]}-${m[2].padStart(2, '0')}-${m[3].padStart(2, '0')}`;
-    }
-    return null;
+function estadoDe(horas: number): HHEEEstado {
+    if (horas >= HHEE_UMBRAL_CRITICO) return 'CRITICO';
+    if (horas >= HHEE_LIMITE_SEMANAL) return 'SOBRE_LIMITE';
+    if (horas >= HHEE_UMBRAL_PROXIMO) return 'PROXIMO';
+    return 'OK';
 }
 
-function looksLikeRut(s: string): boolean {
-    return /^\d{1,2}\.?\d{3}\.?\d{3}-?[\dkK]$/.test(s.trim()) || /^\d{7,8}-?[\dkK]$/.test(s.trim());
-}
+const round2 = (n: number) => Math.round(n * 100) / 100;
 
 export async function analyzeHHEEFile(
     file: File,
@@ -95,183 +127,146 @@ export async function analyzeHHEEFile(
 
     const warnings: string[] = [];
 
-    // Elegir la primera hoja con datos
+    // Elegir la primera hoja que tenga datos más allá de la fila 15
     let sheetName = wb.SheetNames[0];
     let rows: unknown[][] = [];
     for (const name of wb.SheetNames) {
-        const sheet = wb.Sheets[name];
-        const parsed = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, defval: '' });
-        if (parsed.length > 1) {
+        const parsed = XLSX.utils.sheet_to_json<unknown[]>(wb.Sheets[name], { header: 1, defval: '' });
+        if (parsed.length > DATA_START_ROW) {
             sheetName = name;
             rows = parsed;
             break;
         }
     }
-    if (rows.length === 0) {
-        throw new Error('El archivo no tiene datos legibles.');
-    }
-
-    // ---- Detectar fila de encabezados ----
-    let headerRowIdx = -1;
-    let rutCol = -1;
-    let nameCol = -1;
-    let dateCol = -1;
-    let hourCols: number[] = [];
-    let hourColNames: string[] = [];
-
-    const scanLimit = Math.min(rows.length, 25);
-    for (let i = 0; i < scanLimit; i++) {
-        const row = rows[i] || [];
-        const rutIdx = row.findIndex((c) => RUT_HEADER.test(cellText(c)));
-        if (rutIdx === -1) continue;
-
-        const hIdxs: number[] = [];
-        const hNames: string[] = [];
-        row.forEach((c, idx) => {
-            const txt = cellText(c);
-            if (idx !== rutIdx && txt && HOURS_HEADER.test(txt) && !NAME_HEADER.test(txt) && !DATE_HEADER.test(txt)) {
-                hIdxs.push(idx);
-                hNames.push(txt);
-            }
-        });
-
-        if (hIdxs.length > 0) {
-            headerRowIdx = i;
-            rutCol = rutIdx;
-            hourCols = hIdxs;
-            hourColNames = hNames;
-            nameCol = row.findIndex((c) => NAME_HEADER.test(cellText(c)));
-            dateCol = row.findIndex((c) => DATE_HEADER.test(cellText(c)));
-            break;
-        }
-    }
-
-    if (headerRowIdx === -1) {
+    if (rows.length <= DATA_START_ROW) {
         throw new Error(
-            'No se encontró una fila de encabezados con columnas RUT y HORAS/HHEE. ' +
-            'Verifica que el Excel tenga una columna "RUT" y al menos una columna de horas (ej: "HHEE", "Horas Extra", "50%", "100%").'
+            `El archivo no tiene datos desde la fila ${DATA_START_ROW + 1}. ` +
+            'Verifica que sea el Excel oficial de HHEE (datos desde la fila 15: A=RUT, B=Nombre, C=Cargo, S=Total HHEE).'
         );
     }
 
-    // ---- Mapa de dotación por RUT ----
+    // ---- Dotación por RUT (para terminal) ----
     const staffByRut = new Map<string, StaffWithShift>();
     for (const s of staff) {
         staffByRut.set(normalizeRutKey(s.rut), s);
     }
 
-    // ---- Leer registros ----
-    const records: HHEERecord[] = [];
+    // ---- Leer filas desde la fila 15 ----
+    const people: HHEEPersonRow[] = [];
+    const excludedMap = new Map<string, number>();
     const rutsNoEncontrados = new Set<string>();
+    const seenRuts = new Map<string, number>(); // rut → índice en people (consolida duplicados)
+    let rowsRead = 0;
 
-    for (let i = headerRowIdx + 1; i < rows.length; i++) {
+    for (let i = DATA_START_ROW; i < rows.length; i++) {
         const row = rows[i] || [];
-        const rutRaw = cellText(row[rutCol]);
-        if (!rutRaw) continue;
-        if (!looksLikeRut(rutRaw)) {
-            // filas de totales u otros textos
+        const rutRaw = cellText(row[COL_RUT]);
+        if (!rutRaw || !looksLikeRut(rutRaw)) continue; // filas vacías, totales o texto
+
+        rowsRead++;
+
+        const cargoRaw = cellText(row[COL_CARGO]);
+        const cargo = matchCargo(cargoRaw);
+        if (!cargo) {
+            const key = cargoRaw ? cargoRaw.toUpperCase() : '(SIN CARGO)';
+            excludedMap.set(key, (excludedMap.get(key) || 0) + 1);
             continue;
         }
 
-        let totalRow = 0;
-        let anyHours = false;
-        for (const hc of hourCols) {
-            const h = parseHours(row[hc]);
-            if (h !== null) {
-                totalRow += h;
-                anyHours = true;
-            }
-        }
-        if (!anyHours || totalRow <= 0) continue;
+        const horas = parseHours(row[COL_TOTAL]) ?? 0;
 
         const rutKey = normalizeRutKey(rutRaw);
         const matched = staffByRut.get(rutKey);
         if (!matched) rutsNoEncontrados.add(rutRaw);
 
-        records.push({
-            rut: rutRaw,
-            nombre: matched?.nombre || (nameCol >= 0 ? cellText(row[nameCol]) : '') || rutRaw,
-            fecha: dateCol >= 0 ? parseDate(row[dateCol]) : null,
-            horas: Math.round(totalRow * 100) / 100,
-            origen: `Fila ${i + 1}`,
+        const nombre = matched?.nombre || cellText(row[COL_NOMBRE]) || rutRaw;
+        const terminal = matched
+            ? (TERMINAL_LABELS[matched.terminal_code as TerminalCode] || matched.terminal_code)
+            : '—';
+
+        // Duplicado del mismo RUT: sumar horas (algunas planillas repiten fila)
+        if (seenRuts.has(rutKey)) {
+            const idx = seenRuts.get(rutKey)!;
+            people[idx].totalHoras = round2(people[idx].totalHoras + horas);
+            people[idx].estado = estadoDe(people[idx].totalHoras);
+            continue;
+        }
+
+        seenRuts.set(rutKey, people.length);
+        people.push({
+            rut: matched?.rut || rutRaw,
+            nombre,
+            cargo,
+            terminal,
+            totalHoras: round2(horas),
+            estado: estadoDe(horas),
         });
     }
 
-    if (records.length === 0) {
-        warnings.push('Se detectaron los encabezados pero ninguna fila con RUT válido y horas > 0.');
+    if (people.length === 0) {
+        throw new Error(
+            'No se encontró ninguna fila con RUT válido y cargo autorizado desde la fila 15. ' +
+            'Revisa que la columna C tenga los cargos oficiales (ej: SUPERVISOR DE PATIO 1, PLANILLERO, CLEANER…).'
+        );
     }
-
-    // ---- Resumen por persona ----
-    const byPerson = new Map<string, HHEEPersonSummary & { _dayHours: Map<string, number> }>();
-
-    for (const rec of records) {
-        const key = normalizeRutKey(rec.rut);
-        const matched = staffByRut.get(key);
-
-        if (!byPerson.has(key)) {
-            byPerson.set(key, {
-                rut: matched?.rut || rec.rut,
-                nombre: matched?.nombre || rec.nombre,
-                terminal: matched
-                    ? (TERMINAL_LABELS[matched.terminal_code as TerminalCode] || matched.terminal_code)
-                    : 'No encontrado',
-                cargo: matched?.cargo?.toUpperCase() || '—',
-                totalHoras: 0,
-                registros: 0,
-                diasConExceso: 0,
-                maxHorasDia: 0,
-                _dayHours: new Map(),
-            });
-        }
-
-        const p = byPerson.get(key)!;
-        p.totalHoras = Math.round((p.totalHoras + rec.horas) * 100) / 100;
-        p.registros++;
-        if (rec.fecha) {
-            const acc = (p._dayHours.get(rec.fecha) || 0) + rec.horas;
-            p._dayHours.set(rec.fecha, acc);
-        } else {
-            // sin fecha: tratar el registro como un "día" individual
-            p.maxHorasDia = Math.max(p.maxHorasDia, rec.horas);
-            if (rec.horas > DAILY_LEGAL_LIMIT) p.diasConExceso++;
-        }
-    }
-
-    const people: HHEEPersonSummary[] = Array.from(byPerson.values()).map((p) => {
-        for (const h of p._dayHours.values()) {
-            p.maxHorasDia = Math.max(p.maxHorasDia, h);
-            if (h > DAILY_LEGAL_LIMIT) p.diasConExceso++;
-        }
-        const { _dayHours, ...rest } = p;
-        void _dayHours;
-        return rest;
-    });
 
     people.sort((a, b) => b.totalHoras - a.totalHoras);
 
-    const totalHoras = Math.round(people.reduce((acc, p) => acc + p.totalHoras, 0) * 100) / 100;
+    // ---- Resumen por cargo (orden oficial, luego por total desc) ----
+    const cargos: HHEECargoSummary[] = CARGOS_HHEE
+        .map((cargo): HHEECargoSummary | null => {
+            const del = people.filter((p) => p.cargo === cargo);
+            if (del.length === 0) return null;
+            const total = round2(del.reduce((acc, p) => acc + p.totalHoras, 0));
+            const top = del[0]; // ya vienen ordenadas desc
+            return {
+                cargo,
+                personas: del.length,
+                totalHoras: total,
+                promedio: round2(total / del.length),
+                maximo: top.totalHoras,
+                maxPersona: top.nombre,
+                sobreLimite: del.filter((p) => p.totalHoras >= HHEE_LIMITE_SEMANAL).length,
+                proximos: del.filter((p) => p.estado === 'PROXIMO').length,
+                people: del,
+            };
+        })
+        .filter((c): c is HHEECargoSummary => c !== null)
+        .sort((a, b) => b.totalHoras - a.totalHoras);
+
+    const totalHoras = round2(people.reduce((acc, p) => acc + p.totalHoras, 0));
+    const sobreLimiteCount = people.filter((p) => p.totalHoras >= HHEE_LIMITE_SEMANAL).length;
+    const criticoCount = people.filter((p) => p.estado === 'CRITICO').length;
 
     if (rutsNoEncontrados.size > 0) {
         warnings.push(
-            `${rutsNoEncontrados.size} RUT(s) del Excel no están en la dotación activa (se incluyen igual en el análisis).`
+            `${rutsNoEncontrados.size} RUT(s) del archivo no están en la dotación activa (se analizan igual, sin terminal).`
+        );
+    }
+
+    const excludedCargos = Array.from(excludedMap.entries())
+        .map(([cargo, count]) => ({ cargo, count }))
+        .sort((a, b) => b.count - a.count);
+
+    if (excludedCargos.length > 0) {
+        const totalExcluded = excludedCargos.reduce((acc, e) => acc + e.count, 0);
+        warnings.push(
+            `${totalExcluded} fila(s) excluida(s) por cargo fuera de la lista autorizada.`
         );
     }
 
     return {
         fileName: file.name,
         sheetName,
-        headerRow: headerRowIdx + 1,
-        columns: {
-            rut: `Col ${rutCol + 1}`,
-            nombre: nameCol >= 0 ? `Col ${nameCol + 1}` : undefined,
-            fecha: dateCol >= 0 ? `Col ${dateCol + 1}` : undefined,
-            horas: hourColNames,
-        },
-        records,
+        rowsRead,
+        excludedCargos,
         people,
+        cargos,
         totalHoras,
+        promedioPersona: round2(totalHoras / people.length),
+        sobreLimiteCount,
+        criticoCount,
         rutsNoEncontrados: Array.from(rutsNoEncontrados),
         warnings,
     };
 }
-
-export { DAILY_LEGAL_LIMIT };
