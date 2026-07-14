@@ -47,6 +47,7 @@ import {
 } from '../utils/shiftEngine';
 import { GridFilters, StaffWithShift, Asistencia2026KPIs } from '../types';
 import * as XLSX from 'xlsx';
+import { exportWeeklyAttendanceXlsx } from '../utils/weeklyXlsxExport';
 
 const TERMINALS: { value: TerminalCode | 'ALL'; label: string }[] = [
     { value: 'ALL', label: 'Todos' },
@@ -93,6 +94,7 @@ export const Asistencia2026Page = () => {
     // Modals
     const [isPdfModalOpen, setIsPdfModalOpen] = useState(false);
     const [isAdvancedReportOpen, setIsAdvancedReportOpen] = useState(false);
+    const [isExporting, setIsExporting] = useState(false);
     const [offboardingStaff, setOffboardingStaff] = useState<StaffWithShift | null>(null);
     const [shiftConfigStaff, setShiftConfigStaff] = useState<StaffWithShift | null>(null);
 
@@ -185,251 +187,18 @@ export const Asistencia2026Page = () => {
         setFilters((f) => ({ ...f, terminal }));
     };
 
-    // Export XLSX - Professional Dashboard & Report
-    const handleExportXlsx = () => {
-        const wb = XLSX.utils.book_new();
-        const weekRange = formatWeekRange(weekStart);
-
-        // Helper to format date for column headers
-        const formatDateHeader = (dateStr: string) => {
-            const d = new Date(dateStr + 'T12:00:00');
-            const days = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
-            return `${days[d.getDay()]} ${d.getDate()}/${d.getMonth() + 1}`;
-        };
-
-        const getStatusText = (s: StaffWithShift, date: string): string => {
-            const mark = marks.find(m => m.staff_id === s.id && m.mark_date === date);
-            const hasLicense = licenses.some(l => l.staff_id === s.id && date >= l.start_date && date <= l.end_date);
-            const hasVacation = vacations.some(v => v.staff_id === s.id && date >= v.start_date && date <= v.end_date);
-            const hasPerm = permissions.some(p => p.staff_id === s.id && date >= p.start_date && date <= p.end_date);
-
-            if (hasLicense) return 'LIC';
-            if (hasVacation) return 'VAC';
-            if (hasPerm) return 'PER';
-            if (mark) return mark.mark;
-
-            const shiftType = s.shift ? shiftTypes.find(st => st.code === s.shift!.shift_type_code) : null;
-            let isOff = false;
-
-            if (s.shift) {
-                let effectiveShiftType = shiftType;
-                if (!effectiveShiftType?.pattern_json) {
-                    effectiveShiftType = getFallbackShiftType(s.shift.shift_type_code);
-                }
-
-                if (effectiveShiftType?.pattern_json) {
-                    const specialTemplateFound = specialTemplates.find(t => t.staff_id === s.id);
-                    const overrideFound = overrides.find(o => o.staff_id === s.id && o.override_date === date);
-
-                    isOff = isOffDay(
-                        date,
-                        s.shift.shift_type_code,
-                        s.shift.variant_code,
-                        effectiveShiftType.pattern_json,
-                        specialTemplateFound,
-                        overrideFound
-                    );
-                } else {
-                    const dayOfWeek = new Date(date + 'T12:00:00').getDay();
-                    isOff = dayOfWeek === 0 || dayOfWeek === 6;
-                }
-            } else {
-                const dayOfWeek = new Date(date + 'T12:00:00').getDay();
-                isOff = dayOfWeek === 0 || dayOfWeek === 6;
-            }
-
-            if (isOff) return 'L';
-
-            // Check for Special Details (D/N, Early Exit)
-            if (s.shift && s.shift.shift_type_code === 'ESPECIAL') {
-                const specialTemplateFound = specialTemplates.find(t => t.staff_id === s.id);
-                if (specialTemplateFound) {
-                    const details = getSpecialShiftDetails(date, specialTemplateFound);
-                    if (details.earlyExit) return `Salida: ${details.earlyExit}`;
-                }
-            }
-
-            return '-';
-        };
-
-        // ===== SHEET 1: DASHBOARD / GENERAL =====
-        const totalMarks = marks.length;
-        const totalLicenses = licenses.filter(l => l.start_date <= endDate && l.end_date >= startDate).length;
-        const totalVacations = vacations.filter(v => v.start_date <= endDate && v.end_date >= startDate).length;
-        const totalIncidences = (incidences?.noMarcaciones.length || 0) + (incidences?.sinCredenciales.length || 0) + (incidences?.cambiosDia.length || 0) + (incidences?.autorizaciones.length || 0);
-
-        const dashboardData = [
-            { Concepto: 'REPORTE SEMANAL ASISTENCIA 2026', Valor: '' },
-            { Concepto: 'Semana', Valor: weekRange },
-            { Concepto: 'Fecha y Hora Generación', Valor: new Date().toLocaleString('es-CL') },
-            { Concepto: 'Generado Por', Valor: session?.supervisorName || 'Sistema' },
-            { Concepto: '', Valor: '' },
-            { Concepto: 'RESUMEN ESTADÍSTICO', Valor: '' },
-            { Concepto: 'Total Personal Activo', Valor: staff.length },
-            { Concepto: 'Total Marcas Recibidas', Valor: totalMarks },
-            { Concepto: 'Licencias Médicas Activas', Valor: totalLicenses },
-            { Concepto: 'Vacaciones en Curso', Valor: totalVacations },
-            { Concepto: 'Incidencias Totales', Valor: totalIncidences },
-            { Concepto: 'Amonestaciones/Informes', Valor: admonitions.length },
-        ];
-        const wsDashboard = XLSX.utils.json_to_sheet(dashboardData, { skipHeader: true });
-        wsDashboard['!cols'] = [{ wch: 30 }, { wch: 40 }];
-        // Add minimal title styling mock by merging
-        wsDashboard['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 1 } }];
-        XLSX.utils.book_append_sheet(wb, wsDashboard, 'Resumen Gerencial');
-
-
-        // ===== SHEET 2: ASISTENCIA DETALLADA =====
-        const attendanceData = staff.map(s => {
-            const row: Record<string, string> = {
-                'RUT': s.rut,
-                'NOMBRE COMPLETO': s.nombre,
-                'CARGO': s.cargo,
-                'TERMINAL': s.terminal_code,
-                'TURNO': s.horario || '',
-            };
-            for (const date of weekDates) {
-                row[formatDateHeader(date)] = getStatusText(s, date);
-            }
-            return row;
-        });
-
-        const wsAttendance = XLSX.utils.json_to_sheet(attendanceData);
-        wsAttendance['!cols'] = [
-            { wch: 12 }, { wch: 35 }, { wch: 20 }, { wch: 12 }, { wch: 15 },
-            ...weekDates.map(() => ({ wch: 12 })),
-        ];
-        XLSX.utils.book_append_sheet(wb, wsAttendance, 'Asistencia Detallada');
-
-
-        // ===== SHEET 3: NO MARCACIONES =====
-        const nmData = incidences?.noMarcaciones
-            ?.filter(item => item.date >= startDate && item.date <= endDate)
-            ?.map(item => {
-                const s = staff.find(st => st.rut === item.rut);
-                return {
-                    'FECHA': formatDateDDMMYYYY(item.date),
-                    'RUT': item.rut,
-                    'NOMBRE': s?.nombre || 'N/A',
-                    'CARGO': s?.cargo || 'N/A',
-                    'TERMINAL': s?.terminal_code || 'N/A',
-                };
-            }) || [];
-        const wsNM = XLSX.utils.json_to_sheet(nmData.length > 0 ? nmData : [{ 'Status': 'Sin Registros' }]);
-        wsNM['!cols'] = [{ wch: 12 }, { wch: 12 }, { wch: 30 }, { wch: 15 }, { wch: 12 }];
-        XLSX.utils.book_append_sheet(wb, wsNM, 'No Marcacion');
-
-
-        // ===== SHEET 4: SIN CREDENCIAL =====
-        const scData = incidences?.sinCredenciales
-            ?.filter(item => item.date >= startDate && item.date <= endDate)
-            ?.map(item => {
-                const s = staff.find(st => st.rut === item.rut);
-                return {
-                    'FECHA': formatDateDDMMYYYY(item.date),
-                    'RUT': item.rut,
-                    'NOMBRE': s?.nombre || 'N/A',
-                    'CARGO': s?.cargo || 'N/A',
-                    'TERMINAL': s?.terminal_code || 'N/A',
-                };
-            }) || [];
-        const wsSC = XLSX.utils.json_to_sheet(scData.length > 0 ? scData : [{ 'Status': 'Sin Registros' }]);
-        wsSC['!cols'] = [{ wch: 12 }, { wch: 12 }, { wch: 30 }, { wch: 15 }, { wch: 12 }];
-        XLSX.utils.book_append_sheet(wb, wsSC, 'Sin Credencial');
-
-
-        // ===== SHEET 5: CAMBIOS DE DÍA =====
-        const cdData = incidences?.cambiosDia
-            ?.filter(item => item.date >= startDate && item.date <= endDate)
-            ?.map(item => {
-                const s = staff.find(st => st.rut === item.rut);
-                return {
-                    'FECHA ORIGINAL': formatDateDDMMYYYY(item.day_off_date),
-                    'FECHA CAMBIO': formatDateDDMMYYYY(item.day_on_date),
-                    'RUT': item.rut,
-                    'NOMBRE': s?.nombre || 'N/A',
-                    'CARGO': s?.cargo || 'N/A',
-                };
-            }) || [];
-        const wsCD = XLSX.utils.json_to_sheet(cdData.length > 0 ? cdData : [{ 'Status': 'Sin Registros' }]);
-        wsCD['!cols'] = [{ wch: 15 }, { wch: 15 }, { wch: 12 }, { wch: 30 }, { wch: 15 }];
-        XLSX.utils.book_append_sheet(wb, wsCD, 'Cambios de Dia');
-
-
-        // ===== SHEET 6: AUTORIZACIONES =====
-        const autData = incidences?.autorizaciones
-            ?.filter(item => item.date >= startDate && item.date <= endDate)
-            ?.map(item => {
-                const s = staff.find(st => st.rut === item.rut);
-                return {
-                    'FECHA': formatDateDDMMYYYY(item.authorization_date),
-                    'RUT': item.rut,
-                    'NOMBRE': s?.nombre || 'N/A',
-                    'CARGO': s?.cargo || 'N/A',
-                };
-            }) || [];
-        const wsAut = XLSX.utils.json_to_sheet(autData.length > 0 ? autData : [{ 'Status': 'Sin Registros' }]);
-        wsAut['!cols'] = [{ wch: 12 }, { wch: 12 }, { wch: 30 }, { wch: 15 }];
-        XLSX.utils.book_append_sheet(wb, wsAut, 'Autorizaciones');
-
-
-        // ===== SHEET 7: VACACIONES =====
-        const vacData = vacations
-            .filter(v => v.end_date >= startDate && v.start_date <= endDate)
-            .map(v => {
-                const s = staff.find(st => st.id === v.staff_id);
-                return {
-                    'RUT': s?.rut || 'N/A',
-                    'NOMBRE': s?.nombre || 'N/A',
-                    'CARGO': s?.cargo || 'N/A',
-                    'INICIO': v.start_date,
-                    'TERMINO': v.end_date,
-                };
-            });
-        const wsVac = XLSX.utils.json_to_sheet(vacData.length > 0 ? vacData : [{ 'Status': 'Sin Registros' }]);
-        wsVac['!cols'] = [{ wch: 12 }, { wch: 30 }, { wch: 15 }, { wch: 12 }, { wch: 12 }];
-        XLSX.utils.book_append_sheet(wb, wsVac, 'Vacaciones');
-
-
-        // ===== SHEET 8: LICENCIAS =====
-        const licData = licenses
-            .filter(l => l.end_date >= startDate && l.start_date <= endDate)
-            .map(l => {
-                const s = staff.find(st => st.id === l.staff_id);
-                return {
-                    'RUT': s?.rut || 'N/A',
-                    'NOMBRE': s?.nombre || 'N/A',
-                    'CARGO': s?.cargo || 'N/A',
-                    'INICIO': l.start_date,
-                    'TERMINO': l.end_date,
-                    'NOTA': l.note || '',
-                };
-            });
-        const wsLic = XLSX.utils.json_to_sheet(licData.length > 0 ? licData : [{ 'Status': 'Sin Registros' }]);
-        wsLic['!cols'] = [{ wch: 12 }, { wch: 30 }, { wch: 15 }, { wch: 12 }, { wch: 12 }, { wch: 30 }];
-        XLSX.utils.book_append_sheet(wb, wsLic, 'Licencias');
-
-
-        // ===== SHEET 9: INFORMES (ADMONITIONS) =====
-        const informData = admonitions
-            .filter(a => a.date >= startDate && a.date <= endDate)
-            .map(a => {
-                const s = staff.find(st => st.id === a.staff_id);
-                return {
-                    'FECHA': a.date,
-                    'RUT': s?.rut || 'N/A',
-                    'NOMBRE': s?.nombre || 'N/A',
-                    'CARGO': s?.cargo || 'N/A',
-                    'MOTIVO': a.reason,
-                };
-            });
-        const wsInf = XLSX.utils.json_to_sheet(informData.length > 0 ? informData : [{ 'Status': 'Sin Registros' }]);
-        wsInf['!cols'] = [{ wch: 12 }, { wch: 12 }, { wch: 30 }, { wch: 15 }, { wch: 50 }];
-        XLSX.utils.book_append_sheet(wb, wsInf, 'Informes');
-
-        // Save
-        const fileName = `Reporte_Asistencia_${weekRange.replace(/\s/g, '_').replace(/\//g, '-')}.xlsx`;
-        XLSX.writeFile(wb, fileName);
+    // Export XLSX - Reporte semanal oficial (ExcelJS, datos frescos incl. suspendidos)
+    const handleExportXlsx = async () => {
+        if (isExporting) return;
+        setIsExporting(true);
+        try {
+            await exportWeeklyAttendanceXlsx(weekDates, session?.supervisorName || 'Sistema');
+        } catch (error) {
+            console.error('Error exportando asistencia semanal:', error);
+            alert(error instanceof Error ? error.message : 'Error al generar el Excel de asistencia.');
+        } finally {
+            setIsExporting(false);
+        }
     };
 
     const handleDownloadIncidencesXlsx = () => {
@@ -647,10 +416,12 @@ export const Asistencia2026Page = () => {
                         </button>
                         <button
                             onClick={handleExportXlsx}
-                            className={`px-3 py-2 rounded-lg text-sm font-medium flex items-center gap-1 ${BUTTON_VARIANTS.secondary}`}
+                            disabled={isExporting}
+                            className="px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-1.5 bg-gradient-to-r from-emerald-600 to-teal-600 text-white hover:from-emerald-700 hover:to-teal-700 shadow-sm transition-all disabled:opacity-60 disabled:cursor-wait"
+                            title="Descargar reporte semanal de asistencia (Excel oficial)"
                         >
-                            <Icon name="download" size={16} />
-                            <span className="hidden sm:inline">Exportar XLSX</span>
+                            <Icon name={isExporting ? 'loader' : 'download'} size={16} className={isExporting ? 'animate-spin' : ''} />
+                            <span className="hidden sm:inline">{isExporting ? 'Generando…' : 'Descargar Asistencia'}</span>
                         </button>
                         <button
                             onClick={() => setIsAdvancedReportOpen(true)}
