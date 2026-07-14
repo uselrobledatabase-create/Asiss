@@ -7,7 +7,7 @@ export interface SessionInfo {
 }
 
 export interface SessionService {
-  startSession: (supervisorName: string, terminalCode: TerminalCode | null) => Promise<SessionInfo>;
+  startSession: (supervisorName: string, terminalCode: TerminalCode | null, password: string) => Promise<SessionInfo>;
   getSession: () => Promise<SessionInfo | null>;
   logout: () => Promise<void>;
 }

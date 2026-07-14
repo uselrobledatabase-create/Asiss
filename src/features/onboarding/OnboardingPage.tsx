@@ -3,17 +3,9 @@ import { useNavigate } from 'react-router-dom';
 import { sessionService } from '../../shared/services/sessionService';
 import { useSessionStore } from '../../shared/state/sessionStore';
 import { useTerminalStore } from '../../shared/state/terminalStore';
-import { terminalOptions, EL_ROBLE_SUBTERMINALS_SET } from '../../shared/utils/terminal';
-import { TerminalCode, TerminalContext } from '../../shared/types/terminal';
+import { defaultTerminalContext } from '../../shared/utils/terminal';
+import { AUTHORIZED_SUPERVISORS, assertValidLoginCredentials, normalizeSupervisorName } from '../../shared/utils/authorizedSupervisors';
 import { Icon } from '../../shared/components/common/Icon';
-
-type LoginTerminal = TerminalCode | 'ALL';
-
-const resolveTerminalContext = (t: LoginTerminal): TerminalContext => {
-  if (t === 'ALL') return { mode: 'ALL' };
-  if (EL_ROBLE_SUBTERMINALS_SET.has(t as TerminalCode)) return { mode: 'GROUP', value: 'GRUPO_ROBLE' };
-  return { mode: 'TERMINAL', value: t as TerminalCode };
-};
 
 export const OnboardingPage = () => {
   const navigate = useNavigate();
@@ -21,7 +13,8 @@ export const OnboardingPage = () => {
   const session = useSessionStore((state) => state.session);
   const setTerminalContext = useTerminalStore((state) => state.setContext);
   const [supervisorName, setSupervisorName] = useState('');
-  const [loginTerminal, setLoginTerminal] = useState<LoginTerminal>('ALL');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
@@ -30,14 +23,26 @@ export const OnboardingPage = () => {
     }
   }, [session, navigate]);
 
+  useEffect(() => {
+    setTerminalContext(defaultTerminalContext);
+  }, [setTerminalContext]);
+
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    setSubmitting(true);
-    const sessionTerminal: TerminalCode | null = loginTerminal === 'ALL' ? null : loginTerminal as TerminalCode;
-    const session = await sessionService.startSession(supervisorName, sessionTerminal);
-    setSession(session);
-    setTerminalContext(resolveTerminalContext(loginTerminal));
-    navigate('/personal');
+    setError(null);
+
+    try {
+      setSubmitting(true);
+      assertValidLoginCredentials(supervisorName, password);
+      const session = await sessionService.startSession(supervisorName, null, password);
+      setSession(session);
+      setTerminalContext(defaultTerminalContext);
+      navigate('/personal');
+    } catch (submitError) {
+      setError(submitError instanceof Error ? submitError.message : 'No fue posible iniciar sesión.');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -97,47 +102,72 @@ export const OnboardingPage = () => {
                   className="input pl-10"
                   value={supervisorName}
                   onChange={(e) => setSupervisorName(e.target.value)}
-                  placeholder="Ej: Ana Pérez"
+                  placeholder="Ingresa un nombre autorizado"
+                  autoComplete="off"
                   required
+                  list="authorized-supervisors"
                 />
+              </div>
+              <datalist id="authorized-supervisors">
+                {AUTHORIZED_SUPERVISORS.map((name) => (
+                  <option key={name} value={name} />
+                ))}
+              </datalist>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {AUTHORIZED_SUPERVISORS.map((name) => (
+                  <button
+                    key={name}
+                    type="button"
+                    onClick={() => {
+                      setSupervisorName(name);
+                      setError(null);
+                    }}
+                    className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors ${
+                      normalizeSupervisorName(supervisorName) === name
+                        ? 'border-brand-500 bg-brand-50 text-brand-700'
+                        : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50'
+                    }`}
+                  >
+                    {name}
+                  </button>
+                ))}
               </div>
             </div>
 
-            {/* Terminal */}
+            {/* Password */}
             <div>
-              <label className="label">Terminal</label>
+              <label className="label">Contraseña de Acceso</label>
               <div className="relative">
                 <Icon
-                  name="building"
+                  name="key"
                   size={18}
                   className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none z-10"
                 />
-                <select
-                  className="input pl-10 appearance-none cursor-pointer"
-                  value={loginTerminal}
-                  onChange={(e) => setLoginTerminal(e.target.value as LoginTerminal)}
-                  style={{
-                    backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%2394a3b8'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E")`,
-                    backgroundRepeat: 'no-repeat',
-                    backgroundPosition: 'right 12px center',
-                    backgroundSize: '16px',
-                    paddingRight: '40px',
-                  }}
-                >
-                  <option value="ALL">Todos los terminales</option>
-                  {terminalOptions.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
+                <input
+                  type="password"
+                  className="input pl-10"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="Ingresa la clave de acceso"
+                  autoComplete="current-password"
+                  required
+                />
               </div>
+              <p className="mt-2 text-xs text-slate-500">
+                El acceso inicia siempre con visibilidad sobre todos los terminales.
+              </p>
             </div>
+
+            {error && (
+              <div className="rounded-xl border border-danger-200 bg-danger-50 px-4 py-3 text-sm text-danger-700">
+                {error}
+              </div>
+            )}
 
             {/* Submit Button */}
             <button
               type="submit"
-              disabled={submitting || !supervisorName}
+              disabled={submitting || !supervisorName || !password}
               className="btn btn-primary w-full py-3.5 text-base"
             >
               {submitting ? (
