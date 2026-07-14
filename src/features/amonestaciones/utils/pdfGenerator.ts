@@ -16,6 +16,48 @@ const formatDocumentRut = (rut?: string) => {
     return rawRut.toUpperCase();
 };
 
+const fitTextToBox = (
+    doc: jsPDF,
+    text: string,
+    width: number,
+    height: number,
+    initialFontSize: number,
+    minFontSize: number,
+    initialLineHeight: number,
+    minLineHeight: number
+) => {
+    let fontSize = initialFontSize;
+    let lineHeightFactor = initialLineHeight;
+    doc.setFontSize(fontSize);
+    let lines = doc.splitTextToSize(text, width) as string[];
+
+    const getTextHeight = () => lines.length * fontSize * lineHeightFactor * 0.352778;
+
+    while (getTextHeight() > height && fontSize > minFontSize) {
+        fontSize -= 0.25;
+        doc.setFontSize(fontSize);
+        lines = doc.splitTextToSize(text, width) as string[];
+    }
+
+    while (getTextHeight() > height && lineHeightFactor > minLineHeight) {
+        lineHeightFactor -= 0.05;
+    }
+
+    if (getTextHeight() > height) {
+        while (getTextHeight() > height && fontSize > 4.5) {
+            fontSize -= 0.1;
+            doc.setFontSize(fontSize);
+            lines = doc.splitTextToSize(text, width) as string[];
+        }
+    }
+
+    return {
+        fontSize,
+        lineHeightFactor,
+        lines
+    };
+};
+
 export const generateAmonestacionPDF = (data: AmonestacionFormData, returnBlob: boolean = false): Blob | void => {
     // Letter Size: 215.9mm x 279.4mm
     const doc = new jsPDF({
@@ -237,15 +279,30 @@ export const generateAmonestacionPDF = (data: AmonestacionFormData, returnBlob: 
     y += drawSectionTitle('V. Descripción Detallada de los Hechos', y);
 
     const descH = 46;
+    const descPaddingX = 4;
+    const descPaddingTop = 5;
+    const descPaddingBottom = 3;
     doc.setDrawColor(GRAY_BORDER);
     doc.setLineWidth(0.2);
     doc.rect(MARGIN_X, y, CONTENT_W, descH);
 
     doc.setFont('helvetica', 'normal');
-    doc.setFontSize(8.5);
     doc.setTextColor(0);
-    const splitDesc = doc.splitTextToSize((data.description || '').toUpperCase(), CONTENT_W - 8);
-    doc.text(splitDesc, MARGIN_X + 4, y + 5, { lineHeightFactor: 1.35 });
+    const descriptionText = (data.description || '').toUpperCase();
+    const fittedDescription = fitTextToBox(
+        doc,
+        descriptionText,
+        CONTENT_W - (descPaddingX * 2),
+        descH - descPaddingTop - descPaddingBottom,
+        8.5,
+        5.25,
+        1.35,
+        1.05
+    );
+    doc.setFontSize(fittedDescription.fontSize);
+    doc.text(fittedDescription.lines, MARGIN_X + descPaddingX, y + descPaddingTop, {
+        lineHeightFactor: fittedDescription.lineHeightFactor
+    });
     y += descH + 3.5;
 
     // ============ VI. TESTIGOS PRESENCIALES ============
