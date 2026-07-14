@@ -79,34 +79,73 @@ function looksLikeRut(s: string): boolean {
     return /^\d{1,2}\.?\d{3}\.?\d{3}-?[\dkK]$/.test(s.trim()) || /^\d{7,8}-?[\dkK]$/.test(s.trim());
 }
 
-/** Convierte la celda de total a horas decimales (decimal, HH:MM o serial Excel). */
-function parseHours(v: unknown): number | null {
-    if (v === null || v === undefined || v === '') return null;
+/**
+ * Convierte la celda de Total HHEE (columna S) a horas decimales.
+ *
+ * CLAVE: Excel guarda duraciones como serial numérico donde la parte
+ * ENTERA son DÍAS y la parte decimal es la fracción del día. Por eso
+ * "41:14:16" se almacena como ~1.7182 (1 día = 24 hrs + 17:14:16).
+ * Cuando la celda tiene formato de tiempo se debe leer el valor
+ * numérico ORIGINAL y multiplicarlo por 24 (cada día suma 24 horas),
+ * NUNCA interpretarlo como fecha ni como horas decimales directas.
+ */
+function parseDurationCell(cell: XLSX.CellObject | undefined): number | null {
+    if (!cell || cell.v === null || cell.v === undefined || cell.v === '') return null;
 
-    if (typeof v === 'number') {
+    // Celda numérica: decidir por el FORMATO si es duración serial o decimal
+    if (cell.t === 'n' && typeof cell.v === 'number') {
+        const v = cell.v;
         if (!isFinite(v) || v < 0) return null;
-        // Serial de tiempo Excel: fracción de día (ej: 1.6875 = 40:30)
-        if (v > 0 && v < 15) {
-            // Ambiguo: podría ser decimal directo (1.5 hrs) o serial (36 hrs).
-            // En la columna S de este archivo el valor viene en horas decimales.
-            return Math.round(v * 100) / 100;
+
+        const fmt = String(cell.z ?? '');
+        const shown = String(cell.w ?? '');
+        // Formato de tiempo: [h]:mm:ss, hh:mm, h:mm:ss, etc. — o el texto
+        // visible parece duración H:MM
+        const isTimeFormat =
+            (/[hH]/.test(fmt) && fmt.includes(':')) ||
+            /^\d{1,4}:\d{2}(:\d{2})?$/.test(shown);
+
+        if (isTimeFormat) {
+            // Serial de duración: días completos × 24 + fracción del día en horas
+            const horas = v * 24;
+            if (horas > 744) return null; // más de un mes: dato corrupto
+            return Math.round(horas * 100) / 100;
         }
-        if (v > 744) return null; // más de un mes de horas: no es HHEE
-        return Math.round(v * 100) / 100;
+
+        // Sin formato de tiempo: horas decimales directas
+        if (v <= 744) return Math.round(v * 100) / 100;
+        return null;
     }
 
-    const s = cellText(v).replace(',', '.');
+    // Celda fecha (si el archivo se leyó con cellDates): convertir desde epoca 1900
+    if (cell.t === 'd' && cell.v instanceof Date) {
+        const epoch = Date.UTC(1899, 11, 30); // día 0 de Excel
+        const dias = (cell.v.getTime() - epoch) / 86400000;
+        if (dias < 0 || dias * 24 > 744) return null;
+        return Math.round(dias * 24 * 100) / 100;
+    }
+
+    // Texto: "41:14:16", "42:30" o decimal
+    const s = cellText(cell.v).replace(',', '.');
     if (!s) return null;
 
-    // Formato HH:MM (ej: "42:30")
-    const hm = s.match(/^(\d{1,3}):(\d{2})$/);
-    if (hm) {
-        return Math.round((parseInt(hm[1], 10) + parseInt(hm[2], 10) / 60) * 100) / 100;
+    const hms = s.match(/^(\d{1,4}):(\d{2})(?::(\d{2}))?$/);
+    if (hms) {
+        const horas = parseInt(hms[1], 10) + parseInt(hms[2], 10) / 60 + (hms[3] ? parseInt(hms[3], 10) / 3600 : 0);
+        return Math.round(horas * 100) / 100;
     }
 
     const num = parseFloat(s);
     if (!isNaN(num) && num >= 0 && num <= 744) return Math.round(num * 100) / 100;
     return null;
+}
+
+/** Formatea horas decimales como duración H:MM (ej: 41.24 → "41:14") */
+export function formatHorasHM(horas: number): string {
+    const h = Math.floor(horas);
+    const m = Math.round((horas - h) * 60);
+    if (m === 60) return `${h + 1}:00`;
+    return `${h}:${String(m).padStart(2, '0')}`;
 }
 
 function estadoDe(horas: number): HHEEEstado {
@@ -123,18 +162,21 @@ export async function analyzeHHEEFile(
     staff: StaffWithShift[]
 ): Promise<HHEEAnalysis> {
     const buffer = await file.arrayBuffer();
-    const wb = XLSX.read(buffer, { type: 'array', cellDates: false });
+    // cellNF: true para leer el formato de cada celda y detectar duraciones
+    const wb = XLSX.read(buffer, { type: 'array', cellDates: false, cellNF: true });
 
     const warnings: string[] = [];
 
     // Elegir la primera hoja que tenga datos más allá de la fila 15
     let sheetName = wb.SheetNames[0];
     let rows: unknown[][] = [];
+    let sheet: XLSX.WorkSheet = wb.Sheets[sheetName];
     for (const name of wb.SheetNames) {
         const parsed = XLSX.utils.sheet_to_json<unknown[]>(wb.Sheets[name], { header: 1, defval: '' });
         if (parsed.length > DATA_START_ROW) {
             sheetName = name;
             rows = parsed;
+            sheet = wb.Sheets[name];
             break;
         }
     }
@@ -173,7 +215,10 @@ export async function analyzeHHEEFile(
             continue;
         }
 
-        const horas = parseHours(row[COL_TOTAL]) ?? 0;
+        // Leer la celda CRUDA de la columna S (con su formato) para
+        // interpretar correctamente las duraciones seriales de Excel
+        const totalCell = sheet[XLSX.utils.encode_cell({ r: i, c: COL_TOTAL })] as XLSX.CellObject | undefined;
+        const horas = parseDurationCell(totalCell) ?? 0;
 
         const rutKey = normalizeRutKey(rutRaw);
         const matched = staffByRut.get(rutKey);
