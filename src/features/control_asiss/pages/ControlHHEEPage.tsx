@@ -1,14 +1,13 @@
 /**
  * Control ASISS - Control HHEE
- * Análisis de horas extra a partir de un archivo Excel.
- * Detecta automáticamente columnas RUT / Nombre / Fecha / Horas.
+ * Analisis de horas extra a partir del layout oficial de HHEE.
  */
 
 import { useMemo, useRef, useState } from 'react';
 import { Icon } from '../../../shared/components/common/Icon';
 import { useStaffWithShifts } from '../../asistencia2026/hooks';
-import { analyzeHHEEFile, DAILY_LEGAL_LIMIT } from '../utils/hheeAnalyzer';
 import { HHEEAnalysis } from '../types';
+import { analyzeHHEEFile } from '../utils/hheeAnalyzer';
 
 export const ControlHHEEPage = () => {
     const { data: staff = [] } = useStaffWithShifts({ mode: 'ALL' }, undefined);
@@ -27,6 +26,7 @@ export const ControlHHEEPage = () => {
             setError('El archivo debe ser Excel (.xlsx, .xls) o CSV.');
             return;
         }
+
         setIsAnalyzing(true);
         setError(null);
         try {
@@ -51,25 +51,28 @@ export const ControlHHEEPage = () => {
         return analysis.people.filter((p) => {
             if (terminalFilter !== 'ALL' && p.terminal !== terminalFilter) return false;
             if (!q) return true;
-            return p.nombre.toLowerCase().includes(q) || p.rut.toLowerCase().includes(q);
+            return (
+                p.nombre.toLowerCase().includes(q) ||
+                p.rut.toLowerCase().includes(q) ||
+                p.cargo.toLowerCase().includes(q)
+            );
         });
     }, [analysis, search, terminalFilter]);
 
-    const peopleConExceso = analysis?.people.filter((p) => p.diasConExceso > 0).length ?? 0;
-
     return (
         <div className="space-y-6">
-            {/* Header */}
             <div>
                 <h1 className="text-2xl font-bold text-slate-800">Control HHEE</h1>
                 <p className="text-sm text-slate-500">
-                    Control ASISS · Análisis de horas extra desde archivo Excel
+                    Control ASISS · Analisis de horas extra desde archivo Excel
                 </p>
             </div>
 
-            {/* Zona de carga */}
             <div
-                onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+                onDragOver={(e) => {
+                    e.preventDefault();
+                    setDragOver(true);
+                }}
                 onDragLeave={() => setDragOver(false)}
                 onDrop={(e) => {
                     e.preventDefault();
@@ -77,10 +80,11 @@ export const ControlHHEEPage = () => {
                     handleFile(e.dataTransfer.files?.[0]);
                 }}
                 onClick={() => inputRef.current?.click()}
-                className={`flex cursor-pointer flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed px-6 py-10 transition-colors ${dragOver
-                    ? 'border-blue-500 bg-blue-50'
-                    : 'border-slate-300 bg-white hover:border-blue-400 hover:bg-slate-50'
-                    }`}
+                className={`flex cursor-pointer flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed px-6 py-10 transition-colors ${
+                    dragOver
+                        ? 'border-blue-500 bg-blue-50'
+                        : 'border-slate-300 bg-white hover:border-blue-400 hover:bg-slate-50'
+                }`}
             >
                 <input
                     ref={inputRef}
@@ -97,11 +101,11 @@ export const ControlHHEEPage = () => {
                 </div>
                 <div className="text-center">
                     <p className="font-bold text-slate-700">
-                        {isAnalyzing ? 'Analizando archivo…' : 'Arrastra aquí el Excel de HHEE o haz clic para seleccionarlo'}
+                        {isAnalyzing ? 'Analizando archivo...' : 'Arrastra aqui el Excel de HHEE o haz clic para seleccionarlo'}
                     </p>
                     <p className="mt-1 text-xs text-slate-500">
-                        Debe contener una columna <b>RUT</b> y al menos una columna de horas
-                        (ej: HHEE, Horas Extra, 50%, 100%). Fecha y Nombre son opcionales.
+                        Usa el layout oficial: datos desde la fila 15, con RUT en A,
+                        Nombre en B, Cargo en C y Total HHEE en S.
                     </p>
                 </div>
             </div>
@@ -118,46 +122,47 @@ export const ControlHHEEPage = () => {
 
             {analysis && (
                 <>
-                    {/* Resumen del archivo */}
                     <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
                         <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-xs text-slate-600">
                             <span className="flex items-center gap-1.5">
                                 <Icon name="file-text" size={14} className="text-blue-600" />
                                 <b>{analysis.fileName}</b> (hoja "{analysis.sheetName}")
                             </span>
-                            <span>Encabezados en fila {analysis.headerRow}</span>
-                            <span>RUT: {analysis.columns.rut}</span>
-                            {analysis.columns.fecha && <span>Fecha: {analysis.columns.fecha}</span>}
-                            <span>Horas: {analysis.columns.horas.join(' + ')}</span>
+                            <span>Filas validas leidas: {analysis.rowsRead}</span>
+                            <span>Personas analizadas: {analysis.people.length}</span>
+                            <span>Cargos resumidos: {analysis.cargos.length}</span>
                         </div>
-                        {analysis.warnings.map((w, i) => (
-                            <p key={i} className="mt-2 flex items-center gap-1.5 text-xs font-medium text-amber-700">
-                                <Icon name="alert-circle" size={14} /> {w}
+                        {analysis.warnings.map((warning, index) => (
+                            <p key={index} className="mt-2 flex items-center gap-1.5 text-xs font-medium text-amber-700">
+                                <Icon name="alert-circle" size={14} /> {warning}
                             </p>
                         ))}
                     </div>
 
-                    {/* KPIs */}
                     <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-                        <HheeKpi label="Total HHEE del período" value={`${analysis.totalHoras.toFixed(1)} hrs`} tone="blue" icon="clock" />
-                        <HheeKpi label="Personas con HHEE" value={String(analysis.people.length)} tone="slate" icon="users" />
-                        <HheeKpi label="Registros leídos" value={String(analysis.records.length)} tone="slate" icon="clipboard" />
+                        <HheeKpi label="Total HHEE del periodo" value={`${analysis.totalHoras.toFixed(1)} hrs`} tone="blue" icon="clock" />
+                        <HheeKpi label="Promedio por persona" value={`${analysis.promedioPersona.toFixed(1)} hrs`} tone="slate" icon="users" />
                         <HheeKpi
-                            label={`Con días sobre ${DAILY_LEGAL_LIMIT} hrs`}
-                            value={String(peopleConExceso)}
-                            tone={peopleConExceso > 0 ? 'red' : 'green'}
+                            label="Sobre 40 hrs"
+                            value={String(analysis.sobreLimiteCount)}
+                            tone={analysis.sobreLimiteCount > 0 ? 'red' : 'green'}
                             icon="alert-triangle"
+                        />
+                        <HheeKpi
+                            label="Criticos 60+ hrs"
+                            value={String(analysis.criticoCount)}
+                            tone={analysis.criticoCount > 0 ? 'red' : 'green'}
+                            icon="clipboard"
                         />
                     </div>
 
-                    {/* Filtros */}
                     <div className="flex flex-col gap-3 md:flex-row md:items-center">
                         <div className="relative flex-1">
                             <Icon name="search" size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                             <input
                                 value={search}
                                 onChange={(e) => setSearch(e.target.value)}
-                                placeholder="Buscar por nombre o RUT…"
+                                placeholder="Buscar por nombre, RUT o cargo..."
                                 className="w-full rounded-lg border border-slate-300 bg-white py-2 pl-9 pr-3 text-sm focus:ring-2 focus:ring-blue-500"
                             />
                         </div>
@@ -167,11 +172,14 @@ export const ControlHHEEPage = () => {
                             className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500"
                         >
                             <option value="ALL">Todos los terminales</option>
-                            {terminals.map((t) => <option key={t} value={t}>{t}</option>)}
+                            {terminals.map((terminal) => (
+                                <option key={terminal} value={terminal}>
+                                    {terminal}
+                                </option>
+                            ))}
                         </select>
                     </div>
 
-                    {/* Tabla por persona */}
                     <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
                         <div className="overflow-x-auto">
                             <table className="w-full text-sm">
@@ -183,47 +191,41 @@ export const ControlHHEEPage = () => {
                                         <th className="px-4 py-3">Terminal</th>
                                         <th className="px-4 py-3">Cargo</th>
                                         <th className="px-4 py-3 text-right">Total HHEE</th>
-                                        <th className="px-4 py-3 text-center">Registros</th>
-                                        <th className="px-4 py-3 text-center">Máx/día</th>
-                                        <th className="px-4 py-3 text-center">Alerta</th>
+                                        <th className="px-4 py-3 text-center">Estado</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {filteredPeople.length === 0 && (
                                         <tr>
-                                            <td colSpan={9} className="px-4 py-6 text-center text-slate-400">
+                                            <td colSpan={7} className="px-4 py-6 text-center text-slate-400">
                                                 Sin resultados para el filtro aplicado
                                             </td>
                                         </tr>
                                     )}
-                                    {filteredPeople.map((p, i) => (
-                                        <tr key={p.rut} className="border-b border-slate-100 last:border-0 hover:bg-slate-50">
-                                            <td className="px-4 py-2.5 text-slate-400">{i + 1}</td>
-                                            <td className="px-4 py-2.5 font-semibold text-slate-800">{p.nombre}</td>
-                                            <td className="px-4 py-2.5 text-slate-600">{p.rut}</td>
+                                    {filteredPeople.map((person, index) => (
+                                        <tr key={person.rut} className="border-b border-slate-100 last:border-0 hover:bg-slate-50">
+                                            <td className="px-4 py-2.5 text-slate-400">{index + 1}</td>
+                                            <td className="px-4 py-2.5 font-semibold text-slate-800">{person.nombre}</td>
+                                            <td className="px-4 py-2.5 text-slate-600">{person.rut}</td>
                                             <td className="px-4 py-2.5">
-                                                <span className={`rounded px-2 py-0.5 text-xs font-medium ${p.terminal === 'No encontrado'
-                                                    ? 'bg-slate-100 text-slate-500'
-                                                    : 'bg-blue-50 text-blue-700'
-                                                    }`}>
-                                                    {p.terminal}
+                                                <span
+                                                    className={`rounded px-2 py-0.5 text-xs font-medium ${
+                                                        person.terminal === '—'
+                                                            ? 'bg-slate-100 text-slate-500'
+                                                            : 'bg-blue-50 text-blue-700'
+                                                    }`}
+                                                >
+                                                    {person.terminal}
                                                 </span>
                                             </td>
-                                            <td className="px-4 py-2.5 text-slate-600">{p.cargo}</td>
+                                            <td className="px-4 py-2.5 text-slate-600">{person.cargo}</td>
                                             <td className="px-4 py-2.5 text-right font-bold text-slate-800">
-                                                {p.totalHoras.toFixed(1)} hrs
+                                                {person.totalHoras.toFixed(1)} hrs
                                             </td>
-                                            <td className="px-4 py-2.5 text-center text-slate-600">{p.registros}</td>
-                                            <td className="px-4 py-2.5 text-center text-slate-600">{p.maxHorasDia.toFixed(1)}</td>
                                             <td className="px-4 py-2.5 text-center">
-                                                {p.diasConExceso > 0 ? (
-                                                    <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-bold text-red-700">
-                                                        <Icon name="alert-triangle" size={12} />
-                                                        {p.diasConExceso} día(s) &gt; {DAILY_LEGAL_LIMIT}h
-                                                    </span>
-                                                ) : (
-                                                    <span className="text-xs text-emerald-600 font-medium">OK</span>
-                                                )}
+                                                <span className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-bold ${estadoTone(person.estado)}`}>
+                                                    {estadoLabel(person.estado)}
+                                                </span>
                                             </td>
                                         </tr>
                                     ))}
@@ -232,19 +234,65 @@ export const ControlHHEEPage = () => {
                         </div>
                     </div>
 
+                    <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+                        <div className="border-b border-slate-100 px-4 py-3">
+                            <h2 className="text-sm font-bold text-slate-800">Resumen por cargo</h2>
+                        </div>
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-sm">
+                                <thead>
+                                    <tr className="bg-slate-50 text-left text-xs uppercase text-slate-500">
+                                        <th className="px-4 py-3">Cargo</th>
+                                        <th className="px-4 py-3 text-center">Personas</th>
+                                        <th className="px-4 py-3 text-right">Total</th>
+                                        <th className="px-4 py-3 text-right">Promedio</th>
+                                        <th className="px-4 py-3">Maximo</th>
+                                        <th className="px-4 py-3 text-center">40+ hrs</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {analysis.cargos.map((cargo) => (
+                                        <tr key={cargo.cargo} className="border-b border-slate-100 last:border-0">
+                                            <td className="px-4 py-2.5 font-semibold text-slate-800">{cargo.cargo}</td>
+                                            <td className="px-4 py-2.5 text-center text-slate-600">{cargo.personas}</td>
+                                            <td className="px-4 py-2.5 text-right font-semibold text-slate-800">{cargo.totalHoras.toFixed(1)} hrs</td>
+                                            <td className="px-4 py-2.5 text-right text-slate-600">{cargo.promedio.toFixed(1)} hrs</td>
+                                            <td className="px-4 py-2.5 text-slate-600">
+                                                {cargo.maxPersona} ({cargo.maximo.toFixed(1)} hrs)
+                                            </td>
+                                            <td className="px-4 py-2.5 text-center text-slate-600">{cargo.sobreLimite}</td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    {analysis.excludedCargos.length > 0 && (
+                        <div className="rounded-xl border border-amber-200 bg-amber-50 px-5 py-4">
+                            <p className="mb-1 flex items-center gap-2 text-sm font-bold text-amber-800">
+                                <Icon name="alert-circle" size={16} />
+                                Registros excluidos por cargo no autorizado
+                            </p>
+                            <p className="text-xs text-amber-700">
+                                {analysis.excludedCargos.map((item) => `${item.cargo} (${item.count})`).join(' · ')}
+                            </p>
+                        </div>
+                    )}
+
                     {analysis.rutsNoEncontrados.length > 0 && (
                         <div className="rounded-xl border border-amber-200 bg-amber-50 px-5 py-4">
                             <p className="mb-1 flex items-center gap-2 text-sm font-bold text-amber-800">
                                 <Icon name="alert-circle" size={16} />
-                                RUTs del Excel no encontrados en la dotación activa
+                                RUTs del Excel no encontrados en la dotacion activa
                             </p>
                             <p className="text-xs text-amber-700">{analysis.rutsNoEncontrados.join(' · ')}</p>
                         </div>
                     )}
 
                     <p className="text-xs text-slate-400">
-                        Referencia: el límite legal en Chile es de {DAILY_LEGAL_LIMIT} horas extraordinarias por día.
-                        Las filas marcadas superan ese límite en al menos un día y deben revisarse.
+                        Estados aplicados: OK bajo 30 hrs, Proximo entre 30 y 39,9 hrs,
+                        Sobre limite desde 40 hrs y Critico desde 60 hrs.
                     </p>
                 </>
             )}
@@ -268,3 +316,29 @@ const HheeKpi = ({ label, value, tone, icon }: { label: string; value: string; t
         </div>
     </div>
 );
+
+const estadoLabel = (estado: HHEEAnalysis['people'][number]['estado']) => {
+    switch (estado) {
+        case 'CRITICO':
+            return 'Critico';
+        case 'SOBRE_LIMITE':
+            return 'Sobre limite';
+        case 'PROXIMO':
+            return 'Proximo';
+        default:
+            return 'OK';
+    }
+};
+
+const estadoTone = (estado: HHEEAnalysis['people'][number]['estado']) => {
+    switch (estado) {
+        case 'CRITICO':
+            return 'bg-red-100 text-red-700';
+        case 'SOBRE_LIMITE':
+            return 'bg-orange-100 text-orange-700';
+        case 'PROXIMO':
+            return 'bg-amber-100 text-amber-700';
+        default:
+            return 'bg-emerald-100 text-emerald-700';
+    }
+};

@@ -68,33 +68,41 @@ export interface CoverageAnalysis {
 // HHEE (HORAS EXTRA)
 // ==========================================
 
-export interface HHEERecord {
+/** Estado según el límite de 40 hrs semanales del período consultado */
+export type HHEEEstado = 'OK' | 'PROXIMO' | 'SOBRE_LIMITE' | 'CRITICO';
+
+export interface HHEEPersonRow {
     rut: string;
     nombre: string;
-    fecha: string | null;         // YYYY-MM-DD si se pudo interpretar
-    horas: number;
-    origen: string;               // referencia fila del excel
+    cargo: string;                // cargo canónico (de la lista autorizada)
+    terminal: string;             // resuelto contra dotación si es posible
+    totalHoras: number;           // columna S del archivo
+    estado: HHEEEstado;
 }
 
-export interface HHEEPersonSummary {
-    rut: string;
-    nombre: string;
-    terminal: string;             // resuelto contra dotación si es posible
+export interface HHEECargoSummary {
     cargo: string;
+    personas: number;
     totalHoras: number;
-    registros: number;
-    diasConExceso: number;        // días con más de 2 hrs (límite legal diario)
-    maxHorasDia: number;
+    promedio: number;
+    maximo: number;
+    maxPersona: string;
+    sobreLimite: number;          // personas con >= 40 hrs
+    proximos: number;             // personas con 30-39.9 hrs
+    people: HHEEPersonRow[];      // ordenadas por horas desc
 }
 
 export interface HHEEAnalysis {
     fileName: string;
     sheetName: string;
-    headerRow: number;
-    columns: { rut: string; nombre?: string; fecha?: string; horas: string[] };
-    records: HHEERecord[];
-    people: HHEEPersonSummary[];
+    rowsRead: number;             // filas con RUT válido desde la fila 15
+    excludedCargos: { cargo: string; count: number }[]; // cargos fuera de la lista
+    people: HHEEPersonRow[];      // todas, ordenadas por horas desc
+    cargos: HHEECargoSummary[];   // ordenados por total desc
     totalHoras: number;
+    promedioPersona: number;
+    sobreLimiteCount: number;
+    criticoCount: number;
     rutsNoEncontrados: string[];  // ruts del excel que no están en la dotación
     warnings: string[];
 }
