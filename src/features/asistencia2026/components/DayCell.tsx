@@ -78,13 +78,14 @@ export const DayCell = ({
         if (mark) return <span className="text-lg font-bold">{mark.mark}</span>;
         if (isOff) return <span className="text-lg font-bold text-slate-500">L</span>;
 
-        // Show horario for work days
+        // Show horario for work days (hora completa: 22:00-08:00)
         if (horario) {
-            // Format horario to show times (reduced time already baked in)
             const formatted = formatHorario(horario, reducido);
             return (
-                <div className="text-center leading-tight">
-                    <div className={`text-[10px] font-semibold ${reducido ? 'text-amber-600' : ''}`}>{formatted}</div>
+                <div className="text-center leading-tight px-0.5" title={formatted}>
+                    <div className={`text-[9px] font-bold tracking-tight whitespace-nowrap ${reducido ? 'text-amber-600' : ''}`}>
+                        {formatted}
+                    </div>
                 </div>
             );
         }
@@ -129,28 +130,18 @@ export const DayCell = ({
 };
 
 /**
- * Format horario for display in cell
- * Input: "10:00-20:00" or "22:00-06:00"
- * Output: "10-20" or "22-06" (shortened)
- * If reducido (Ley 40 hrs), subtract 1 hour from end time
+ * Format horario for display in cell — hora COMPLETA con minutos.
+ * Input: "10:00-20:00" o "22:00 - 08:00"
+ * Output: "10:00-20:00" / "22:00-08:00"
  */
-function formatHorario(horario: string, reducido: boolean): string {
+function formatHorario(horario: string, _reducido: boolean): string {
     if (!horario) return '';
 
-    // Parse 10:00-20:00 format
-    const match = horario.match(/(\d{1,2}):(\d{2})-(\d{1,2}):(\d{2})/);
+    const match = horario.match(/(\d{1,2}):(\d{2})\s*-\s*(\d{1,2}):(\d{2})/);
     if (!match) return horario;
 
-    const startHour = parseInt(match[1], 10);
-    let endHour = parseInt(match[3], 10);
-
-    // If reducido (Ley 40 hrs), logic removed.
-    // formatting now just shows provided times without modification.
-    // if (reducido) {
-    //    endHour = endHour === 0 ? 23 : endHour - 1;
-    // }
-
-    return `${startHour.toString().padStart(2, '0')}-${endHour.toString().padStart(2, '0')}`;
+    const pad = (h: string) => h.padStart(2, '0');
+    return `${pad(match[1])}:${match[2]}-${pad(match[3])}:${match[4]}`;
 }
 
 function getIncidenceLabel(code: IncidenceCode): string {

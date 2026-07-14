@@ -318,33 +318,46 @@ export const Asistencia2026Page = () => {
     return (
         <div className="space-y-4">
             {/* Header bar */}
-            <div className="bg-white rounded-lg border p-4 space-y-4">
+            <div className="bg-white rounded-xl border shadow-sm p-4 space-y-4">
+                {/* Row 0: Título de sección */}
+                <div className="flex items-center gap-3 border-b border-slate-100 pb-3">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-brand-500 to-brand-700 shadow-brand">
+                        <Icon name="clock" size={20} className="text-white" />
+                    </div>
+                    <div>
+                        <h1 className="text-lg font-bold leading-tight text-slate-800">Asistencia Semanal</h1>
+                        <p className="text-xs text-slate-500">
+                            Control de marcas, turnos e incidencias · Semana {formatWeekRange(weekStart)}
+                        </p>
+                    </div>
+                </div>
+
                 {/* Row 1: Week navigator + Terminal buttons */}
                 <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                     {/* Week navigator */}
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-1 rounded-xl border border-slate-200 bg-slate-50 p-1">
                         <button
                             onClick={handlePrevWeek}
-                            className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
+                            className="rounded-lg p-2 text-slate-500 transition-colors hover:bg-white hover:text-slate-800 hover:shadow-sm"
                             title="Semana anterior"
                         >
-                            <Icon name="chevron-left" size={20} />
+                            <Icon name="chevron-left" size={18} />
                         </button>
-                        <div className="text-center min-w-[180px]">
-                            <div className="font-semibold text-slate-800">
+                        <div className="min-w-[170px] text-center">
+                            <div className="text-sm font-bold text-slate-800">
                                 {formatWeekRange(weekStart)}
                             </div>
                         </div>
                         <button
                             onClick={handleNextWeek}
-                            className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
+                            className="rounded-lg p-2 text-slate-500 transition-colors hover:bg-white hover:text-slate-800 hover:shadow-sm"
                             title="Semana siguiente"
                         >
-                            <Icon name="chevron-right" size={20} />
+                            <Icon name="chevron-right" size={18} />
                         </button>
                         <button
                             onClick={handleGoToToday}
-                            className="px-3 py-1.5 text-xs font-medium bg-brand-100 text-brand-700 rounded-lg hover:bg-brand-200"
+                            className="ml-1 rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-bold text-white transition-colors hover:bg-brand-700"
                         >
                             Hoy
                         </button>

@@ -142,6 +142,11 @@ export const AttendanceGrid = ({
         date: string;
     } | null>(null);
 
+    // Presentes masivos: modal con selección de fecha (turnos de noche
+    // cruzan medianoche y suelen marcarse al día siguiente)
+    const [massMarkOpen, setMassMarkOpen] = useState(false);
+    const [massMarkDate, setMassMarkDate] = useState('');
+
     const createMarkMutation = useCreateOrUpdateMark();
     const createLicenseMutation = useCreateLicense();
     const createPermissionMutation = useCreatePermission();
@@ -338,41 +343,44 @@ export const AttendanceGrid = ({
         };
     };
 
-    // Mass mark all present for today (Local Time)
-    const handleMassMarkPresent = () => {
-        if (!session) return;
+    // ---- Presentes masivos con fecha seleccionable ----
+    const localDateStr = (offsetDays: number = 0): string => {
+        const d = new Date();
+        d.setDate(d.getDate() + offsetDays);
+        const m = String(d.getMonth() + 1).padStart(2, '0');
+        const dd = String(d.getDate()).padStart(2, '0');
+        return `${d.getFullYear()}-${m}-${dd}`;
+    };
 
-        // Get generic local date YYYY-MM-DD
-        const now = new Date();
-        const year = now.getFullYear();
-        const month = String(now.getMonth() + 1).padStart(2, '0');
-        const day = String(now.getDate()).padStart(2, '0');
-        const todayStr = `${year}-${month}-${day}`;
-
-        const staffToMark = staff.filter((s) => {
+    /** Personal pendiente de marcar (citado, sin marca ni ausencia) para una fecha */
+    const getPendingForDate = (date: string): StaffWithShift[] =>
+        staff.filter((s) => {
             if (s.status === 'DESVINCULADO') return false;
-            const status = getDayStatus(s, todayStr);
+            const status = getDayStatus(s, date);
             if (status.isOff || status.license || status.vacation || status.permission) return false;
-            // Only mark if no mark exists (prevent overwriting 'A' or 'P')
-            if (status.mark) return false;
+            if (status.mark) return false; // no sobreescribir P/A existentes
             return true;
         });
 
-        if (staffToMark.length === 0) {
-            alert(`No hay personal pendiente de marcar para hoy (${todayStr})`);
-            return;
-        }
+    const openMassMark = () => {
+        // Fecha por defecto: hoy si está en la semana visible, si no el último día visible
+        const today = localDateStr();
+        const defaultDate = weekDates.includes(today) ? today : weekDates[weekDates.length - 1];
+        setMassMarkDate(defaultDate);
+        setMassMarkOpen(true);
+    };
 
-        const uniqueTerminals = Array.from(new Set(staffToMark.map(s => s.terminal_code)));
-        const termLabel = uniqueTerminals.length === 1 ? uniqueTerminals[0] : `${uniqueTerminals.length} Terminales`;
+    const executeMassMark = () => {
+        if (!session || !massMarkDate) return;
+        const staffToMark = getPendingForDate(massMarkDate);
+        if (staffToMark.length === 0) return;
 
-        if (confirm(`¿Marcar ${staffToMark.length} personas de ${termLabel} como PRESENTE para la fecha ${todayStr}?`)) {
-            bulkMarkMutation.mutate({
-                staffIds: staffToMark.map((s) => s.id),
-                date: todayStr,
-                createdBy: session.supervisorName,
-            });
-        }
+        bulkMarkMutation.mutate({
+            staffIds: staffToMark.map((s) => s.id),
+            date: massMarkDate,
+            createdBy: session.supervisorName,
+        });
+        setMassMarkOpen(false);
     };
 
     // Action handlers
@@ -451,19 +459,25 @@ export const AttendanceGrid = ({
 
     return (
         <>
-            <div className="bg-white rounded-lg border shadow-sm overflow-hidden">
-                {/* Mass mark button */}
-                <div className="flex items-center justify-between p-3 bg-slate-50 border-b">
-                    <span className="text-sm text-slate-600">
-                        {staff.length} trabajadores
-                    </span>
+            <div className="bg-white rounded-xl border shadow-sm overflow-hidden">
+                {/* Barra superior de la grilla */}
+                <div className="flex flex-col gap-2 border-b bg-gradient-to-r from-slate-800 to-slate-700 p-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="flex items-center gap-2.5">
+                        <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-white/10">
+                            <Icon name="users" size={16} className="text-white" />
+                        </span>
+                        <div>
+                            <p className="text-sm font-bold leading-tight text-white">Grilla Semanal de Asistencia</p>
+                            <p className="text-[11px] text-slate-300">{staff.length} trabajadores en vista</p>
+                        </div>
+                    </div>
                     <button
-                        onClick={handleMassMarkPresent}
+                        onClick={openMassMark}
                         disabled={bulkMarkMutation.isPending}
-                        className="px-4 py-2 bg-emerald-600 text-white rounded-lg font-medium text-sm hover:bg-emerald-700 transition-colors flex items-center gap-2 disabled:opacity-50"
+                        className="flex items-center gap-2 rounded-lg bg-emerald-500 px-4 py-2 text-sm font-bold text-white transition-colors hover:bg-emerald-600 disabled:opacity-50"
                     >
-                        <Icon name="check" size={16} />
-                        {bulkMarkMutation.isPending ? 'Marcando...' : 'Marcar Todos Pres. Hoy'}
+                        <Icon name={bulkMarkMutation.isPending ? 'loader' : 'check-circle'} size={16} className={bulkMarkMutation.isPending ? 'animate-spin' : ''} />
+                        {bulkMarkMutation.isPending ? 'Marcando…' : 'Presentes Masivos'}
                     </button>
                 </div>
 
@@ -534,7 +548,7 @@ export const AttendanceGrid = ({
                                                         const isTodayDate = isToday(date);
 
                                                         return (
-                                                            <div key={date} className="flex-shrink-0 w-16 snap-center flex flex-col items-center gap-1">
+                                                            <div key={date} className="flex-shrink-0 w-[74px] snap-center flex flex-col items-center gap-1">
                                                                 <div className={`text-[10px] font-medium uppercase ${isTodayDate ? 'text-brand-600 font-bold' : 'text-slate-400'}`}>
                                                                     {dayName} {dayNum}
                                                                 </div>
@@ -585,7 +599,7 @@ export const AttendanceGrid = ({
                                     return (
                                         <th
                                             key={date}
-                                            className={`border-b px-1 py-2 text-center min-w-[70px] ${isTodayDate ? 'bg-brand-50' : 'bg-slate-50'
+                                            className={`border-b px-1 py-2 text-center min-w-[78px] ${isTodayDate ? 'bg-brand-50' : 'bg-slate-50'
                                                 }`}
                                         >
                                             <div className="text-xs font-medium text-slate-500">{dayName}</div>
@@ -710,6 +724,134 @@ export const AttendanceGrid = ({
                 }
                 isManager={isManager ?? false}
             />
+
+            {/* Modal: Presentes Masivos con selección de fecha */}
+            {massMarkOpen && (() => {
+                const pending = massMarkDate ? getPendingForDate(massMarkDate) : [];
+                const byTerminal = pending.reduce<Record<string, number>>((acc, s) => {
+                    acc[s.terminal_code] = (acc[s.terminal_code] || 0) + 1;
+                    return acc;
+                }, {});
+                const hoy = localDateStr();
+                const ayer = localDateStr(-1);
+                const dateLabel = massMarkDate
+                    ? new Date(massMarkDate + 'T12:00:00').toLocaleDateString('es-CL', { weekday: 'long', day: '2-digit', month: 'long' })
+                    : '';
+
+                return (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
+                        <div className="w-full max-w-md overflow-hidden rounded-2xl bg-white shadow-2xl">
+                            {/* Header */}
+                            <div className="flex items-center justify-between border-b bg-slate-800 px-5 py-4">
+                                <div className="flex items-center gap-3">
+                                    <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-500">
+                                        <Icon name="check-circle" size={18} className="text-white" />
+                                    </span>
+                                    <div>
+                                        <h3 className="font-bold text-white">Presentes Masivos</h3>
+                                        <p className="text-xs text-slate-300">Selecciona la fecha a marcar</p>
+                                    </div>
+                                </div>
+                                <button
+                                    onClick={() => setMassMarkOpen(false)}
+                                    className="rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-white/10 hover:text-white"
+                                >
+                                    <Icon name="x" size={18} />
+                                </button>
+                            </div>
+
+                            <div className="space-y-4 p-5">
+                                {/* Selección de fecha */}
+                                <div>
+                                    <label className="mb-1.5 block text-sm font-semibold text-slate-700">
+                                        Fecha de la marca
+                                    </label>
+                                    <div className="flex gap-2">
+                                        <input
+                                            type="date"
+                                            value={massMarkDate}
+                                            min={weekDates[0]}
+                                            max={weekDates[weekDates.length - 1]}
+                                            onChange={(e) => setMassMarkDate(e.target.value)}
+                                            className="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500"
+                                        />
+                                        {weekDates.includes(ayer) && (
+                                            <button
+                                                onClick={() => setMassMarkDate(ayer)}
+                                                className={`rounded-lg px-3 py-2 text-xs font-bold transition-colors ${massMarkDate === ayer
+                                                    ? 'bg-slate-800 text-white'
+                                                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
+                                            >
+                                                Ayer
+                                            </button>
+                                        )}
+                                        {weekDates.includes(hoy) && (
+                                            <button
+                                                onClick={() => setMassMarkDate(hoy)}
+                                                className={`rounded-lg px-3 py-2 text-xs font-bold transition-colors ${massMarkDate === hoy
+                                                    ? 'bg-slate-800 text-white'
+                                                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
+                                            >
+                                                Hoy
+                                            </button>
+                                        )}
+                                    </div>
+                                    <p className="mt-1.5 text-xs text-slate-400">
+                                        Útil para turnos de noche que cruzan medianoche: puedes marcar el día anterior.
+                                        Solo fechas de la semana visible ({weekDates[0].split('-').reverse().join('-')} al {weekDates[6].split('-').reverse().join('-')}).
+                                    </p>
+                                </div>
+
+                                {/* Resumen de lo que se marcará */}
+                                {massMarkDate && (
+                                    pending.length > 0 ? (
+                                        <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3">
+                                            <p className="text-sm font-bold text-emerald-900">
+                                                Se marcarán {pending.length} persona(s) como PRESENTE
+                                            </p>
+                                            <p className="mt-0.5 text-xs capitalize text-emerald-700">{dateLabel}</p>
+                                            <div className="mt-2 flex flex-wrap gap-1.5">
+                                                {Object.entries(byTerminal).map(([term, count]) => (
+                                                    <span key={term} className="rounded-full bg-white px-2.5 py-0.5 text-[11px] font-semibold text-emerald-800 border border-emerald-200">
+                                                        {term}: {count}
+                                                    </span>
+                                                ))}
+                                            </div>
+                                            <p className="mt-2 text-[11px] text-emerald-600">
+                                                Solo se marca al personal citado ese día que aún no tiene marca.
+                                                No se sobreescriben presentes/ausentes ya registrados.
+                                            </p>
+                                        </div>
+                                    ) : (
+                                        <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-500">
+                                            No hay personal pendiente de marcar para esa fecha
+                                            (todos ya tienen marca, están libres o con licencia/vacaciones/permiso).
+                                        </div>
+                                    )
+                                )}
+                            </div>
+
+                            {/* Footer */}
+                            <div className="flex justify-end gap-3 border-t bg-slate-50 px-5 py-4">
+                                <button
+                                    onClick={() => setMassMarkOpen(false)}
+                                    className="rounded-lg px-4 py-2 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-200"
+                                >
+                                    Cancelar
+                                </button>
+                                <button
+                                    onClick={executeMassMark}
+                                    disabled={!massMarkDate || pending.length === 0 || bulkMarkMutation.isPending}
+                                    className="flex items-center gap-2 rounded-lg bg-emerald-600 px-5 py-2 text-sm font-bold text-white transition-colors hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-40"
+                                >
+                                    <Icon name="check" size={16} />
+                                    Confirmar ({pending.length})
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                );
+            })()}
         </>
     );
 };
