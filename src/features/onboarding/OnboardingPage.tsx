@@ -14,6 +14,7 @@ export const OnboardingPage = () => {
   const setTerminalContext = useTerminalStore((state) => state.setContext);
   const [supervisorName, setSupervisorName] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -46,161 +47,186 @@ export const OnboardingPage = () => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center relative overflow-hidden">
-      {/* Animated Background */}
+    <div className="relative flex min-h-screen flex-col overflow-hidden bg-dark-900">
+      {/* Fondo */}
       <div className="absolute inset-0 bg-gradient-to-br from-dark-900 via-dark-800 to-brand-900">
-        {/* Gradient Orbs */}
-        <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-brand-500/30 rounded-full blur-3xl animate-float" />
-        <div className="absolute bottom-1/4 right-1/4 w-80 h-80 bg-accent-500/20 rounded-full blur-3xl animate-float" style={{ animationDelay: '1s' }} />
-        <div className="absolute top-1/2 right-1/3 w-64 h-64 bg-brand-600/20 rounded-full blur-3xl animate-float" style={{ animationDelay: '2s' }} />
-
-        {/* Grid Pattern */}
-        <div
-          className="absolute inset-0 opacity-[0.03]"
-          style={{
-            backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='1'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`
-          }}
-        />
+        <div className="absolute -top-32 -left-32 h-96 w-96 rounded-full bg-brand-600/20 blur-3xl" />
+        <div className="absolute -bottom-32 -right-32 h-96 w-96 rounded-full bg-accent-500/10 blur-3xl" />
       </div>
 
-      {/* Content */}
-      <div className="relative z-10 w-full max-w-lg px-4 animate-slide-up">
-        {/* Logo */}
-        <div className="flex justify-center mb-8">
-          <div className="flex items-center gap-4">
-            <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-brand-500 to-brand-700 shadow-brand-lg">
-              <span className="text-3xl font-bold text-white">A</span>
+      {/* Contenido */}
+      <div className="relative z-10 flex flex-1 items-center justify-center px-4 py-10">
+        <div className="grid w-full max-w-4xl overflow-hidden rounded-3xl shadow-2xl lg:grid-cols-[5fr_6fr]">
+
+          {/* ===== Panel de marca (izquierda) ===== */}
+          <div className="relative flex flex-col justify-between bg-gradient-to-br from-brand-600 to-brand-800 p-8 lg:p-10">
+            <div>
+              <div className="flex items-center gap-3">
+                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/15 backdrop-blur">
+                  <span className="text-2xl font-bold text-white">A</span>
+                </div>
+                <div>
+                  <p className="text-xl font-bold leading-tight text-white">Asiss</p>
+                  <p className="text-xs text-brand-100/80">Dashboard de Logística</p>
+                </div>
+              </div>
+
+              <h2 className="mt-8 hidden text-2xl font-bold leading-snug text-white lg:block">
+                Gestión operativa de personal y asistencia
+              </h2>
+
+              <ul className="mt-6 hidden space-y-3 lg:block">
+                {[
+                  { icon: 'users' as const, text: 'Personal, turnos y programación' },
+                  { icon: 'clock' as const, text: 'Asistencia, HHEE y Control ASISS' },
+                  { icon: 'building' as const, text: 'El Roble · La Reina · María Angélica' },
+                ].map((item) => (
+                  <li key={item.text} className="flex items-center gap-3 text-sm text-brand-50/90">
+                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white/10">
+                      <Icon name={item.icon} size={15} className="text-white" />
+                    </span>
+                    {item.text}
+                  </li>
+                ))}
+              </ul>
             </div>
-            <div className="flex flex-col">
-              <span className="text-2xl font-bold text-white">Asiss</span>
-              <span className="text-sm text-slate-400">Dashboard de Logística</span>
+
+            <div className="mt-8 hidden items-center gap-2 text-xs text-brand-100/70 lg:flex">
+              <Icon name="check-circle" size={14} />
+              Conexión segura · Datos protegidos
             </div>
           </div>
-        </div>
 
-        {/* Login Card */}
-        <div className="card-glass p-8 md:p-10">
-          <div className="text-center mb-8">
-            <h1 className="text-2xl font-bold text-slate-900">Bienvenido</h1>
-            <p className="mt-2 text-sm text-slate-600">
-              Ingresa tus datos para acceder al panel de control
-            </p>
-          </div>
-
-          <form onSubmit={handleSubmit} className="space-y-6">
-            {/* Supervisor Name */}
-            <div>
-              <label className="label">Nombre del Supervisor</label>
-              <div className="relative">
-                <Icon
-                  name="users"
-                  size={18}
-                  className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"
-                />
-                <input
-                  type="text"
-                  className="input pl-10"
-                  value={supervisorName}
-                  onChange={(e) => setSupervisorName(e.target.value)}
-                  placeholder="Ingresa un nombre autorizado"
-                  autoComplete="off"
-                  required
-                  list="authorized-supervisors"
-                />
-              </div>
-              <datalist id="authorized-supervisors">
-                {AUTHORIZED_SUPERVISORS.map((name) => (
-                  <option key={name} value={name} />
-                ))}
-              </datalist>
-              <div className="mt-3 flex flex-wrap gap-2">
-                {AUTHORIZED_SUPERVISORS.map((name) => (
-                  <button
-                    key={name}
-                    type="button"
-                    onClick={() => {
-                      setSupervisorName(name);
-                      setError(null);
-                    }}
-                    className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors ${
-                      normalizeSupervisorName(supervisorName) === name
-                        ? 'border-brand-500 bg-brand-50 text-brand-700'
-                        : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50'
-                    }`}
-                  >
-                    {name}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Password */}
-            <div>
-              <label className="label">Contraseña de Acceso</label>
-              <div className="relative">
-                <Icon
-                  name="key"
-                  size={18}
-                  className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none z-10"
-                />
-                <input
-                  type="password"
-                  className="input pl-10"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Ingresa la clave de acceso"
-                  autoComplete="current-password"
-                  required
-                />
-              </div>
-              <p className="mt-2 text-xs text-slate-500">
-                El acceso inicia siempre con visibilidad sobre todos los terminales.
+          {/* ===== Formulario (derecha) ===== */}
+          <div className="bg-white p-8 lg:p-10">
+            <div className="mb-7">
+              <h1 className="text-2xl font-bold text-slate-900">Bienvenido</h1>
+              <p className="mt-1 text-sm text-slate-500">
+                Selecciona tu nombre e ingresa la clave de acceso
               </p>
             </div>
 
-            {error && (
-              <div className="rounded-xl border border-danger-200 bg-danger-50 px-4 py-3 text-sm text-danger-700">
-                {error}
+            <form onSubmit={handleSubmit} className="space-y-6">
+              {/* Selección de supervisor */}
+              <div>
+                <label className="mb-2 block text-sm font-semibold text-slate-700">
+                  Supervisor
+                </label>
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                  {AUTHORIZED_SUPERVISORS.map((name) => {
+                    const selected = normalizeSupervisorName(supervisorName) === name;
+                    return (
+                      <button
+                        key={name}
+                        type="button"
+                        onClick={() => {
+                          setSupervisorName(name);
+                          setError(null);
+                        }}
+                        className={`flex items-center justify-between rounded-xl border px-3.5 py-2.5 text-left text-sm font-medium transition-all ${selected
+                          ? 'border-brand-500 bg-brand-50 text-brand-700 shadow-sm ring-1 ring-brand-500'
+                          : 'border-slate-200 bg-white text-slate-600 hover:border-brand-300 hover:bg-slate-50'
+                          }`}
+                      >
+                        <span className="truncate">{name}</span>
+                        <span
+                          className={`ml-2 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border transition-colors ${selected
+                            ? 'border-brand-500 bg-brand-500 text-white'
+                            : 'border-slate-300 bg-white text-transparent'
+                            }`}
+                        >
+                          <Icon name="check" size={12} />
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
-            )}
 
-            {/* Submit Button */}
-            <button
-              type="submit"
-              disabled={submitting || !supervisorName || !password}
-              className="btn btn-primary w-full py-3.5 text-base"
-            >
-              {submitting ? (
-                <span className="flex items-center justify-center gap-2">
-                  <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                  </svg>
-                  Iniciando sesión...
-                </span>
-              ) : (
-                <span className="flex items-center justify-center gap-2">
-                  Entrar al Dashboard
-                  <Icon name="chevron-right" size={18} />
-                </span>
+              {/* Contraseña */}
+              <div>
+                <label className="mb-2 block text-sm font-semibold text-slate-700">
+                  Contraseña de acceso
+                </label>
+                <div className="relative">
+                  <span className="pointer-events-none absolute inset-y-0 left-0 flex w-11 items-center justify-center text-slate-400">
+                    <Icon name="key" size={17} />
+                  </span>
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="••••••••"
+                    autoComplete="current-password"
+                    required
+                    className="w-full rounded-xl border border-slate-300 bg-white py-3 pl-11 pr-12 text-sm text-slate-800 placeholder:text-slate-300 transition-shadow focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/30"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword((v) => !v)}
+                    className="absolute inset-y-0 right-0 flex w-11 items-center justify-center text-slate-400 transition-colors hover:text-slate-600"
+                    title={showPassword ? 'Ocultar clave' : 'Mostrar clave'}
+                  >
+                    <Icon name="eye" size={17} />
+                  </button>
+                </div>
+                <p className="mt-2 text-xs text-slate-400">
+                  El acceso inicia con visibilidad sobre todos los terminales.
+                </p>
+              </div>
+
+              {/* Error */}
+              {error && (
+                <div className="flex items-start gap-2.5 rounded-xl border border-danger-200 bg-danger-50 px-4 py-3">
+                  <Icon name="x-circle" size={16} className="mt-0.5 shrink-0 text-danger-500" />
+                  <p className="text-sm text-danger-700">{error}</p>
+                </div>
               )}
-            </button>
-          </form>
 
-          {/* Footer Info */}
-          <div className="mt-8 pt-6 border-t border-slate-200">
-            <div className="flex items-center justify-center gap-2 text-xs text-slate-500">
-              <Icon name="check-circle" size={14} className="text-success-500" />
-              <span>Conexión segura · Datos protegidos</span>
+              {/* Botón */}
+              <button
+                type="submit"
+                disabled={submitting || !supervisorName || !password}
+                className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-brand-500 to-brand-700 py-3.5 text-sm font-bold text-white shadow-lg shadow-brand-500/25 transition-all hover:from-brand-600 hover:to-brand-800 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                {submitting ? (
+                  <>
+                    <Icon name="loader" size={18} className="animate-spin" />
+                    Iniciando sesión…
+                  </>
+                ) : (
+                  <>
+                    Entrar al Dashboard
+                    <Icon name="chevron-right" size={17} />
+                  </>
+                )}
+              </button>
+            </form>
+
+            {/* Nota de seguridad (visible en móvil, donde no está el panel izquierdo) */}
+            <div className="mt-6 flex items-center justify-center gap-2 text-xs text-slate-400 lg:hidden">
+              <Icon name="check-circle" size={13} className="text-success-500" />
+              Conexión segura · Datos protegidos
             </div>
           </div>
         </div>
-
-        {/* Version */}
-        <p className="mt-6 text-center text-xs text-slate-500">
-          Versión 2.0 · © 2024 Asiss
-        </p>
       </div>
+
+      {/* Pie de página */}
+      <footer className="relative z-10 pb-6 text-center">
+        <p className="text-xs text-slate-400">
+          Versión 2.0 · © {new Date().getFullYear()} Asiss
+        </p>
+        <a
+          href="https://www.zyteron.cl"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="mt-1 inline-flex items-center gap-1.5 text-xs font-medium text-slate-400 transition-colors hover:text-white"
+        >
+          Desarrollado por <span className="font-bold text-brand-300 hover:text-brand-200">Zyteron</span>
+          <span className="text-slate-500">· www.zyteron.cl</span>
+        </a>
+      </footer>
     </div>
   );
 };
