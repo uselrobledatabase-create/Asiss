@@ -1,23 +1,33 @@
 /**
  * Control ASISS - Exportadores Excel (ExcelJS)
  *
- * 1) exportPersonScheduleXlsx: programación individual por rango de fechas
- *    (formato autorizado para enviar ante cambios de programación).
- * 2) exportMonthlyScheduleXlsx: programación mensual de todo el personal,
- *    en semanas completas Lun-Dom (extiende al lunes previo y domingo posterior).
+ * Ambos exportes usan el MISMO formato oficial autorizado, LIMPIO de
+ * incidencias (sin licencias/vacaciones/permisos): cada celda es un
+ * horario en formato HH:MM_HH:MM_ o "LIBRE".
+ *
+ * Columnas fijas: Nº | NOMBRE | RUT | AREA | CARGO | ZONA |
+ * Tiempo de Colación (minutos) | Régimen de Turno | JORNADA | Feriados
+ *
+ * 1) exportScheduleChangeXlsx: cambio de programación para 1 o más
+ *    personas seleccionadas, por rango de fechas libre.
+ * 2) exportMonthlyScheduleXlsx: todo el personal (incluye suspendidos),
+ *    mes en semanas completas Lun-Dom.
+ *
+ * Régimen detectado desde el patrón real (ventana de 4 semanas):
+ * - Lun-Vie trabajando y TODOS los Sáb+Dom libres → "5X2 FIJO_42"
+ * - Cualquier otro patrón → "5X2 ROT_42"
+ * La opción `feriadosLibres` (botón en la UI) controla si los feriados
+ * legales de Chile se muestran LIBRES para los 5X2 FIJO_42.
  */
 
 import ExcelJS from 'exceljs';
 import { StaffWithShift } from '../../asistencia2026/types';
-import { TERMINAL_LABELS, TerminalCode } from '../../../shared/types/terminal';
-import { CONTROL_TERMINALS, ResolvedDayStatus, STATUS_LABELS } from '../types';
+import { CONTROL_TERMINALS } from '../types';
 import {
     ScheduleContext,
-    resolveDay,
     resolveDayPattern,
     getDateRange,
     getExtendedMonthRange,
-    dayName,
     dayNameShort,
     monthName,
     formatDateCL,
@@ -32,7 +42,6 @@ import { isFeriado } from './feriados';
 const C = {
     navy: 'FF0F172A',
     blue: 'FF2563EB',
-    blueSoft: 'FFDBEAFE',
     white: 'FFFFFFFF',
     ink: 'FF1E293B',
     inkSoft: 'FF475569',
@@ -41,25 +50,40 @@ const C = {
     bgSoft: 'FFF8FAFC',
     libreBg: 'FFF1F5F9',
     libreTx: 'FF64748B',
-    licBg: 'FFEDE9FE',
-    licTx: 'FF6D28D9',
-    vacBg: 'FFCCFBF1',
-    vacTx: 'FF0F766E',
-    perBg: 'FFFFEDD5',
-    perTx: 'FFC2410C',
     weekendBg: 'FF334155',
     outMonthBg: 'FFF8FAFC',
-    alertBg: 'FFFEE2E2',
-    alertTx: 'FFB91C1C',
 } as const;
 
-const STATUS_STYLE: Record<ResolvedDayStatus, { bg: string; tx: string; label: string }> = {
-    TRABAJA: { bg: C.white, tx: C.ink, label: 'Trabaja' },
-    LIBRE: { bg: C.libreBg, tx: C.libreTx, label: 'LIBRE' },
-    LICENCIA: { bg: C.licBg, tx: C.licTx, label: 'LICENCIA' },
-    VACACIONES: { bg: C.vacBg, tx: C.vacTx, label: 'VACACIONES' },
-    PERMISO: { bg: C.perBg, tx: C.perTx, label: 'PERMISO' },
+// ==========================================
+// CONSTANTES DE FORMATO OFICIAL
+// ==========================================
+
+const COLACION_MINUTOS = 60;
+
+const ZONA_BY_TERMINAL: Record<string, string> = {
+    EL_ROBLE: 'ER',
+    LA_REINA: 'LR',
+    MARIA_ANGELICA: 'LR', // MA se considera como LR
 };
+
+const CARGO_SORT = ['SUPERVISOR', 'INSPECTOR', 'CONDUCTOR', 'PLANILLERO', 'CLEANER'];
+const cargoOrder = (cargo: string): number => {
+    const idx = CARGO_SORT.findIndex((c) => cargo.toUpperCase().includes(c));
+    return idx === -1 ? CARGO_SORT.length : idx;
+};
+
+const FIXED_HEADERS = [
+    'Nº', 'NOMBRE', 'RUT', 'AREA', 'CARGO', 'ZONA',
+    'Tiempo de Colación (minutos)', 'Régimen de Turno', 'JORNADA', 'Feriados',
+];
+const FIXED_WIDTHS = [5, 34, 13, 11, 14, 7, 13, 14, 11, 10];
+
+/** RUT con guión: 12345678-9 */
+function rutConGuion(rut: string): string {
+    const clean = String(rut).replace(/[.\s-]/g, '').toUpperCase();
+    if (clean.length < 2) return rut;
+    return `${clean.slice(0, -1)}-${clean.slice(-1)}`;
+}
 
 // ==========================================
 // HELPERS DE ESTILO
@@ -104,11 +128,7 @@ function downloadWorkbook(wb: ExcelJS.Workbook, fileName: string): Promise<void>
     });
 }
 
-function terminalLabel(code: string): string {
-    return TERMINAL_LABELS[code as TerminalCode] || code;
-}
-
-/** Banner superior compartido: barra navy con título + subtítulo y sello ASISS */
+/** Banner superior: barra navy con título + subtítulo y línea de acento */
 function addBanner(
     ws: ExcelJS.Worksheet,
     lastCol: number,
@@ -133,255 +153,93 @@ function addBanner(
     s.alignment = { horizontal: 'left', vertical: 'middle', indent: 1 };
     ws.getRow(2).height = 16;
 
-    // Línea de acento azul
     ws.mergeCells(`A3:${colLetter}3`);
     ws.getCell('A3').fill = fill(C.blue);
     ws.getRow(3).height = 3;
 }
 
 // ==========================================
-// 1) PROGRAMACIÓN INDIVIDUAL POR RANGO
+// DETECCIÓN DE RÉGIMEN (ventana fija de 4 semanas)
 // ==========================================
 
-export async function exportPersonScheduleXlsx(
-    staff: StaffWithShift,
-    startDate: string,
-    endDate: string,
-    ctx: ScheduleContext
-): Promise<void> {
-    const dates = getDateRange(startDate, endDate);
-    const days = dates.map((d) => resolveDay(staff, d, ctx));
+/** Lunes de la semana de una fecha */
+function mondayOf(date: string): string {
+    const d = new Date(date + 'T12:00:00');
+    const offset = (d.getDay() + 6) % 7;
+    d.setDate(d.getDate() - offset);
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    return `${d.getFullYear()}-${m}-${dd}`;
+}
 
-    const wb = new ExcelJS.Workbook();
-    wb.creator = 'Control ASISS';
-    wb.created = new Date();
-
-    const ws = wb.addWorksheet('Programación', {
-        pageSetup: { orientation: 'portrait', fitToPage: true, fitToWidth: 1, fitToHeight: 0 },
-    });
-
-    ws.columns = [
-        { width: 14 }, // Fecha
-        { width: 12 }, // Día
-        { width: 10 }, // Turno
-        { width: 16 }, // Horario
-        { width: 16 }, // Estado
-        { width: 30 }, // Observación
-    ];
-
-    addBanner(
-        ws,
-        6,
-        'PROGRAMACIÓN DE TURNOS — CAMBIO DE PROGRAMACIÓN',
-        'Control ASISS · Documento con formato autorizado para envío'
-    );
-
-    // ---- Ficha del trabajador ----
-    const info: [string, string][] = [
-        ['Nombre', staff.nombre.toUpperCase()],
-        ['RUT', staff.rut],
-        ['Cargo', staff.cargo.toUpperCase()],
-        ['Terminal', terminalLabel(staff.terminal_code)],
-        ['Período', `${formatDateCL(startDate)}  al  ${formatDateCL(endDate)}`],
-    ];
-
-    let r = 5;
-    for (const [label, value] of info) {
-        const lc = ws.getCell(`A${r}`);
-        lc.value = label;
-        lc.font = { name: 'Calibri', size: 10, bold: true, color: { argb: C.inkSoft } };
-        lc.fill = fill(C.bgSoft);
-        lc.border = thinBorder();
-        lc.alignment = left;
-
-        ws.mergeCells(`B${r}:F${r}`);
-        const vc = ws.getCell(`B${r}`);
-        vc.value = value;
-        vc.font = { name: 'Calibri', size: 11, bold: true, color: { argb: C.ink } };
-        vc.border = thinBorder();
-        vc.alignment = left;
-        r++;
+/**
+ * Detecta si la persona es 5X2 FIJO_42: trabaja Lun-Vie y descansa TODOS
+ * los Sáb+Dom. Se evalúa sobre 4 semanas completas ancladas al inicio del
+ * rango exportado, para que rangos cortos no clasifiquen mal.
+ */
+function esFijo42(staff: StaffWithShift, anchorDate: string, ctx: ScheduleContext): boolean {
+    const start = mondayOf(anchorDate);
+    const startD = new Date(start + 'T12:00:00');
+    for (let i = 0; i < 28; i++) {
+        const d = new Date(startD);
+        d.setDate(startD.getDate() + i);
+        const m = String(d.getMonth() + 1).padStart(2, '0');
+        const dd = String(d.getDate()).padStart(2, '0');
+        const dateStr = `${d.getFullYear()}-${m}-${dd}`;
+        const day = resolveDayPattern(staff, dateStr, ctx);
+        const dow = d.getDay();
+        const weekend = dow === 0 || dow === 6;
+        if (weekend && day.status !== 'LIBRE') return false;
+        if (!weekend && day.status !== 'TRABAJA') return false;
     }
-
-    r++; // fila en blanco
-
-    // ---- Encabezado de tabla ----
-    const headers = ['FECHA', 'DÍA', 'TURNO', 'HORARIO', 'ESTADO', 'OBSERVACIÓN'];
-    const headerRow = r;
-    headers.forEach((h, i) => {
-        const cell = ws.getCell(headerRow, i + 1);
-        cell.value = h;
-        styleHeaderCell(cell);
-    });
-    ws.getRow(headerRow).height = 20;
-    r++;
-
-    // ---- Filas de días ----
-    const counts: Record<ResolvedDayStatus, number> = {
-        TRABAJA: 0, LIBRE: 0, LICENCIA: 0, VACACIONES: 0, PERMISO: 0,
-    };
-
-    for (const day of days) {
-        counts[day.status]++;
-        const st = STATUS_STYLE[day.status];
-        const isWeekend = ['Sábado', 'Domingo'].includes(dayName(day.date));
-
-        const values = [
-            formatDateCL(day.date),
-            dayName(day.date),
-            day.status === 'TRABAJA' ? day.turno : '—',
-            day.status === 'TRABAJA' ? (day.horario || '—') : '—',
-            day.status === 'TRABAJA' ? 'Trabaja' : st.label,
-            '',
-        ];
-
-        values.forEach((v, i) => {
-            const cell = ws.getCell(r, i + 1);
-            cell.value = v;
-            cell.border = thinBorder();
-            cell.alignment = i === 5 ? left : center;
-            cell.fill = fill(day.status === 'TRABAJA' ? (isWeekend ? C.bgSoft : C.white) : st.bg);
-            cell.font = {
-                name: 'Calibri',
-                size: 10,
-                bold: day.status !== 'TRABAJA' || i === 4,
-                color: { argb: day.status === 'TRABAJA' ? C.ink : st.tx },
-            };
-        });
-        ws.getRow(r).height = 17;
-        r++;
-    }
-
-    r++; // separación
-
-    // ---- Resumen ----
-    ws.mergeCells(`A${r}:F${r}`);
-    const sumTitle = ws.getCell(`A${r}`);
-    sumTitle.value = 'RESUMEN DEL PERÍODO';
-    styleHeaderCell(sumTitle);
-    r++;
-
-    const sumPairs: [string, number, string][] = [
-        ['Días de trabajo', counts.TRABAJA, C.blueSoft],
-        ['Días libres', counts.LIBRE, C.libreBg],
-        ['Licencia', counts.LICENCIA, C.licBg],
-        ['Vacaciones', counts.VACACIONES, C.vacBg],
-        ['Permiso', counts.PERMISO, C.perBg],
-        ['Total días', days.length, C.bgSoft],
-    ];
-    sumPairs.forEach(([label, value, bg], i) => {
-        const row = r + Math.floor(i / 2);
-        const col = (i % 2) * 3 + 1;
-        const lc = ws.getCell(row, col);
-        ws.mergeCells(row, col, row, col + 1);
-        lc.value = label;
-        lc.font = { name: 'Calibri', size: 10, bold: true, color: { argb: C.inkSoft } };
-        lc.fill = fill(bg);
-        lc.border = thinBorder();
-        lc.alignment = left;
-        const vc = ws.getCell(row, col + 2);
-        vc.value = value;
-        vc.font = { name: 'Calibri', size: 11, bold: true, color: { argb: C.ink } };
-        vc.fill = fill(bg);
-        vc.border = thinBorder();
-        vc.alignment = center;
-    });
-    r += Math.ceil(sumPairs.length / 2) + 1;
-
-    // ---- Pie ----
-    ws.mergeCells(`A${r}:F${r}`);
-    const foot = ws.getCell(`A${r}`);
-    foot.value = `Generado por Control ASISS el ${new Date().toLocaleString('es-CL')} · Documento de programación oficial`;
-    foot.font = { name: 'Calibri', size: 8, italic: true, color: { argb: C.inkFaint } };
-    foot.alignment = left;
-
-    ws.views = [{ state: 'frozen', ySplit: headerRow }];
-
-    const cleanRut = staff.rut.replace(/\./g, '').replace(/-/g, '');
-    await downloadWorkbook(
-        wb,
-        `Programacion_${cleanRut}_${startDate}_a_${endDate}.xlsx`
-    );
+    return true;
 }
 
 // ==========================================
-// 2) PROGRAMACIÓN MENSUAL OFICIAL (Lun-Dom)
+// RENDERIZADOR OFICIAL COMPARTIDO
 // ==========================================
-//
-// Formato oficial autorizado, hoja única consolidada, LIMPIA de incidencias
-// (sin licencias/vacaciones/permisos): cada celda es un horario en formato
-// HH:MM_HH:MM_ o "LIBRE". Incluye personal suspendido con sus horarios.
-//
-// Columnas fijas: Nº | NOMBRE | RUT | AREA | CARGO | ZONA |
-// Tiempo de Colación (minutos) | Régimen de Turno | JORNADA | Feriados
-//
-// Régimen detectado desde el patrón real de la programación:
-// - Lun-Vie trabajando y TODOS los Sáb+Dom libres → "5X2 FIJO_42", feriados LIBRE
-// - Cualquier otro patrón → "5X2 ROT_42", feriados TRABAJA
 
-const COLACION_MINUTOS = 60;
-
-const ZONA_BY_TERMINAL: Record<string, string> = {
-    EL_ROBLE: 'ER',
-    LA_REINA: 'LR',
-    MARIA_ANGELICA: 'LR', // MA se considera como LR
-};
-
-const CARGO_SORT = ['SUPERVISOR', 'INSPECTOR', 'CONDUCTOR', 'PLANILLERO', 'CLEANER'];
-const cargoOrder = (cargo: string): number => {
-    const idx = CARGO_SORT.findIndex((c) => cargo.toUpperCase().includes(c));
-    return idx === -1 ? CARGO_SORT.length : idx;
-};
-
-/** RUT con guión: 12345678-9 */
-function rutConGuion(rut: string): string {
-    const clean = String(rut).replace(/[.\s-]/g, '').toUpperCase();
-    if (clean.length < 2) return rut;
-    return `${clean.slice(0, -1)}-${clean.slice(-1)}`;
+export interface OfficialExportOptions {
+    /** Si true, los 5X2 FIJO_42 muestran LIBRE en feriados legales de Chile */
+    feriadosLibres: boolean;
 }
 
-export async function exportMonthlyScheduleXlsx(
-    staff: StaffWithShift[],
-    year: number,
-    month: number, // 0-11
-    ctx: ScheduleContext
-): Promise<void> {
-    const { dates } = getExtendedMonthRange(year, month);
+interface RenderConfig {
+    sheetName: string;
+    title: string;
+    subtitle: string;
+    dates: string[];
+    /** Mes 0-11 para atenuar días vecinos; null = sin atenuar (rango libre) */
+    dimOutsideMonth: number | null;
+    footerNote: string;
+}
 
-    const controlCodes = CONTROL_TERMINALS.map((t) => t.code as string);
-    const exportStaff = staff
-        .filter((s) => s.status === 'ACTIVO' && controlCodes.includes(s.terminal_code))
-        .sort((a, b) => {
-            const za = ZONA_BY_TERMINAL[a.terminal_code] || 'ZZ';
-            const zb = ZONA_BY_TERMINAL[b.terminal_code] || 'ZZ';
-            if (za !== zb) return za.localeCompare(zb);
-            const ca = cargoOrder(a.cargo);
-            const cb = cargoOrder(b.cargo);
-            if (ca !== cb) return ca - cb;
-            return a.nombre.localeCompare(b.nombre);
-        });
+function renderOfficialSheet(
+    wb: ExcelJS.Workbook,
+    staffList: StaffWithShift[],
+    ctx: ScheduleContext,
+    options: OfficialExportOptions,
+    cfg: RenderConfig
+): void {
+    const { dates } = cfg;
 
-    if (exportStaff.length === 0) {
-        throw new Error('No hay personal activo en los terminales para exportar.');
-    }
+    const sorted = [...staffList].sort((a, b) => {
+        const za = ZONA_BY_TERMINAL[a.terminal_code] || 'ZZ';
+        const zb = ZONA_BY_TERMINAL[b.terminal_code] || 'ZZ';
+        if (za !== zb) return za.localeCompare(zb);
+        const ca = cargoOrder(a.cargo);
+        const cb = cargoOrder(b.cargo);
+        if (ca !== cb) return ca - cb;
+        return a.nombre.localeCompare(b.nombre);
+    });
 
-    // Programación limpia (solo patrón) pre-resuelta por persona
+    // Programación limpia (solo patrón) pre-resuelta
     const resolved = new Map<string, ReturnType<typeof resolveDayPattern>[]>();
-    for (const s of exportStaff) {
+    const fijoMap = new Map<string, boolean>();
+    for (const s of sorted) {
         resolved.set(s.id, dates.map((d) => resolveDayPattern(s, d, ctx)));
+        fijoMap.set(s.id, esFijo42(s, dates[0], ctx));
     }
-
-    // Detección de régimen: Lun-Vie trabaja y TODOS los Sáb+Dom libres
-    const esFijo = (staffId: string): boolean => {
-        const days = resolved.get(staffId)!;
-        for (let i = 0; i < dates.length; i++) {
-            const dow = new Date(dates[i] + 'T12:00:00').getDay();
-            const weekend = dow === 0 || dow === 6;
-            if (weekend && days[i].status !== 'LIBRE') return false;
-            if (!weekend && days[i].status !== 'TRABAJA') return false;
-        }
-        return true;
-    };
 
     const jornadaDe = (staffId: string): 'DIURNA' | 'NOCTURNA' => {
         const days = resolved.get(staffId)!;
@@ -389,35 +247,19 @@ export async function exportMonthlyScheduleXlsx(
         return noche > days.length / 2 ? 'NOCTURNA' : 'DIURNA';
     };
 
-    // ---- Hoja única consolidada ----
-    const wb = new ExcelJS.Workbook();
-    wb.creator = 'Control ASISS';
-    wb.created = new Date();
-
-    const ws = wb.addWorksheet('PROGRAMACION', {
+    const ws = wb.addWorksheet(cfg.sheetName, {
         pageSetup: { orientation: 'landscape', fitToPage: true, fitToWidth: 1, fitToHeight: 0 },
     });
 
-    const FIXED_HEADERS = [
-        'Nº', 'NOMBRE', 'RUT', 'AREA', 'CARGO', 'ZONA',
-        'Tiempo de Colación (minutos)', 'Régimen de Turno', 'JORNADA', 'Feriados',
-    ];
     const fixedCols = FIXED_HEADERS.length;
     const totalCols = fixedCols + dates.length;
 
-    // Anchos
-    const FIXED_WIDTHS = [5, 34, 13, 11, 14, 7, 13, 14, 11, 10];
     FIXED_WIDTHS.forEach((w, i) => { ws.getColumn(i + 1).width = w; });
     for (let i = 0; i < dates.length; i++) {
         ws.getColumn(fixedCols + 1 + i).width = 12.5;
     }
 
-    addBanner(
-        ws,
-        totalCols,
-        `PROGRAMACIÓN MENSUAL — ${monthName(month).toUpperCase()} ${year}`,
-        `Área Logística · Zonas ER / LR · Semanas completas Lun-Dom (${formatDateCL(dates[0])} al ${formatDateCL(dates[dates.length - 1])}) · Control ASISS`
-    );
+    addBanner(ws, totalCols, cfg.title, cfg.subtitle);
 
     // ---- Encabezados (2 filas: fijas fusionadas + día/fecha) ----
     const headRow1 = 5;
@@ -435,7 +277,7 @@ export async function exportMonthlyScheduleXlsx(
         const col = fixedCols + 1 + i;
         const d = new Date(date + 'T12:00:00');
         const isWeekend = d.getDay() === 0 || d.getDay() === 6;
-        const inMonth = d.getMonth() === month;
+        const inMonth = cfg.dimOutsideMonth === null || d.getMonth() === cfg.dimOutsideMonth;
 
         const c1 = ws.getCell(headRow1, col);
         c1.value = dayNameShort(date).toUpperCase();
@@ -454,9 +296,10 @@ export async function exportMonthlyScheduleXlsx(
     let r = headRow2 + 1;
     let n = 1;
 
-    for (const s of exportStaff) {
-        const fijo = esFijo(s.id);
+    for (const s of sorted) {
+        const fijo = fijoMap.get(s.id)!;
         const days = resolved.get(s.id)!;
+        const feriadoLibre = fijo && options.feriadosLibres;
 
         const fixedValues: (string | number)[] = [
             n,
@@ -468,7 +311,7 @@ export async function exportMonthlyScheduleXlsx(
             COLACION_MINUTOS,
             fijo ? '5X2 FIJO_42' : '5X2 ROT_42',
             jornadaDe(s.id),
-            fijo ? 'LIBRE' : 'TRABAJA',
+            feriadoLibre ? 'LIBRE' : 'TRABAJA',
         ];
 
         fixedValues.forEach((v, i) => {
@@ -489,10 +332,9 @@ export async function exportMonthlyScheduleXlsx(
             const col = fixedCols + 1 + i;
             const day = days[i];
             const d = new Date(date + 'T12:00:00');
-            const inMonth = d.getMonth() === month;
+            const inMonth = cfg.dimOutsideMonth === null || d.getMonth() === cfg.dimOutsideMonth;
 
-            // Feriado: los 5X2 FIJO_42 tienen los feriados LIBRES
-            const esLibre = day.status !== 'TRABAJA' || (fijo && isFeriado(date));
+            const esLibre = day.status !== 'TRABAJA' || (feriadoLibre && isFeriado(date));
 
             const cell = ws.getCell(r, col);
             if (esLibre) {
@@ -523,14 +365,95 @@ export async function exportMonthlyScheduleXlsx(
     r += 1;
     ws.mergeCells(r, 1, r, Math.min(totalCols, 12));
     const foot = ws.getCell(r, 1);
+    const feriadosNote = options.feriadosLibres
+        ? 'Régimen 5X2 FIJO_42 con feriados libres'
+        : 'Feriados NO aplicados (todos según patrón de turno)';
     foot.value =
         `Generado por Control ASISS el ${new Date().toLocaleString('es-CL')} · ` +
-        `Programación limpia (solo horarios y libres) · Régimen 5X2 FIJO_42 con feriados libres · ` +
-        `Los días fuera del mes completan semanas Lun-Dom`;
+        `Programación limpia (solo horarios y libres) · ${feriadosNote}` +
+        (cfg.footerNote ? ` · ${cfg.footerNote}` : '');
     foot.font = { name: 'Calibri', size: 8, italic: true, color: { argb: C.inkFaint } };
 
     // Congelar Nº + NOMBRE + RUT y encabezados
     ws.views = [{ state: 'frozen', xSplit: 3, ySplit: headRow2 }];
+}
+
+// ==========================================
+// 1) CAMBIO DE PROGRAMACIÓN (1 O MÁS PERSONAS)
+// ==========================================
+
+export async function exportScheduleChangeXlsx(
+    staffList: StaffWithShift[],
+    startDate: string,
+    endDate: string,
+    ctx: ScheduleContext,
+    options: OfficialExportOptions = { feriadosLibres: true }
+): Promise<void> {
+    if (staffList.length === 0) {
+        throw new Error('Selecciona al menos 1 persona para exportar.');
+    }
+
+    const dates = getDateRange(startDate, endDate);
+
+    const wb = new ExcelJS.Workbook();
+    wb.creator = 'Control ASISS';
+    wb.created = new Date();
+
+    renderOfficialSheet(wb, staffList, ctx, options, {
+        sheetName: 'CAMBIO PROGRAMACION',
+        title: 'CAMBIO DE PROGRAMACIÓN',
+        subtitle:
+            `Área Logística · ${staffList.length} trabajador(es) · ` +
+            `Período ${formatDateCL(startDate)} al ${formatDateCL(endDate)} · ` +
+            `Documento con formato autorizado · Control ASISS`,
+        dates,
+        dimOutsideMonth: null,
+        footerNote: '',
+    });
+
+    const fileName = staffList.length === 1
+        ? `Cambio_Programacion_${rutConGuion(staffList[0].rut).replace('-', '')}_${startDate}_a_${endDate}.xlsx`
+        : `Cambio_Programacion_${staffList.length}_personas_${startDate}_a_${endDate}.xlsx`;
+
+    await downloadWorkbook(wb, fileName);
+}
+
+// ==========================================
+// 2) PROGRAMACIÓN MENSUAL COMPLETA (Lun-Dom)
+// ==========================================
+
+export async function exportMonthlyScheduleXlsx(
+    staff: StaffWithShift[],
+    year: number,
+    month: number, // 0-11
+    ctx: ScheduleContext,
+    options: OfficialExportOptions = { feriadosLibres: true }
+): Promise<void> {
+    const { dates } = getExtendedMonthRange(year, month);
+
+    const controlCodes = CONTROL_TERMINALS.map((t) => t.code as string);
+    const exportStaff = staff.filter(
+        (s) => s.status === 'ACTIVO' && controlCodes.includes(s.terminal_code)
+    );
+
+    if (exportStaff.length === 0) {
+        throw new Error('No hay personal activo en los terminales para exportar.');
+    }
+
+    const wb = new ExcelJS.Workbook();
+    wb.creator = 'Control ASISS';
+    wb.created = new Date();
+
+    renderOfficialSheet(wb, exportStaff, ctx, options, {
+        sheetName: 'PROGRAMACION',
+        title: `PROGRAMACIÓN MENSUAL — ${monthName(month).toUpperCase()} ${year}`,
+        subtitle:
+            `Área Logística · Zonas ER / LR · Semanas completas Lun-Dom ` +
+            `(${formatDateCL(dates[0])} al ${formatDateCL(dates[dates.length - 1])}) · Control ASISS`,
+        dates,
+        dimOutsideMonth: month,
+        footerNote: 'Los días fuera del mes completan semanas Lun-Dom',
+    });
 
     await downloadWorkbook(
         wb,
