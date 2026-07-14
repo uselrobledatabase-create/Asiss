@@ -39,6 +39,15 @@ const NAVIGATION: NavSection[] = [
       { label: 'Amonestaciones', to: '/amonestaciones', icon: 'alert-triangle' },
     ],
   },
+  {
+    label: 'Control ASISS',
+    icon: 'gauge',
+    items: [
+      { label: 'Asistencia Mensual', to: '/control-asiss/asistencia-mensual', icon: 'calendar-range' },
+      { label: 'Control HHEE', to: '/control-asiss/hhee', icon: 'clock' },
+      { label: 'Exportes Excel', to: '/control-asiss/exportes', icon: 'download' },
+    ],
+  },
 ];
 
 export const Sidebar = ({ isOpen, isCollapsed, onClose, onToggleCollapse }: Props) => {

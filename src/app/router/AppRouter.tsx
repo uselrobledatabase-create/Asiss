@@ -14,6 +14,9 @@ import { SolicitudesPage } from '../../features/solicitudes/SolicitudesPage';
 import { MyInfoPage } from '../../features/asistencia2026/pages/MyInfoPage';
 import { AmonestacionesPage } from '../../features/amonestaciones/AmonestacionesPage';
 import { InspeccionICA } from '../../features/inspeccion_ica/InspeccionICA';
+import { AsistenciaMensualPage } from '../../features/control_asiss/pages/AsistenciaMensualPage';
+import { ControlHHEEPage } from '../../features/control_asiss/pages/ControlHHEEPage';
+import { ExportesPage } from '../../features/control_asiss/pages/ExportesPage';
 
 const RequireSession = () => {
   const session = useSessionStore((state) => state.session);
@@ -51,6 +54,9 @@ export const AppRouter = () => (
           <Route path="/solicitudes" element={<SolicitudesPage />} />
           <Route path="/amonestaciones" element={<AmonestacionesPage />} />
           <Route path="/fiscalizacion-ica" element={<InspeccionICA />} />
+          <Route path="/control-asiss/asistencia-mensual" element={<AsistenciaMensualPage />} />
+          <Route path="/control-asiss/hhee" element={<ControlHHEEPage />} />
+          <Route path="/control-asiss/exportes" element={<ExportesPage />} />
         </Route>
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
