@@ -34,6 +34,7 @@ import {
     formatHorarioOficial,
 } from './scheduleEngine';
 import { isFeriado } from './feriados';
+import { turnoDeFicha } from './coverageAnalysis';
 
 // ==========================================
 // PALETA (ARGB)
@@ -241,11 +242,9 @@ function renderOfficialSheet(
         fijoMap.set(s.id, esFijo42(s, dates[0], ctx));
     }
 
-    const jornadaDe = (staffId: string): 'DIURNA' | 'NOCTURNA' => {
-        const days = resolved.get(staffId)!;
-        const noche = days.filter((d) => d.turno === 'NOCHE').length;
-        return noche > days.length / 2 ? 'NOCTURNA' : 'DIURNA';
-    };
+    // Jornada según la asignación de la ficha del trabajador (Mañana/Noche)
+    const jornadaDe = (s: StaffWithShift): 'DIURNA' | 'NOCTURNA' =>
+        turnoDeFicha(s.turno, s.horario) === 'NOCHE' ? 'NOCTURNA' : 'DIURNA';
 
     const ws = wb.addWorksheet(cfg.sheetName, {
         pageSetup: { orientation: 'landscape', fitToPage: true, fitToWidth: 1, fitToHeight: 0 },
@@ -310,7 +309,7 @@ function renderOfficialSheet(
             ZONA_BY_TERMINAL[s.terminal_code] || '',
             COLACION_MINUTOS,
             fijo ? '5X2 FIJO_42' : '5X2 ROT_42',
-            jornadaDe(s.id),
+            jornadaDe(s),
             feriadoLibre ? 'LIBRE' : 'TRABAJA',
         ];
 

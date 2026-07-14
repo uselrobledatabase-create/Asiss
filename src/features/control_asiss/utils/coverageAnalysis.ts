@@ -17,7 +17,20 @@ import {
     TerminalHeadcount,
     CONTROL_TERMINALS,
 } from '../types';
+import { getTurnoFromHorario } from '../../asistencia2026/utils/shiftEngine';
 import { ScheduleContext, resolveDay, dayNameShort, formatDateCL } from './scheduleEngine';
+
+/**
+ * Turno según la ASIGNACIÓN DE LA FICHA del trabajador (campo `turno`):
+ * "Mañana"/"Tarde"/"Rotativo" → DIA · "Noche" → NOCHE.
+ * Solo si la ficha no tiene turno se deduce del horario.
+ */
+export function turnoDeFicha(turno: string | undefined, horario?: string): 'DIA' | 'NOCHE' {
+    const t = (turno || '').trim().toUpperCase();
+    if (t.includes('NOCHE') || t.includes('NIGHT')) return 'NOCHE';
+    if (t.length > 0) return 'DIA'; // Mañana, Tarde, Rotativo, Día
+    return getTurnoFromHorario(horario || '');
+}
 
 const CARGO_SORT = ['SUPERVISOR', 'INSPECTOR', 'CONDUCTOR', 'PLANILLERO', 'CLEANER'];
 
@@ -42,15 +55,14 @@ export function analyzeCoverage(
     );
 
     // ---------- Q del personal (dotación) ----------
-    // Turno base: el turno que la persona cubre habitualmente (mayoría del rango)
+    // Turno: SIEMPRE según la asignación de la ficha del trabajador
+    // (Mañana = DIA, Noche = NOCHE), nunca deducido de la programación.
     const baseTurno = new Map<string, 'DIA' | 'NOCHE'>();
     const resolvedCache = new Map<string, ReturnType<typeof resolveDay>[]>();
 
     for (const s of activeStaff) {
-        const days = dates.map((d) => resolveDay(s, d, ctx));
-        resolvedCache.set(s.id, days);
-        const nocheCount = days.filter((d) => d.turno === 'NOCHE').length;
-        baseTurno.set(s.id, nocheCount > days.length / 2 ? 'NOCHE' : 'DIA');
+        resolvedCache.set(s.id, dates.map((d) => resolveDay(s, d, ctx)));
+        baseTurno.set(s.id, turnoDeFicha(s.turno, s.horario));
     }
 
     const headcounts: TerminalHeadcount[] = CONTROL_TERMINALS.map(({ code, label }) => {
