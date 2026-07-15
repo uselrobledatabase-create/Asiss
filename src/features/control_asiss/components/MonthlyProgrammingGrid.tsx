@@ -25,7 +25,7 @@ import {
     useDeleteOverrideControl,
 } from '../hooks';
 import { ExportStaff } from '../api';
-import { getDateRange, dayNameShort, formatDateCL, monthName } from '../utils/scheduleEngine';
+import { getExtendedMonthRange, dayNameShort, formatDateCL, monthName } from '../utils/scheduleEngine';
 import { turnoDeFicha } from '../utils/coverageAnalysis';
 import {
     buildPlan,
@@ -140,15 +140,18 @@ const AuthGate = ({ onAuthorized }: { onAuthorized: () => void }) => {
 
 const ProgrammingGridInner = ({ year, month }: Props) => {
     const mm = String(month + 1).padStart(2, '0');
-    const lastDay = new Date(year, month + 1, 0).getDate();
     const monthStart = `${year}-${mm}-01`;
-    const monthEnd = `${year}-${mm}-${String(lastDay).padStart(2, '0')}`;
-    const monthDates = useMemo(() => getDateRange(monthStart, monthEnd), [monthStart, monthEnd]);
+
+    // Semanas completas Lun-Dom: parte el lunes de la semana del día 1 y
+    // termina el domingo de la semana del último día
+    const ext = useMemo(() => getExtendedMonthRange(year, month), [year, month]);
+    const monthDates = ext.dates;
+    const inMonth = (d: string) => new Date(d + 'T12:00:00').getMonth() === month;
 
     // Rango de datos extendido ±6 días para validar rachas entre meses
     const { staff, scheduleContext, isLoading } = useControlAsissExportData(
-        shiftDateStr(monthStart, -6),
-        shiftDateStr(monthEnd, 6)
+        shiftDateStr(ext.startDate, -6),
+        shiftDateStr(ext.endDate, 6)
     );
 
     const upsertShift = useUpsertShiftControl();
@@ -283,11 +286,10 @@ const ProgrammingGridInner = ({ year, month }: Props) => {
             </div>
 
             {/* Reglas */}
-            <div className="flex flex-wrap items-center gap-x-5 gap-y-1 rounded-xl border border-red-100 bg-red-50 px-4 py-2.5 text-xs font-medium text-red-800">
-                <span className="font-bold">REGLAS ABSOLUTAS:</span>
-                <span>• Máximo 6 días seguidos de trabajo</span>
-                <span>• Mínimo 2 domingos libres al mes</span>
-                <span>• Jamás trabajar un domingo de descanso</span>
+            <div className="flex flex-wrap items-center gap-x-5 gap-y-1 rounded-xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-xs font-medium text-amber-800">
+                <span className="font-bold">REGLAS:</span>
+                <span>• Máx. 6 días seguidos y mín. 2 domingos libres al mes → se ALERTA (puedes compensar dentro del período)</span>
+                <span className="font-bold text-red-700">• Domingo de descanso: JAMÁS se fuerza a trabajar (único bloqueo)</span>
             </div>
 
             {/* Grilla */}
@@ -309,7 +311,7 @@ const ProgrammingGridInner = ({ year, month }: Props) => {
                                         return (
                                             <th
                                                 key={d}
-                                                className={`min-w-[46px] border-b px-0.5 py-1.5 text-center ${isMonday(d) ? 'border-l-2 border-l-slate-400' : ''} ${dow === 0 ? 'bg-red-700 text-white' : dow === 6 ? 'bg-slate-700 text-white' : 'bg-slate-800 text-slate-200'
+                                                className={`min-w-[46px] border-b px-0.5 py-1.5 text-center ${isMonday(d) ? 'border-l-2 border-l-slate-400' : ''} ${!inMonth(d) ? 'opacity-60 ' : ''}${dow === 0 ? 'bg-red-700 text-white' : dow === 6 ? 'bg-slate-700 text-white' : 'bg-slate-800 text-slate-200'
                                                     }`}
                                             >
                                                 <div className="text-[9px] font-semibold">{dayNameShort(d).toUpperCase()}</div>
@@ -391,9 +393,9 @@ const ProgrammingGridInner = ({ year, month }: Props) => {
                                                                     </button>
                                                                 </div>
                                                             </div>
-                                                            {!rules.ok && (
-                                                                <span title={rules.violations.join(' ')}>
-                                                                    <Icon name="alert-triangle" size={14} className="shrink-0 text-red-500" />
+                                                            {rules.warnings.length > 0 && (
+                                                                <span title={rules.warnings.join(' ')}>
+                                                                    <Icon name="alert-triangle" size={14} className="shrink-0 text-amber-500" />
                                                                 </span>
                                                             )}
                                                         </div>
@@ -401,7 +403,7 @@ const ProgrammingGridInner = ({ year, month }: Props) => {
 
                                                     {/* Días */}
                                                     {plan.map((p) => (
-                                                        <td key={p.date} className={`border-b p-0.5 ${isMonday(p.date) ? 'border-l-2 border-l-slate-400' : ''}`}>
+                                                        <td key={p.date} className={`border-b p-0.5 ${isMonday(p.date) ? 'border-l-2 border-l-slate-400' : ''} ${!inMonth(p.date) ? 'opacity-50' : ''}`}>
                                                             <DayCellBtn plan={p} onClick={() => setDayEdit({ staff: s, date: p.date })} />
                                                         </td>
                                                     ))}
@@ -516,7 +518,7 @@ const DayCellBtn = ({ plan, onClick }: { plan: DayPlan; onClick: () => void }) =
                         ? 'bg-indigo-50 text-indigo-900 ring-1 ring-indigo-200'
                         : 'bg-blue-50 text-blue-900 ring-1 ring-blue-200'
                 }`}
-            title={`${dayNameShort(plan.date)} ${formatDateCL(plan.date)} · ${plan.status === 'LIBRE' ? 'LIBRE' : plan.horario || 'Trabaja'}${plan.overridden ? ' · AJUSTE MANUAL' : ''}`}
+            title={`${dayNameShort(plan.date)} ${formatDateCL(plan.date)} · ${plan.status === 'LIBRE' ? 'LIBRE' : plan.horario || 'Trabaja'}`}
         >
             {plan.status === 'LIBRE' ? (
                 <span className="text-[10px] font-bold">L</span>
@@ -528,15 +530,14 @@ const DayCellBtn = ({ plan, onClick }: { plan: DayPlan; onClick: () => void }) =
             ) : (
                 <span className="text-[9px] font-bold">{plan.turno === 'NOCHE' ? 'N' : 'D'}</span>
             )}
-            {plan.overridden && (
-                <span className="absolute right-0.5 top-0.5 h-1.5 w-1.5 rounded-full bg-amber-500" />
-            )}
         </button>
     );
 };
 
 // ==========================================
-// Modal: cambio de día (la clave ya fue ingresada al entrar)
+// Modal: cambio de día — acción directa, sin confirmación extra.
+// Forzar TRABAJA permite elegir turno DIA/NOCHE y horario propio
+// (supervisores rotativos que cubren día o noche de otro terminal).
 // ==========================================
 
 const DayEditModal = ({
@@ -551,35 +552,48 @@ const DayEditModal = ({
     const currentOverride = ctx.overrides.find(
         (o) => o.staff_id === staff.id && o.override_date === date
     );
-    const [action, setAction] = useState<'OFF' | 'WORK' | null | undefined>(undefined);
 
-    const check = useMemo(
-        () => (action === undefined ? null : checkDayOverride(staff, ctx, year, month, date, action)),
-        [staff, ctx, year, month, date, action]
+    // Sub-form de TRABAJA: turno + horario del día
+    const currentMeta = (currentOverride?.meta_json || {}) as { turno?: 'DIA' | 'NOCHE'; horario?: string };
+    const [turno, setTurno] = useState<'DIA' | 'NOCHE'>(
+        currentMeta.turno || turnoDeFicha(staff.turno, staff.horario)
     );
+    const [horario, setHorario] = useState(currentMeta.horario || staff.horario || '');
+    const [showWork, setShowWork] = useState(false);
 
     const isSunday = new Date(date + 'T12:00:00').getDay() === 0;
+    const workCheck = useMemo(
+        () => checkDayOverride(staff, ctx, year, month, date, 'WORK'),
+        [staff, ctx, year, month, date]
+    );
+    const sundayRest = isSunday && workCheck.blocked !== null;
     const busy = upsertOverride.isPending || removeOverride.isPending;
 
-    const handleConfirm = async () => {
-        if (action === undefined || !check?.ok) return;
+    /** Aplica de inmediato y alerta situaciones (sin bloquear) */
+    const apply = async (type: 'OFF' | 'WORK' | null) => {
+        if (busy) return;
         try {
-            if (action === null) {
+            const check = checkDayOverride(staff, ctx, year, month, date, type);
+            if (type === 'WORK' && check.blocked) return; // único bloqueo duro
+
+            if (type === null) {
                 await removeOverride.mutateAsync({ staffId: staff.id, date });
             } else {
-                await upsertOverride.mutateAsync({ staffId: staff.id, date, type: action });
+                await upsertOverride.mutateAsync({
+                    staffId: staff.id,
+                    date,
+                    type,
+                    meta: type === 'WORK' ? { turno, horario: horario.trim() || undefined } : undefined,
+                });
             }
             onClose();
+            if (check.warnings.length > 0) {
+                setTimeout(() => alert(`Cambio aplicado a ${staff.nombre}.\n\n${check.warnings.join('\n')}`), 50);
+            }
         } catch (e) {
             alert(e instanceof Error ? e.message : 'Error al guardar el cambio.');
         }
     };
-
-    const options: { value: 'OFF' | 'WORK' | null; label: string; desc: string }[] = [
-        { value: 'WORK', label: 'Forzar TRABAJA', desc: isSunday ? 'Prohibido sobre domingo de descanso' : 'La persona trabaja este día (cambio de día)' },
-        { value: 'OFF', label: 'Forzar LIBRE', desc: 'La persona queda libre este día (cambio de día)' },
-        ...(currentOverride ? [{ value: null as null, label: 'Quitar ajuste manual', desc: 'Volver al patrón normal del turno' }] : []),
-    ];
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm" onClick={onClose}>
@@ -590,7 +604,6 @@ const DayEditModal = ({
                             <h3 className="font-bold text-white">Cambio de Día</h3>
                             <p className="text-xs text-slate-300">
                                 {staff.nombre} · {dayNameShort(date)} {formatDateCL(date)}
-                                {currentOverride && ' · tiene ajuste manual'}
                             </p>
                         </div>
                         <button onClick={onClose} className="rounded-lg p-1.5 text-slate-400 hover:bg-white/10 hover:text-white">
@@ -599,50 +612,87 @@ const DayEditModal = ({
                     </div>
                 </div>
 
-                <div className="space-y-4 p-5">
-                    <div className="space-y-2">
-                        {options.map((opt) => (
+                <div className="space-y-3 p-5">
+                    {/* FORZAR TRABAJA (con turno/horario) */}
+                    {sundayRest ? (
+                        <div className="rounded-xl border-2 border-red-200 bg-red-50 px-4 py-2.5">
+                            <p className="text-sm font-bold text-red-800">Forzar TRABAJA — BLOQUEADO</p>
+                            <p className="text-xs text-red-700">{workCheck.blocked}</p>
+                        </div>
+                    ) : (
+                        <div className={`rounded-xl border-2 transition-all ${showWork ? 'border-blue-500 bg-blue-50' : 'border-slate-200'}`}>
                             <button
-                                key={String(opt.value)}
-                                onClick={() => setAction(opt.value)}
-                                className={`w-full rounded-xl border-2 px-4 py-2.5 text-left transition-all ${action === opt.value
-                                    ? 'border-blue-500 bg-blue-50'
-                                    : 'border-slate-200 hover:border-slate-300'
-                                    }`}
+                                onClick={() => setShowWork((v) => !v)}
+                                className="w-full px-4 py-2.5 text-left"
                             >
-                                <p className="text-sm font-bold text-slate-800">{opt.label}</p>
-                                <p className="text-xs text-slate-500">{opt.desc}</p>
+                                <p className="text-sm font-bold text-slate-800">Forzar TRABAJA</p>
+                                <p className="text-xs text-slate-500">Elige turno y horario del día (cubre día o noche de cualquier terminal)</p>
                             </button>
-                        ))}
-                    </div>
-
-                    {check && (
-                        check.ok ? (
-                            <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-xs text-emerald-800">
-                                <p className="font-bold">✓ Cumple todas las reglas</p>
-                                <p>Racha máx: {check.maxRun} días · Domingos libres: {check.sundaysLibres}/{check.sundaysRequired}</p>
-                            </div>
-                        ) : (
-                            <div className="rounded-xl border border-red-300 bg-red-50 px-4 py-2.5 text-xs text-red-800">
-                                <p className="font-bold">✕ BLOQUEADO — viola reglas absolutas:</p>
-                                {check.violations.map((v, i) => <p key={i}>• {v}</p>)}
-                            </div>
-                        )
+                            {showWork && (
+                                <div className="space-y-3 border-t border-blue-200 px-4 py-3">
+                                    <div className="flex gap-2">
+                                        {(['DIA', 'NOCHE'] as const).map((t) => (
+                                            <button
+                                                key={t}
+                                                onClick={() => setTurno(t)}
+                                                className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg border-2 px-3 py-2 text-sm font-bold transition-all ${turno === t
+                                                    ? t === 'NOCHE' ? 'border-indigo-500 bg-indigo-100 text-indigo-800' : 'border-amber-400 bg-amber-50 text-amber-800'
+                                                    : 'border-slate-200 text-slate-500'
+                                                    }`}
+                                            >
+                                                <Icon name={t === 'NOCHE' ? 'moon' : 'sun'} size={14} />
+                                                {t === 'NOCHE' ? 'Noche' : 'Día'}
+                                            </button>
+                                        ))}
+                                    </div>
+                                    <div>
+                                        <label className="mb-1 block text-xs font-semibold text-slate-500">Horario del día (ej: 20:00-08:00)</label>
+                                        <input
+                                            value={horario}
+                                            onChange={(e) => setHorario(e.target.value)}
+                                            placeholder="HH:MM-HH:MM"
+                                            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500"
+                                        />
+                                    </div>
+                                    <button
+                                        onClick={() => apply('WORK')}
+                                        disabled={busy}
+                                        className="flex w-full items-center justify-center gap-2 rounded-lg bg-blue-600 py-2.5 text-sm font-bold text-white hover:bg-blue-700 disabled:opacity-50"
+                                    >
+                                        {busy ? <Icon name="loader" size={14} className="animate-spin" /> : <Icon name="check" size={14} />}
+                                        Forzar TRABAJA {turno === 'NOCHE' ? '(Noche)' : '(Día)'}{horario.trim() ? ` · ${horario.trim()}` : ''}
+                                    </button>
+                                </div>
+                            )}
+                        </div>
                     )}
-                </div>
 
-                <div className="flex justify-end gap-2 border-t bg-slate-50 px-5 py-3.5">
-                    <button onClick={onClose} className="rounded-lg px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-200">
-                        Cancelar
-                    </button>
+                    {/* FORZAR LIBRE: directo */}
                     <button
-                        onClick={handleConfirm}
-                        disabled={action === undefined || !check?.ok || busy}
-                        className="flex items-center gap-2 rounded-lg bg-blue-600 px-5 py-2 text-sm font-bold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-40"
+                        onClick={() => apply('OFF')}
+                        disabled={busy}
+                        className="w-full rounded-xl border-2 border-slate-200 px-4 py-2.5 text-left transition-all hover:border-slate-500 hover:bg-slate-50 disabled:opacity-50"
                     >
-                        {busy && <Icon name="loader" size={14} className="animate-spin" />}
-                        Aplicar cambio
+                        <p className="text-sm font-bold text-slate-800">Forzar LIBRE</p>
+                        <p className="text-xs text-slate-500">Se aplica al instante — puedes mover este libre a otro día de la semana</p>
                     </button>
+
+                    {/* QUITAR AJUSTE: directo */}
+                    {currentOverride && (
+                        <button
+                            onClick={() => apply(null)}
+                            disabled={busy}
+                            className="w-full rounded-xl border-2 border-dashed border-slate-300 px-4 py-2.5 text-left transition-all hover:border-slate-500 hover:bg-slate-50 disabled:opacity-50"
+                        >
+                            <p className="text-sm font-bold text-slate-700">Quitar ajuste manual</p>
+                            <p className="text-xs text-slate-500">Volver al patrón normal del turno</p>
+                        </button>
+                    )}
+
+                    <p className="text-[11px] text-slate-400">
+                        Las situaciones (racha &gt;6 días, domingos libres bajo el mínimo) se ALERTAN
+                        después de aplicar — puedes compensarlas dentro del período.
+                    </p>
                 </div>
             </div>
         </div>
@@ -669,6 +719,10 @@ const ModalityEditModal = ({
     const [variant, setVariant] = useState<VariantCode>(
         staff.shift?.variant_code === 'ESPECIAL' ? 'PRINCIPAL' : (staff.shift?.variant_code || 'PRINCIPAL')
     );
+    // La fecha de inicio SOLO se define para personal NUEVO (sin turno
+    // asignado) y pasa UNA sola vez. Para personal existente se conserva
+    // la original: cambiar la modalidad no borra la programación pasada.
+    const esPersonalNuevo = !staff.shift;
     const [startDate, setStartDate] = useState(staff.shift?.start_date || '');
 
     const recommendation = useMemo(
@@ -692,15 +746,18 @@ const ModalityEditModal = ({
     }, [staff, type, variant, startDate, ctx, year, month]);
 
     const handleConfirm = async () => {
-        if (!check.ok) return;
         try {
             await upsertShift.mutateAsync({
                 staff_id: staff.id,
                 shift_type_code: type,
                 variant_code: variant,
-                start_date: startDate || undefined,
+                // Personal existente: SIEMPRE conserva su fecha de inicio original
+                start_date: esPersonalNuevo ? (startDate || undefined) : (staff.shift?.start_date || undefined),
             });
             onClose();
+            if (check.warnings.length > 0) {
+                setTimeout(() => alert(`Modalidad guardada para ${staff.nombre}.\n\n${check.warnings.join('\n')}`), 50);
+            }
         } catch (e) {
             alert(e instanceof Error ? e.message : 'Error al guardar la modalidad.');
         }
@@ -777,27 +834,37 @@ const ModalityEditModal = ({
                         </div>
                     )}
 
-                    <div>
-                        <label className="mb-1 block text-xs font-bold uppercase tracking-wide text-slate-500">
-                            Fecha de inicio (los días anteriores quedan con “-”)
-                        </label>
-                        <input
-                            type="date"
-                            value={startDate}
-                            onChange={(e) => setStartDate(e.target.value)}
-                            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500"
-                        />
-                    </div>
+                    {esPersonalNuevo ? (
+                        <div>
+                            <label className="mb-1 block text-xs font-bold uppercase tracking-wide text-slate-500">
+                                Fecha de inicio — personal nuevo (los días anteriores quedan con “-”)
+                            </label>
+                            <input
+                                type="date"
+                                value={startDate}
+                                onChange={(e) => setStartDate(e.target.value)}
+                                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500"
+                            />
+                            <p className="mt-1 text-[11px] text-slate-400">
+                                Se define UNA sola vez, al ingresar la persona.
+                            </p>
+                        </div>
+                    ) : (
+                        <p className="rounded-lg bg-slate-50 px-3 py-2 text-[11px] text-slate-500">
+                            La programación histórica se conserva: cambiar la modalidad NO borra
+                            la asistencia hacia atrás{staff.shift?.start_date ? ` (fecha de inicio original: ${formatDateCL(staff.shift.start_date)})` : ''}.
+                        </p>
+                    )}
 
-                    {check.ok ? (
+                    {check.warnings.length === 0 ? (
                         <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-xs text-emerald-800">
                             <p className="font-bold">✓ La modalidad cumple las reglas del mes</p>
                             <p>Racha máx: {check.maxRun} días · Domingos libres: {check.sundaysLibres}/{check.sundaysRequired}</p>
                         </div>
                     ) : (
-                        <div className="rounded-xl border border-red-300 bg-red-50 px-4 py-2.5 text-xs text-red-800">
-                            <p className="font-bold">✕ BLOQUEADO — viola reglas absolutas:</p>
-                            {check.violations.map((v, i) => <p key={i}>• {v}</p>)}
+                        <div className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-2.5 text-xs text-amber-800">
+                            <p className="font-bold">⚠ ALERTA (no bloquea — puedes compensar en el período):</p>
+                            {check.warnings.map((v, i) => <p key={i}>• {v}</p>)}
                         </div>
                     )}
                 </div>
@@ -808,7 +875,7 @@ const ModalityEditModal = ({
                     </button>
                     <button
                         onClick={handleConfirm}
-                        disabled={!check.ok || upsertShift.isPending}
+                        disabled={upsertShift.isPending}
                         className="flex items-center gap-2 rounded-lg bg-blue-600 px-5 py-2 text-sm font-bold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-40"
                     >
                         {upsertShift.isPending && <Icon name="loader" size={14} className="animate-spin" />}

@@ -101,11 +101,16 @@ export function buildPlan(
 // ==========================================
 
 export interface RuleCheck {
+    /** false SOLO ante bloqueo duro (domingo de descanso) */
     ok: boolean;
+    /** motivo del bloqueo duro, si existe */
+    blocked: string | null;
+    /** ALERTAS no bloqueantes: se informan pero se puede forzar igual
+     *  (ej: los domingos pueden compensarse más adelante en el período) */
+    warnings: string[];
     maxRun: number;            // racha máxima de días seguidos trabajando
     sundaysLibres: number;     // domingos libres del mes (desde el inicio)
     sundaysRequired: number;   // domingos libres exigidos
-    violations: string[];      // reglas absolutas violadas
 }
 
 function monthBounds(year: number, month: number): { start: string; end: string } {
@@ -159,15 +164,15 @@ export function checkRules(
     const sundaysLibres = sundays.filter((d) => d.status === 'LIBRE').length;
     const sundaysRequired = Math.min(2, sundays.length);
 
-    const violations: string[] = [];
+    const warnings: string[] = [];
     if (maxRun > 6) {
-        violations.push(`Quedaría con ${maxRun} días seguidos de trabajo (máximo absoluto: 6).`);
+        warnings.push(`ALERTA: quedaría con ${maxRun} días seguidos de trabajo (el máximo permitido es 6 — compénselo dentro del período).`);
     }
     if (sundaysLibres < sundaysRequired) {
-        violations.push(`Quedaría con ${sundaysLibres} domingo(s) libre(s) en el mes (mínimo obligatorio: ${sundaysRequired}).`);
+        warnings.push(`ALERTA: por ahora quedaría con ${sundaysLibres} domingo(s) libre(s) en el mes (mínimo ${sundaysRequired} — puede compensarlo liberando otro domingo del período).`);
     }
 
-    return { ok: violations.length === 0, maxRun, sundaysLibres, sundaysRequired, violations };
+    return { ok: true, blocked: null, warnings, maxRun, sundaysLibres, sundaysRequired };
 }
 
 /**
@@ -194,12 +199,11 @@ export function checkDayOverride(
         if (natural.status !== 'TRABAJA') {
             return {
                 ok: false,
+                blocked: `El ${formatDateCL(date)} es un DOMINGO DE DESCANSO del trabajador: un cambio de día jamás puede caer sobre él.`,
+                warnings: [],
                 maxRun: 0,
                 sundaysLibres: 0,
                 sundaysRequired: 0,
-                violations: [
-                    `El ${formatDateCL(date)} es un DOMINGO DE DESCANSO del trabajador: un cambio de día jamás puede caer sobre él.`,
-                ],
             };
         }
     }
@@ -311,10 +315,11 @@ export function buildGapSuggestions(
         // Debe estar LIBRE (por patrón, sin ausencias) el día de la brecha
         if (resolveDay(cand, gap.date, ctx).status !== 'LIBRE') continue;
 
-        // Regla 3: nunca sobre su domingo de descanso
+        // Regla 3: nunca sobre su domingo de descanso; y las sugerencias
+        // deben ser 100% limpias (sin bloqueos NI alertas)
         const workCheck = checkDayOverride(cand, ctx, year, month, gap.date, 'WORK');
-        if (gapD.getDay() === 0 || !workCheck.ok) {
-            continue; // domingo de descanso o rompe reglas: no es candidato
+        if (gapD.getDay() === 0 || !workCheck.ok || workCheck.warnings.length > 0) {
+            continue;
         }
 
         // Buscar día de la semana para liberar: trabaja ese día, el grupo
@@ -326,7 +331,8 @@ export function buildGapSuggestions(
             const remaining = (availability.get(d) || 0) - 1;
             if (remaining < 1) continue;
             const patch: OverridePatch = new Map<string, 'OFF' | 'WORK' | null>([[gap.date, 'WORK'], [d, 'OFF']]);
-            if (!checkRules(cand, ctx, year, month, patch).ok) continue;
+            const swapCheck = checkRules(cand, ctx, year, month, patch);
+            if (!swapCheck.ok || swapCheck.warnings.length > 0) continue;
             if (!bestLibera || remaining > bestLibera.remaining) {
                 bestLibera = { date: d, remaining };
             }

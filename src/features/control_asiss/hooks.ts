@@ -92,12 +92,18 @@ export function useUpsertShiftControl() {
     });
 }
 
-/** Ajuste puntual de un día (cambio de día) desde Control ASISS */
+/** Ajuste puntual de un día (cambio de día) desde Control ASISS.
+ *  meta permite fijar turno DIA/NOCHE y horario propio para ese día
+ *  (ej: supervisor rotativo cubriendo la noche de otro terminal). */
 export function useUpsertOverrideControl() {
     const invalidate = useInvalidateProgramming();
     return useMutation({
-        mutationFn: ({ staffId, date, type }: { staffId: string; date: string; type: 'OFF' | 'WORK' }) =>
-            upsertOverride(staffId, date, type),
+        mutationFn: ({ staffId, date, type, meta }: {
+            staffId: string;
+            date: string;
+            type: 'OFF' | 'WORK';
+            meta?: { turno?: 'DIA' | 'NOCHE'; horario?: string };
+        }) => upsertOverride(staffId, date, type, meta),
         onSuccess: invalidate,
     });
 }

@@ -332,6 +332,14 @@ export const AttendanceGrid = ({
             isOff = dayOfWeek === 0 || dayOfWeek === 6; // Sunday or Saturday
         }
 
+        // Ajuste manual con turno/horario propio (cobertura día/noche puntual
+        // registrada desde Control ASISS — ej: supervisores rotativos)
+        if (!isOff && override?.override_type === 'WORK' && override.meta_json) {
+            const meta = override.meta_json as { turno?: 'DIA' | 'NOCHE'; horario?: string };
+            if (meta.turno === 'DIA' || meta.turno === 'NOCHE') turno = meta.turno;
+            if (typeof meta.horario === 'string' && meta.horario) horario = meta.horario;
+        }
+
         return {
             mark,
             license,

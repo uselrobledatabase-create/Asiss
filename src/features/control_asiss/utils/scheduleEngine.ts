@@ -85,7 +85,7 @@ export function resolveDayPattern(
     date: string,
     ctx: ScheduleContext
 ): ResolvedDay {
-    const turno = determineDailyShift(
+    let turno = determineDailyShift(
         staff.horario,
         staff.shift,
         date,
@@ -93,6 +93,18 @@ export function resolveDayPattern(
         staff.id,
         ctx.shiftTypes
     );
+
+    // Ajuste manual del día con turno/horario propio (ej: supervisores
+    // rotativos que cubren día o noche de otro terminal)
+    const dayOverride = ctx.overrides.find(
+        (o) => o.staff_id === staff.id && o.override_date === date
+    );
+    const overrideMeta = (dayOverride?.override_type === 'WORK'
+        ? dayOverride.meta_json
+        : undefined) as { turno?: 'DIA' | 'NOCHE'; horario?: string } | undefined;
+    if (overrideMeta?.turno === 'DIA' || overrideMeta?.turno === 'NOCHE') {
+        turno = overrideMeta.turno;
+    }
 
     // Libre según patrón de turno (u override puntual)
     let isOff = false;
@@ -142,6 +154,11 @@ export function resolveDayPattern(
                 horario = `${startTime}-${details.earlyExit}`;
             }
         }
+    }
+
+    // El horario del ajuste manual manda (cobertura día/noche puntual)
+    if (overrideMeta?.horario) {
+        horario = overrideMeta.horario;
     }
 
     return { date, status: 'TRABAJA', turno, horario };
