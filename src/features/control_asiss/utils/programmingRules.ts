@@ -12,6 +12,7 @@
  */
 
 import { StaffWithShift, StaffShiftOverride } from '../../asistencia2026/types';
+import { getDayInCycle } from '../../asistencia2026/utils/shiftEngine';
 import { ScheduleContext, resolveDay, resolveDayPattern, getDateRange, formatDateCL, dayNameShort } from './scheduleEngine';
 import { turnoDeFicha } from './coverageAnalysis';
 
@@ -205,6 +206,51 @@ export function checkDayOverride(
 
     const patch: OverridePatch = new Map([[date, type]]);
     return checkRules(staff, ctx, year, month, patch);
+}
+
+// ==========================================
+// CICLO DE DUPLICIDAD (2 SEMANAS ↔ 4 SEMANAS/MENSUAL)
+// ==========================================
+
+/**
+ * Siembra una plantilla ESPECIAL de 28 días (4 semanas Lun-Dom) copiando
+ * el patrón actual del trabajador. Con esto la programación se llena un
+ * "mes" (4 semanas alineadas de lunes a domingo) y se duplica igual
+ * hacia adelante, en vez del bucle quincenal estándar.
+ * El ciclo queda anclado al lunes de referencia del motor (día 0), por
+ * lo que SIEMPRE parte lunes y termina domingo.
+ */
+export function seedFourWeekTemplate(
+    staff: StaffWithShift,
+    ctx: ScheduleContext,
+    aroundDate: string
+): { offDays: number[]; dailyShifts: Record<number, 'DIA' | 'NOCHE'> } {
+    // Patrón base sin ajustes puntuales (los overrides son por fecha, no cíclicos)
+    const baseCtx: ScheduleContext = {
+        ...ctx,
+        overrides: ctx.overrides.filter((o) => o.staff_id !== staff.id),
+    };
+
+    // Buscar el lunes con índice 0 del ciclo de 28 días, en o antes de la fecha
+    let anchor = aroundDate;
+    for (let i = 0; i < 28 && getDayInCycle(anchor) !== 0; i++) {
+        anchor = shiftDate(anchor, -1);
+    }
+
+    const offDays: number[] = [];
+    const dailyShifts: Record<number, 'DIA' | 'NOCHE'> = {};
+
+    for (let i = 0; i < 28; i++) {
+        const date = shiftDate(anchor, i);
+        const day = resolveDayPattern(staff, date, baseCtx);
+        if (day.status !== 'TRABAJA') {
+            offDays.push(i);
+        } else if (day.turno === 'NOCHE') {
+            dailyShifts[i] = 'NOCHE';
+        }
+    }
+
+    return { offDays, dailyShifts };
 }
 
 // ==========================================
