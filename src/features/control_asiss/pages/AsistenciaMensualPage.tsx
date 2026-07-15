@@ -12,6 +12,10 @@ import { useControlAsissData } from '../hooks';
 import { analyzeCoverage } from '../utils/coverageAnalysis';
 import { getDateRange, monthName, formatDateCL, dayNameShort } from '../utils/scheduleEngine';
 import { CONTROL_TERMINALS, CoverageGap } from '../types';
+import { MonthlyProgrammingGrid } from '../components/MonthlyProgrammingGrid';
+import { buildGapSuggestions, GapSuggestion } from '../utils/programmingRules';
+import { ScheduleContext } from '../utils/scheduleEngine';
+import { StaffWithShift } from '../../asistencia2026/types';
 
 const YEARS = [2025, 2026, 2027];
 
@@ -26,6 +30,7 @@ export const AsistenciaMensualPage = () => {
     const [month, setMonth] = useState(now.getMonth());
     const [year, setYear] = useState(now.getFullYear());
     const [terminalFilter, setTerminalFilter] = useState<string>('ALL');
+    const [tab, setTab] = useState<'resumen' | 'programacion'>('resumen');
 
     const { start, end } = monthRange(year, month);
     const { staff, scheduleContext, isLoading } = useControlAsissData(start, end);
@@ -76,9 +81,29 @@ export const AsistenciaMensualPage = () => {
                 </div>
             </div>
 
-            {isLoading && <LoadingState label="Analizando programación del mes" />}
+            {/* Pestañas */}
+            <div className="flex gap-1 rounded-xl border border-slate-200 bg-white p-1.5">
+                <button
+                    onClick={() => setTab('resumen')}
+                    className={`flex flex-1 items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-bold transition-colors ${tab === 'resumen' ? 'bg-slate-800 text-white' : 'text-slate-500 hover:bg-slate-100'}`}
+                >
+                    <Icon name="bar-chart" size={16} />
+                    Resumen y Alertas
+                </button>
+                <button
+                    onClick={() => setTab('programacion')}
+                    className={`flex flex-1 items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-bold transition-colors ${tab === 'programacion' ? 'bg-slate-800 text-white' : 'text-slate-500 hover:bg-slate-100'}`}
+                >
+                    <Icon name="calendar-range" size={16} />
+                    Programación Mensual (editar)
+                </button>
+            </div>
 
-            {!isLoading && analysis && (
+            {tab === 'programacion' && <MonthlyProgrammingGrid year={year} month={month} />}
+
+            {tab === 'resumen' && isLoading && <LoadingState label="Analizando programación del mes" />}
+
+            {tab === 'resumen' && !isLoading && analysis && (
                 <>
                     {/* KPIs */}
                     <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
@@ -175,7 +200,19 @@ export const AsistenciaMensualPage = () => {
                         ) : (
                             <div className="max-h-[560px] space-y-2 overflow-y-auto pr-1">
                                 {filteredGaps.map((gap) => (
-                                    <GapCard key={gap.id} gap={gap} />
+                                    <GapCard
+                                        key={gap.id}
+                                        gap={gap}
+                                        getSuggestions={() =>
+                                            buildGapSuggestions(
+                                                { date: gap.date, terminal: gap.terminal, cargo: gap.cargo, turno: gap.turno },
+                                                staff,
+                                                scheduleContext,
+                                                year,
+                                                month
+                                            )
+                                        }
+                                    />
                                 ))}
                             </div>
                         )}
@@ -188,7 +225,7 @@ export const AsistenciaMensualPage = () => {
                 </>
             )}
 
-            {!isLoading && staff.length === 0 && (
+            {tab === 'resumen' && !isLoading && staff.length === 0 && (
                 <div className="rounded-xl border border-slate-200 bg-white p-8 text-center text-slate-500">
                     No se encontró personal activo. Verifica la conexión con la base de datos.
                 </div>
@@ -231,8 +268,18 @@ const FilterChip = ({ label, active, onClick }: { label: string; active: boolean
     </button>
 );
 
-const GapCard = ({ gap }: { gap: CoverageGap }) => {
+const GapCard = ({ gap, getSuggestions }: { gap: CoverageGap; getSuggestions?: () => GapSuggestion[] }) => {
     const isCritical = gap.level === 'CRITICAL';
+    const [suggestions, setSuggestions] = useState<GapSuggestion[] | null>(null);
+    const [expanded, setExpanded] = useState(false);
+
+    const handleToggleSuggestions = () => {
+        if (!expanded && suggestions === null && getSuggestions) {
+            setSuggestions(getSuggestions());
+        }
+        setExpanded((v) => !v);
+    };
+
     return (
         <div
             className={`rounded-xl border-l-4 p-4 shadow-sm ${isCritical
@@ -250,6 +297,15 @@ const GapCard = ({ gap }: { gap: CoverageGap }) => {
                 <span className="text-xs font-semibold text-slate-500">
                     {gap.cargo} · Turno {gap.turno} · {gap.disponibles}/{gap.dotacion} disponibles
                 </span>
+                {getSuggestions && (
+                    <button
+                        onClick={handleToggleSuggestions}
+                        className={`ml-auto flex items-center gap-1 rounded-full px-3 py-1 text-xs font-bold transition-colors ${expanded ? 'bg-slate-800 text-white' : 'bg-white text-slate-700 border border-slate-300 hover:bg-slate-100'}`}
+                    >
+                        <Icon name="sparkles" size={12} />
+                        {expanded ? 'Ocultar sugerencias' : 'Ver sugerencias'}
+                    </button>
+                )}
             </div>
             <p className={`mt-1.5 text-sm font-medium ${isCritical ? 'text-red-800' : 'text-amber-800'}`}>
                 {gap.message}
@@ -262,6 +318,37 @@ const GapCard = ({ gap }: { gap: CoverageGap }) => {
                     {gap.ausentes.length > 0 && (
                         <span><b>Ausentes:</b> {gap.ausentes.join(', ')}</span>
                     )}
+                </div>
+            )}
+
+            {/* Sugerencias de cobertura (cumplen todas las reglas) */}
+            {expanded && suggestions && (
+                <div className="mt-3 space-y-1.5 rounded-lg border border-slate-200 bg-white p-3">
+                    <p className="text-[11px] font-bold uppercase tracking-wide text-slate-400">
+                        Sugerencias que cumplen las reglas (máx. 6 días seguidos · 2 domingos libres · domingo de descanso intocable)
+                    </p>
+                    {suggestions.length === 0 ? (
+                        <p className="text-xs text-slate-500">
+                            No hay candidatos del mismo grupo que puedan cubrir este día sin violar reglas.
+                            Considerar apoyo de otro terminal o redistribuir la modalidad de turnos en la
+                            pestaña "Programación Mensual".
+                        </p>
+                    ) : (
+                        suggestions.map((s, i) => (
+                            <div key={i} className="flex items-start gap-2 rounded-lg bg-slate-50 px-3 py-2">
+                                <span className={`mt-0.5 rounded px-1.5 py-0.5 text-[10px] font-bold text-white ${s.tipo === 'CAMBIO_DIA' ? 'bg-blue-600' : 'bg-orange-500'}`}>
+                                    {s.tipo === 'CAMBIO_DIA' ? 'CAMBIO DE DÍA' : 'HORAS EXTRA'}
+                                </span>
+                                <div>
+                                    <p className="text-xs font-bold text-slate-800">{s.nombre}</p>
+                                    <p className="text-xs text-slate-600">{s.detail}</p>
+                                </div>
+                            </div>
+                        ))
+                    )}
+                    <p className="pt-1 text-[10px] text-slate-400">
+                        Aplica los cambios en la pestaña "Programación Mensual (editar)" — requiere clave de autorización.
+                    </p>
                 </div>
             )}
         </div>

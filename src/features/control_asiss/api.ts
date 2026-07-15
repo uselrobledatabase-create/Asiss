@@ -9,6 +9,19 @@ import { StaffShift, StaffWithShift } from '../asistencia2026/types';
 
 export type ExportStaff = StaffWithShift & { suspended: boolean };
 
+/** Elimina un ajuste puntual (override) de un día, volviendo al patrón normal */
+export async function deleteOverride(staffId: string, date: string): Promise<void> {
+    if (!isSupabaseConfigured()) throw new Error('Supabase not configured');
+
+    const { error } = await supabase
+        .from('staff_shift_overrides')
+        .delete()
+        .eq('staff_id', staffId)
+        .eq('override_date', date);
+
+    if (error) throw error;
+}
+
 export async function fetchStaffForExport(): Promise<ExportStaff[]> {
     if (!isSupabaseConfigured()) return [];
 

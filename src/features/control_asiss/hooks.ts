@@ -6,8 +6,11 @@
  */
 
 import { useMemo } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { TerminalContext } from '../../shared/types/terminal';
+import { upsertStaffShift, upsertOverride } from '../asistencia2026/api/asistencia2026Api';
+import { StaffShiftFormValues } from '../asistencia2026/types';
+import { deleteOverride } from './api';
 import {
     useShiftTypes,
     useStaffWithShifts,
@@ -69,6 +72,44 @@ export function useControlAsissData(startDate: string, endDate: string) {
         isLoading,
         isError: staffQuery.isError,
     };
+}
+
+/** Invalida tanto las queries de asistencia como la dotación de Control ASISS */
+function useInvalidateProgramming() {
+    const queryClient = useQueryClient();
+    return () => {
+        queryClient.invalidateQueries({ queryKey: ['asistencia2026'] });
+        queryClient.invalidateQueries({ queryKey: ['controlAsiss', 'staffExport'] });
+    };
+}
+
+/** Cambio de modalidad de turno desde Control ASISS (refleja en Asistencia) */
+export function useUpsertShiftControl() {
+    const invalidate = useInvalidateProgramming();
+    return useMutation({
+        mutationFn: (values: StaffShiftFormValues) => upsertStaffShift(values),
+        onSuccess: invalidate,
+    });
+}
+
+/** Ajuste puntual de un día (cambio de día) desde Control ASISS */
+export function useUpsertOverrideControl() {
+    const invalidate = useInvalidateProgramming();
+    return useMutation({
+        mutationFn: ({ staffId, date, type }: { staffId: string; date: string; type: 'OFF' | 'WORK' }) =>
+            upsertOverride(staffId, date, type),
+        onSuccess: invalidate,
+    });
+}
+
+/** Quitar un ajuste puntual, volviendo al patrón normal */
+export function useDeleteOverrideControl() {
+    const invalidate = useInvalidateProgramming();
+    return useMutation({
+        mutationFn: ({ staffId, date }: { staffId: string; date: string }) =>
+            deleteOverride(staffId, date),
+        onSuccess: invalidate,
+    });
 }
 
 /**
