@@ -35,6 +35,7 @@ import {
     useCreateOrUpdateMark,
     useCreateLicense,
     useCreatePermission,
+    useCreateVacationDirect,
     useBulkMarkPresent,
 } from '../hooks';
 import { Icon } from '../../../shared/components/common/Icon';
@@ -150,6 +151,7 @@ export const AttendanceGrid = ({
     const createMarkMutation = useCreateOrUpdateMark();
     const createLicenseMutation = useCreateLicense();
     const createPermissionMutation = useCreatePermission();
+    const createVacationMutation = useCreateVacationDirect();
     const bulkMarkMutation = useBulkMarkPresent();
 
     // Group staff by cargo
@@ -440,6 +442,23 @@ export const AttendanceGrid = ({
         setSelectedCell(null);
     };
 
+    const handleRegisterVacation = (startDate: string, endDate: string) => {
+        if (!selectedCell || !session) return;
+        createVacationMutation.mutate({
+            staff: {
+                rut: selectedCell.staff.rut,
+                nombre: selectedCell.staff.nombre,
+                cargo: selectedCell.staff.cargo,
+                terminal_code: selectedCell.staff.terminal_code,
+                turno: selectedCell.staff.turno,
+            },
+            startDate,
+            endDate,
+            createdBy: session.supervisorName,
+        });
+        setSelectedCell(null);
+    };
+
     const isManager = Boolean(session?.supervisorName && isAuthorizedSupervisor(session.supervisorName));
 
     if (isLoading) {
@@ -716,7 +735,7 @@ export const AttendanceGrid = ({
                 onMarkAbsent={handleMarkAbsent}
                 onRegisterLicense={handleRegisterLicense}
                 onRegisterPermission={handleRegisterPermission}
-                onRegisterVacation={() => { }}
+                onRegisterVacation={handleRegisterVacation}
                 onRequestOffboarding={
                     isManager && onRequestOffboarding && selectedCell
                         ? () => onRequestOffboarding(selectedCell.staff)

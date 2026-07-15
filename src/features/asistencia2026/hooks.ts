@@ -23,6 +23,7 @@ import {
     fetchPermissionsForRange,
     createPermission,
     fetchVacationsForRange,
+    createVacationDirect,
     fetchIncidencesForRange,
     fetchAdmonitionsForRange,
     createOffboardingRequest,
@@ -226,6 +227,22 @@ export const useCreatePermission = () => {
     return useMutation({
         mutationFn: ({ values, createdBy }: { values: AttendancePermissionFormValues; createdBy: string }) =>
             createPermission(values, createdBy),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: asistencia2026Keys.monthData() });
+        },
+    });
+};
+
+export const useCreateVacationDirect = () => {
+    const queryClient = useQueryClient();
+
+    return useMutation({
+        mutationFn: ({ staff, startDate, endDate, createdBy }: {
+            staff: { rut: string; nombre: string; cargo: string; terminal_code: string; turno: string };
+            startDate: string;
+            endDate: string;
+            createdBy: string;
+        }) => createVacationDirect(staff, startDate, endDate, createdBy),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: asistencia2026Keys.monthData() });
         },

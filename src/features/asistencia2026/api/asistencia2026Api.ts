@@ -532,6 +532,56 @@ export async function fetchVacationsForRange(
     }));
 }
 
+/**
+ * Registrar vacaciones directamente desde la grilla de asistencia.
+ * Se inserta AUTORIZADA (la registra el supervisor en terreno) para que
+ * el período se muestre de inmediato como VAC en la grilla, además del
+ * flujo normal de la subsección de vacaciones del personal.
+ */
+export async function createVacationDirect(
+    staff: { rut: string; nombre: string; cargo: string; terminal_code: string; turno: string },
+    startDate: string,
+    endDate: string,
+    createdBy: string
+): Promise<void> {
+    if (!isSupabaseConfigured()) throw new Error('Supabase not configured');
+
+    const dayMs = 86400000;
+    const start = new Date(startDate + 'T12:00:00');
+    const end = new Date(endDate + 'T12:00:00');
+    const calendarDays = Math.round((end.getTime() - start.getTime()) / dayMs) + 1;
+
+    let businessDays = 0;
+    for (const d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+        if (d.getDay() !== 0 && d.getDay() !== 6) businessDays++;
+    }
+
+    const returnDate = new Date(end);
+    returnDate.setDate(returnDate.getDate() + 1);
+    const returnStr = `${returnDate.getFullYear()}-${String(returnDate.getMonth() + 1).padStart(2, '0')}-${String(returnDate.getDate()).padStart(2, '0')}`;
+
+    const { error } = await supabase
+        .from('attendance_vacaciones')
+        .insert({
+            rut: staff.rut,
+            nombre: staff.nombre,
+            cargo: staff.cargo,
+            terminal_code: staff.terminal_code,
+            turno: staff.turno,
+            start_date: startDate,
+            end_date: endDate,
+            return_date: returnStr,
+            calendar_days: calendarDays,
+            business_days: businessDays,
+            auth_status: 'AUTORIZADO',
+            authorized_by: createdBy,
+            authorized_at: new Date().toISOString(),
+            created_by_supervisor: createdBy,
+        });
+
+    if (error) throw error;
+}
+
 // ==========================================
 // INCIDENCES (from existing tables)
 // ==========================================

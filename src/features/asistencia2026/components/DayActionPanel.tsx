@@ -22,7 +22,7 @@ interface DayActionPanelProps {
     onMarkAbsent: (note: string) => void;
     onRegisterLicense: (startDate: string, endDate: string, note?: string) => void;
     onRegisterPermission: (startDate: string, endDate: string, type: string, note?: string) => void;
-    onRegisterVacation: () => void;
+    onRegisterVacation: (startDate: string, endDate: string) => void;
     onRequestOffboarding?: () => void;
     isManager?: boolean;
 }
@@ -45,13 +45,16 @@ export const DayActionPanel = ({
     onMarkPresent,
     onMarkAbsent,
     onRegisterLicense,
+    onRegisterVacation,
 }: DayActionPanelProps) => {
     const session = useSessionStore((s) => s.session);
     const autoAdmonition = useAutoAdmonition();
-    const [activeForm, setActiveForm] = useState<'none' | 'license' | 'absent_confirm'>('none');
+    const [activeForm, setActiveForm] = useState<'none' | 'license' | 'vacation' | 'absent_confirm'>('none');
     const [licenseStart, setLicenseStart] = useState(date);
     const [licenseEnd, setLicenseEnd] = useState(date);
     const [licenseNote, setLicenseNote] = useState('');
+    const [vacationStart, setVacationStart] = useState(date);
+    const [vacationEnd, setVacationEnd] = useState(date);
 
     if (!isOpen || !staff) return null;
 
@@ -74,6 +77,18 @@ export const DayActionPanel = ({
     const handleRegisterLicense = () => {
         onRegisterLicense(licenseStart, licenseEnd, licenseNote || undefined);
         setLicenseNote('');
+        setActiveForm('none');
+    };
+
+    const vacationDays = (() => {
+        if (!vacationStart || !vacationEnd || vacationStart > vacationEnd) return 0;
+        const ms = new Date(vacationEnd + 'T12:00:00').getTime() - new Date(vacationStart + 'T12:00:00').getTime();
+        return Math.round(ms / 86400000) + 1;
+    })();
+
+    const handleRegisterVacation = () => {
+        if (vacationDays === 0) return;
+        onRegisterVacation(vacationStart, vacationEnd);
         setActiveForm('none');
     };
 
@@ -243,24 +258,99 @@ export const DayActionPanel = ({
                         </div>
                     )}
 
-                    {/* Registrar licencia */}
+                    {/* Registrar licencia / vacaciones */}
                     {!isDesvinculado && activeForm === 'none' && (
                         <div>
                             <p className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-400">
                                 Registrar
                             </p>
-                            <button
-                                onClick={() => setActiveForm('license')}
-                                className="flex w-full items-center justify-between rounded-xl border-2 border-purple-200 bg-purple-50 px-4 py-3 transition-all hover:border-purple-400 hover:bg-purple-100"
-                            >
-                                <span className="flex items-center gap-2.5">
-                                    <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-purple-500">
-                                        <Icon name="file-text" size={15} className="text-white" />
+                            <div className="space-y-2">
+                                <button
+                                    onClick={() => setActiveForm('license')}
+                                    className="flex w-full items-center justify-between rounded-xl border-2 border-purple-200 bg-purple-50 px-4 py-3 transition-all hover:border-purple-400 hover:bg-purple-100"
+                                >
+                                    <span className="flex items-center gap-2.5">
+                                        <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-purple-500">
+                                            <Icon name="file-text" size={15} className="text-white" />
+                                        </span>
+                                        <span className="text-sm font-bold text-purple-800">Licencia Médica</span>
                                     </span>
-                                    <span className="text-sm font-bold text-purple-800">Licencia Médica</span>
-                                </span>
-                                <Icon name="chevron-right" size={16} className="text-purple-400" />
-                            </button>
+                                    <Icon name="chevron-right" size={16} className="text-purple-400" />
+                                </button>
+                                <button
+                                    onClick={() => setActiveForm('vacation')}
+                                    className="flex w-full items-center justify-between rounded-xl border-2 border-teal-200 bg-teal-50 px-4 py-3 transition-all hover:border-teal-400 hover:bg-teal-100"
+                                >
+                                    <span className="flex items-center gap-2.5">
+                                        <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-teal-500">
+                                            <Icon name="palmtree" size={15} className="text-white" />
+                                        </span>
+                                        <span className="text-sm font-bold text-teal-800">Vacaciones</span>
+                                    </span>
+                                    <Icon name="chevron-right" size={16} className="text-teal-400" />
+                                </button>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Formulario de vacaciones */}
+                    {activeForm === 'vacation' && (
+                        <div className="space-y-3 rounded-xl border border-teal-200 bg-teal-50 p-4">
+                            <div className="flex items-center gap-2 text-teal-800">
+                                <Icon name="palmtree" size={18} />
+                                <h4 className="font-bold">Registrar Vacaciones</h4>
+                            </div>
+                            <p className="text-xs leading-snug text-teal-700">
+                                El período completo quedará marcado como <b>VAC</b> en la grilla de
+                                asistencia, quedando autorizado a nombre de quien lo registra.
+                            </p>
+                            <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label className="mb-1 block text-xs font-medium text-slate-600">Desde</label>
+                                    <input
+                                        type="date"
+                                        value={vacationStart}
+                                        onChange={(e) => setVacationStart(e.target.value)}
+                                        className="w-full rounded-lg border border-slate-300 p-2 text-sm focus:ring-2 focus:ring-teal-500"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="mb-1 block text-xs font-medium text-slate-600">Hasta</label>
+                                    <input
+                                        type="date"
+                                        value={vacationEnd}
+                                        min={vacationStart}
+                                        onChange={(e) => setVacationEnd(e.target.value)}
+                                        className="w-full rounded-lg border border-slate-300 p-2 text-sm focus:ring-2 focus:ring-teal-500"
+                                    />
+                                </div>
+                            </div>
+                            {vacationDays > 0 ? (
+                                <div className="rounded-lg bg-white px-3 py-2 text-xs font-semibold text-teal-800 border border-teal-200">
+                                    {vacationDays} día(s) corridos ·{' '}
+                                    {vacationStart.split('-').reverse().join('-')} al {vacationEnd.split('-').reverse().join('-')} ·
+                                    regreso el día siguiente al término
+                                </div>
+                            ) : (
+                                <p className="text-xs font-medium text-red-600">
+                                    La fecha "desde" no puede ser posterior a "hasta".
+                                </p>
+                            )}
+                            <div className="flex gap-2">
+                                <button
+                                    onClick={handleRegisterVacation}
+                                    disabled={vacationDays === 0}
+                                    className="flex-1 rounded-xl bg-teal-600 py-2.5 font-bold text-white transition-colors hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-40"
+                                >
+                                    Registrar VAC ({vacationDays})
+                                </button>
+                                <button
+                                    onClick={() => setActiveForm('none')}
+                                    className="rounded-xl bg-white border border-slate-200 px-4 py-2.5 font-medium text-slate-600 transition-colors hover:bg-slate-100"
+                                >
+                                    Volver
+                                </button>
+                            </div>
                         </div>
                     )}
 
