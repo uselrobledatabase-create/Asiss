@@ -16,6 +16,8 @@ import { StaffTable } from './components/StaffTable';
 import { StaffForm } from './components/StaffForm';
 import { OffboardModal } from './components/OffboardModal';
 import { AdmonishModal } from './components/AdmonishModal';
+import { ShiftConfigModal } from '../asistencia2026/components/ShiftConfigModal';
+import { StaffWithShift } from '../asistencia2026/types';
 
 // Hooks
 import {
@@ -43,9 +45,23 @@ type ModalState =
   | { type: 'create' }
   | { type: 'edit'; staff: StaffViewModel }
   | { type: 'offboard'; staff: StaffViewModel }
-  | { type: 'admonish'; staff: StaffViewModel };
+  | { type: 'admonish'; staff: StaffViewModel }
+  | { type: 'shift'; staff: StaffViewModel };
 
 const ALL_TERMINALS: TerminalContext = { mode: 'ALL' };
+
+/** Adaptador mínimo para abrir el configurador de turnos de asistencia */
+const toShiftStaff = (s: StaffViewModel): StaffWithShift => ({
+  id: s.id,
+  rut: s.rut,
+  nombre: s.nombre,
+  cargo: s.cargo,
+  terminal_code: s.terminal_code as StaffWithShift['terminal_code'],
+  turno: s.turno,
+  horario: s.horario,
+  contacto: s.contacto ?? '',
+  status: s.status === 'DESVINCULADO' ? 'DESVINCULADO' : 'ACTIVO',
+});
 
 export const PersonalPage = () => {
   // Local terminal — only affects the data table, not counters or other pages
@@ -109,8 +125,14 @@ export const PersonalPage = () => {
 
   const handleCreate = async (values: StaffFormValues) => {
     try {
-      await createMutation.mutateAsync(values);
-      setModalState({ type: 'none' });
+      const created = await createMutation.mutateAsync(values);
+      // Tras registrar la ficha, abrir de inmediato la asignación de turno
+      // con la recomendación inteligente de cobertura
+      if (created?.id) {
+        setModalState({ type: 'shift', staff: created as unknown as StaffViewModel });
+      } else {
+        setModalState({ type: 'none' });
+      }
     } catch (error) {
       console.error('Error creating staff:', error);
       alert(error instanceof Error ? error.message : 'Error al crear trabajador');
@@ -264,6 +286,7 @@ export const PersonalPage = () => {
         <StaffTable
           staff={staffQuery.data || []}
           onEdit={(staff) => setModalState({ type: 'edit', staff })}
+          onConfigureShift={(staff) => setModalState({ type: 'shift', staff })}
           onOffboard={(staff) => setModalState({ type: 'offboard', staff })}
           onAdmonish={(staff) => setModalState({ type: 'admonish', staff })}
           onSuspend={handleSuspend}
@@ -314,6 +337,13 @@ export const PersonalPage = () => {
           isLoading={admonitionMutation.isPending}
         />
       )}
+
+      {/* Asignación de turno con recomendación inteligente */}
+      <ShiftConfigModal
+        isOpen={modalState.type === 'shift'}
+        onClose={closeModal}
+        staff={modalState.type === 'shift' ? toShiftStaff(modalState.staff) : null}
+      />
     </div>
   );
 };

@@ -5,8 +5,12 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { Icon } from '../../../shared/components/common/Icon';
-import { useShiftTypes, useStaffShift, useUpsertStaffShift, useSpecialTemplate, useUpsertSpecialTemplate } from '../hooks';
+import { useShiftTypes, useStaffShift, useUpsertStaffShift, useSpecialTemplate, useUpsertSpecialTemplate, useStaffWithShifts } from '../hooks';
 import { StaffWithShift, ShiftTypeCode, VariantCode, ShiftType, SpecialTemplateSettings } from '../types';
+import { TerminalContext } from '../../../shared/types/terminal';
+import { buildShiftRecommendation } from '../utils/shiftRecommendation';
+
+const ALL_TERMINALS_CTX: TerminalContext = { mode: 'ALL' };
 
 interface ShiftConfigModalProps {
     isOpen: boolean;
@@ -82,6 +86,14 @@ export const ShiftConfigModal = ({ isOpen, onClose, staff, onSuccess }: ShiftCon
     const { data: dbShiftTypes = [] } = useShiftTypes();
     const { data: currentShift } = useStaffShift(staff?.id ?? null);
     const { data: currentTemplate } = useSpecialTemplate(staff?.id ?? null);
+
+    // Dotación completa para el análisis de cobertura inteligente
+    const { data: allStaff = [] } = useStaffWithShifts(ALL_TERMINALS_CTX, undefined);
+
+    const recommendation = useMemo(() => {
+        if (!staff || allStaff.length === 0) return null;
+        return buildShiftRecommendation(staff, allStaff);
+    }, [staff, allStaff]);
 
     // Ensure ESPECIAL is always available, even if not in DB
     const shiftTypes = useMemo(() => {
@@ -317,6 +329,112 @@ export const ShiftConfigModal = ({ isOpen, onClose, staff, onSuccess }: ShiftCon
                             <div className="font-medium text-slate-800">
                                 {shiftTypes.find((t) => t.code === currentShift.shift_type_code)?.name || currentShift.shift_type_code}
                                 {' - '}{currentShift.variant_code}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* ===== Recomendación Inteligente de Cobertura ===== */}
+                    {recommendation && recommendation.recommended && (
+                        <div className="rounded-xl border border-indigo-200 bg-gradient-to-br from-indigo-50 to-blue-50 overflow-hidden">
+                            <div className="flex items-center gap-2 border-b border-indigo-100 bg-white/60 px-4 py-2.5">
+                                <Icon name="sparkles" size={16} className="text-indigo-600" />
+                                <span className="text-sm font-bold text-indigo-900">Recomendación Inteligente</span>
+                                <span className="ml-auto rounded-full bg-indigo-100 px-2.5 py-0.5 text-[10px] font-bold uppercase text-indigo-700">
+                                    {recommendation.scopeLabel}
+                                </span>
+                            </div>
+
+                            <div className="space-y-3 p-4">
+                                {/* Combo recomendado */}
+                                <div className="flex flex-col gap-2 rounded-lg border-2 border-indigo-400 bg-white p-3 sm:flex-row sm:items-center sm:justify-between">
+                                    <div>
+                                        <div className="flex items-center gap-2">
+                                            <span className="rounded bg-indigo-600 px-1.5 py-0.5 text-[10px] font-bold uppercase text-white">
+                                                Turno más descubierto
+                                            </span>
+                                            <span className="text-sm font-bold text-slate-800">
+                                                {recommendation.recommended.label}
+                                            </span>
+                                        </div>
+                                        <p className="mt-1 text-xs text-slate-500">
+                                            {recommendation.recommended.offDaysDesc} ·{' '}
+                                            <b className="text-indigo-700">
+                                                {recommendation.recommended.count === 0
+                                                    ? 'sin nadie asignado'
+                                                    : `solo ${recommendation.recommended.count} persona(s)`}
+                                            </b>{' '}
+                                            en el grupo
+                                        </p>
+                                    </div>
+                                    <button
+                                        onClick={() => {
+                                            setSelectedType(recommendation.recommended!.shiftType);
+                                            setSelectedVariant(recommendation.recommended!.variant);
+                                        }}
+                                        className={`shrink-0 rounded-lg px-4 py-2 text-xs font-bold transition-colors ${selectedType === recommendation.recommended.shiftType &&
+                                            (recommendation.recommended.shiftType === 'SUPERVISOR_RELEVO' ||
+                                                selectedVariant === recommendation.recommended.variant)
+                                            ? 'bg-emerald-600 text-white'
+                                            : 'bg-indigo-600 text-white hover:bg-indigo-700'
+                                            }`}
+                                    >
+                                        {selectedType === recommendation.recommended.shiftType &&
+                                            (recommendation.recommended.shiftType === 'SUPERVISOR_RELEVO' ||
+                                                selectedVariant === recommendation.recommended.variant)
+                                            ? '✓ Seleccionado'
+                                            : 'Usar este turno'}
+                                    </button>
+                                </div>
+
+                                {/* Cobertura actual por combinación */}
+                                <div>
+                                    <p className="mb-1.5 text-[11px] font-bold uppercase tracking-wide text-indigo-400">
+                                        Cobertura actual del grupo por combinación
+                                    </p>
+                                    <div className="space-y-1">
+                                        {recommendation.combos.map((combo) => {
+                                            const maxCount = Math.max(1, ...recommendation.combos.map((c) => c.count));
+                                            const isWeakest = combo === recommendation.recommended;
+                                            const isSelected =
+                                                selectedType === combo.shiftType &&
+                                                (combo.shiftType === 'SUPERVISOR_RELEVO' || selectedVariant === combo.variant);
+                                            return (
+                                                <button
+                                                    key={`${combo.shiftType}-${combo.variant}`}
+                                                    onClick={() => {
+                                                        setSelectedType(combo.shiftType);
+                                                        setSelectedVariant(combo.variant);
+                                                    }}
+                                                    title={combo.people.length > 0 ? combo.people.join(', ') : 'Sin personal asignado'}
+                                                    className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left transition-colors ${isSelected ? 'bg-indigo-100 ring-1 ring-indigo-400' : 'hover:bg-white'
+                                                        }`}
+                                                >
+                                                    <span className="w-44 shrink-0 truncate text-xs font-semibold text-slate-700">
+                                                        {isWeakest && <span className="mr-1 text-indigo-600">★</span>}
+                                                        {combo.label}
+                                                    </span>
+                                                    <span className="relative h-2.5 flex-1 overflow-hidden rounded-full bg-slate-200">
+                                                        <span
+                                                            className={`absolute inset-y-0 left-0 rounded-full ${combo.count === 0 ? 'bg-red-400' : isWeakest ? 'bg-amber-400' : 'bg-emerald-500'}`}
+                                                            style={{ width: `${(combo.count / maxCount) * 100}%` }}
+                                                        />
+                                                    </span>
+                                                    <span className={`w-6 shrink-0 text-right text-xs font-bold ${combo.count === 0 ? 'text-red-600' : 'text-slate-700'}`}>
+                                                        {combo.count}
+                                                    </span>
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+
+                                {/* Contexto adicional */}
+                                <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-indigo-800/70">
+                                    <span>Grupo: <b>{recommendation.totalPeers}</b> persona(s)</span>
+                                    {recommendation.unassigned > 0 && <span>Sin turno asignado: <b>{recommendation.unassigned}</b></span>}
+                                    {recommendation.fijoCount > 0 && <span>5x2 Fijo (casos especiales): <b>{recommendation.fijoCount}</b></span>}
+                                    {recommendation.especialCount > 0 && <span>Plantilla especial: <b>{recommendation.especialCount}</b></span>}
+                                </div>
                             </div>
                         </div>
                     )}

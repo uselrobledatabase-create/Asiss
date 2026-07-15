@@ -6,6 +6,7 @@ import { Icon } from '../../../shared/components/common/Icon';
 interface Props {
     staff: StaffViewModel[];
     onEdit: (staff: StaffViewModel) => void;
+    onConfigureShift: (staff: StaffViewModel) => void;
     onOffboard: (staff: StaffViewModel) => void;
     onAdmonish: (staff: StaffViewModel) => void;
     onSuspend: (staff: StaffViewModel) => void;
@@ -31,7 +32,7 @@ const StatusBadge = ({ isOffboarded, isSuspended }: { isOffboarded: boolean; isS
     </span>
 );
 
-export const StaffTable = ({ staff, onEdit, onOffboard, onAdmonish, onSuspend, onUnsuspend }: Props) => {
+export const StaffTable = ({ staff, onEdit, onConfigureShift, onOffboard, onAdmonish, onSuspend, onUnsuspend }: Props) => {
     if (!staff.length) {
         return (
             <div className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50/50 px-6 py-12 text-center">
@@ -111,12 +112,18 @@ export const StaffTable = ({ staff, onEdit, onOffboard, onAdmonish, onSuspend, o
 
                                 {/* Row 3: Actions */}
                                 {!isOffboarded ? (
-                                    <div className="grid grid-cols-4 gap-2 pt-3 border-t border-slate-100">
+                                    <div className="grid grid-cols-5 gap-2 pt-3 border-t border-slate-100">
                                         <ActionBtn
                                             icon="clipboard"
                                             label="Editar"
                                             color="brand"
                                             onClick={() => onEdit(row)}
+                                        />
+                                        <ActionBtn
+                                            icon="calendar-range"
+                                            label="Turno"
+                                            color="brand"
+                                            onClick={() => onConfigureShift(row)}
                                         />
                                         {!isSuspended ? (
                                             <ActionBtn
@@ -235,6 +242,13 @@ export const StaffTable = ({ staff, onEdit, onOffboard, onAdmonish, onSuspend, o
                                                         title="Editar"
                                                     >
                                                         <Icon name="clipboard" size={16} />
+                                                    </button>
+                                                    <button
+                                                        onClick={() => onConfigureShift(row)}
+                                                        className="btn btn-ghost btn-icon text-slate-500 hover:text-indigo-600"
+                                                        title="Asignar / revisar turno de asistencia"
+                                                    >
+                                                        <Icon name="calendar-range" size={16} />
                                                     </button>
                                                     {!isSuspended ? (
                                                         <button
