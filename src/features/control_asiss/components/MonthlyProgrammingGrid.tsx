@@ -50,6 +50,7 @@ import {
 } from '../utils/programmingRules';
 import { CONTROL_TERMINALS } from '../types';
 import { buildShiftRecommendation } from '../../asistencia2026/utils/shiftRecommendation';
+import { generateRelevoTemplate, esElegibleRelevo, RelevoResult } from '../utils/relevoGenerator';
 
 const CARGO_SORT = ['SUPERVISOR', 'INSPECTOR', 'CONDUCTOR', 'PLANILLERO', 'CLEANER'];
 const cargoOrder = (cargo: string): number => {
@@ -61,7 +62,16 @@ const cargoOrder = (cargo: string): number => {
 // MODALIDADES (el juego siempre es de 2 semanas)
 // ==========================================
 
-type ModalidadKey = 'FIJO' | 'NORMAL' | 'CONTRA' | 'MANUAL';
+type ModalidadKey = 'FIJO' | 'NORMAL' | 'CONTRA' | 'MANUAL' | 'RELEVO';
+
+/** Turno especial de cobertura para supervisores de El Roble y La Reina */
+const RELEVO_OPTION = {
+    key: 'RELEVO' as ModalidadKey,
+    label: 'Relevo Automático (Supervisores)',
+    desc: 'Genera la programación automática para cubrir SÍ O SÍ los libres de los supervisores fijos de día y de noche, respetando todas las reglas',
+    code: 'ESPECIAL' as ShiftTypeCode,
+    variant: 'RELEVO' as VariantCode,
+};
 
 const MODALIDAD_OPTIONS: {
     key: ModalidadKey;
@@ -106,7 +116,7 @@ function modalityRank(s: StaffWithShift): number {
     const variant = s.shift?.variant_code;
     if (!code) return 4;
     if (code === '5X2_FIJO') return 0;
-    if (code === 'ESPECIAL') return 5;
+    if (code === 'ESPECIAL') return variant === 'RELEVO' ? 3 : 5;
     if (code === 'SUPERVISOR_RELEVO') return 3;
     // Rotativos de 2 semanas: Normal (CONTRATURNO) antes que Contraturno (PRINCIPAL)
     return variant === 'CONTRATURNO' ? 1 : 2;
@@ -117,7 +127,7 @@ function modalityLabel(s: StaffWithShift): string {
     const variant = s.shift?.variant_code;
     if (!code) return 'Sin turno';
     if (code === '5X2_FIJO') return 'Lun-Vie';
-    if (code === 'ESPECIAL') return 'Manual 2 sem';
+    if (code === 'ESPECIAL') return variant === 'RELEVO' ? 'Relevo Auto' : 'Manual 2 sem';
     if (code === 'SUPERVISOR_RELEVO') return 'Relevo';
     if (code === '5X2_SUPER') return variant === 'CONTRATURNO' ? 'Turno Normal' : 'Contraturno';
     // Legacy 5X2_ROTATIVO
@@ -393,8 +403,9 @@ const ProgrammingGridInner = ({ year, month }: Props) => {
                                             const badgeCls = rank === 0 ? 'bg-slate-200 text-slate-700'
                                                 : rank === 1 ? 'bg-blue-100 text-blue-700'
                                                     : rank === 2 ? 'bg-cyan-100 text-cyan-700'
-                                                        : rank === 5 ? 'bg-purple-100 text-purple-700'
-                                                            : 'bg-slate-100 text-slate-500';
+                                                        : rank === 3 ? 'bg-amber-100 text-amber-700'
+                                                            : rank === 5 ? 'bg-purple-100 text-purple-700'
+                                                                : 'bg-slate-100 text-slate-500';
 
                                             return (
                                                 <tr key={s.id} className="group">
@@ -830,12 +841,23 @@ const ModalityEditModal = ({
     const monthStart = `${year}-${mm}-01`;
 
     // Modalidad actual → key
-    const currentKey: ModalidadKey = staff.shift?.shift_type_code === 'ESPECIAL' ? 'MANUAL'
+    const currentKey: ModalidadKey = staff.shift?.shift_type_code === 'ESPECIAL'
+        ? (staff.shift?.variant_code === 'RELEVO' ? 'RELEVO' : 'MANUAL')
         : staff.shift?.shift_type_code === '5X2_FIJO' ? 'FIJO'
             : staff.shift?.variant_code === 'CONTRATURNO' ? 'NORMAL'
                 : staff.shift ? 'CONTRA' : 'NORMAL';
 
     const [key, setKey] = useState<ModalidadKey>(currentKey);
+
+    // Turno especial de relevo: solo supervisores de El Roble / La Reina
+    const relevoDisponible = esElegibleRelevo(staff);
+    const opciones = relevoDisponible ? [...MODALIDAD_OPTIONS, RELEVO_OPTION] : MODALIDAD_OPTIONS;
+
+    // Programación automática del relevo (recalculada en vivo)
+    const relevoResult: RelevoResult | null = useMemo(() => {
+        if (key !== 'RELEVO' || !relevoDisponible) return null;
+        return generateRelevoTemplate(staff, allStaff, ctx, monthStart);
+    }, [key, relevoDisponible, staff, allStaff, ctx, monthStart]);
 
     // Editor manual: juego de 2 semanas sembrado del patrón actual
     const [manual, setManual] = useState(() => seedTwoWeekPattern(staff, ctx, monthStart));
@@ -855,7 +877,7 @@ const ModalityEditModal = ({
         };
     }, [staff, allStaff]);
 
-    const selected = MODALIDAD_OPTIONS.find((m) => m.key === key)!;
+    const selected = opciones.find((m) => m.key === key) || MODALIDAD_OPTIONS[1];
 
     // Simulación de reglas con la modalidad elegida
     const check = useMemo(() => {
@@ -869,8 +891,10 @@ const ModalityEditModal = ({
         };
         const simStaff: StaffWithShift = { ...staff, shift: simulatedShift };
 
-        if (key === 'MANUAL') {
-            const tpl = twoWeekToTemplate(manual.libres, manual.noches);
+        if (key === 'MANUAL' || (key === 'RELEVO' && relevoResult)) {
+            const tpl = key === 'MANUAL'
+                ? twoWeekToTemplate(manual.libres, manual.noches)
+                : { offDays: relevoResult!.offDays, dailyShifts: relevoResult!.dailyShifts };
             const simCtx = {
                 ...ctx,
                 specialTemplates: [
@@ -886,7 +910,7 @@ const ModalityEditModal = ({
             return checkRules(simStaff, simCtx, year, month);
         }
         return checkRules(simStaff, ctx, year, month);
-    }, [staff, key, selected, manual, startDate, esPersonalNuevo, ctx, year, month]);
+    }, [staff, key, selected, manual, relevoResult, startDate, esPersonalNuevo, ctx, year, month]);
 
     const handleSave = async () => {
         try {
@@ -901,6 +925,15 @@ const ModalityEditModal = ({
                     staffId: staff.id,
                     offDays: tpl.offDays,
                     settings: { daily_shifts: tpl.dailyShifts },
+                });
+            } else if (key === 'RELEVO' && relevoResult) {
+                await upsertTemplate.mutateAsync({
+                    staffId: staff.id,
+                    offDays: relevoResult.offDays,
+                    settings: {
+                        daily_shifts: relevoResult.dailyShifts,
+                        custom_schedules: relevoResult.customSchedules,
+                    },
                 });
             }
             await upsertShift.mutateAsync({
@@ -950,7 +983,7 @@ const ModalityEditModal = ({
                 <div className="flex-1 space-y-4 overflow-y-auto p-5">
                     {/* Opciones */}
                     <div className="space-y-2">
-                        {MODALIDAD_OPTIONS.map((m) => (
+                        {opciones.map((m) => (
                             <button
                                 key={m.key}
                                 onClick={() => setKey(m.key)}
@@ -1021,6 +1054,94 @@ const ModalityEditModal = ({
                             <p className="mt-2 text-[10px] text-purple-500">
                                 Libres marcados: {manual.libres.filter(Boolean).length} de 14 · los días de trabajo
                                 conservan su turno D/N actual (ajustable día a día desde la grilla).
+                            </p>
+                        </div>
+                    )}
+
+                    {/* Vista previa del Relevo Automático */}
+                    {key === 'RELEVO' && relevoResult && (
+                        <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
+                            <p className="mb-1 text-xs font-bold uppercase tracking-wide text-amber-700">
+                                Programación automática generada (ciclo de 4 semanas Lun→Dom, replicado al infinito)
+                            </p>
+                            <div className="mb-2 space-y-0.5 text-[11px] text-amber-800">
+                                <p>
+                                    <b>Cubre a fijos de DÍA:</b>{' '}
+                                    {relevoResult.fijosDia.length > 0 ? relevoResult.fijosDia.join(', ') : '— (no hay fijos de día)'}
+                                </p>
+                                <p>
+                                    <b>Cubre a fijos de NOCHE:</b>{' '}
+                                    {relevoResult.fijosNoche.length > 0 ? relevoResult.fijosNoche.join(', ') : '— (no hay fijos de noche)'}
+                                </p>
+                            </div>
+
+                            {/* Mini-grilla del ciclo */}
+                            <div className="space-y-1">
+                                {[0, 1, 2, 3].map((week) => (
+                                    <div key={week} className="flex items-center gap-2">
+                                        <span className="w-12 text-[10px] font-bold text-amber-700">Sem {week + 1}</span>
+                                        <div className="flex flex-1 gap-1">
+                                            {DIAS_SEMANA.map((label, di) => {
+                                                const d = relevoResult.days[week * 7 + di];
+                                                return (
+                                                    <div
+                                                        key={di}
+                                                        title={`${dayNameShort(d.date)} ${formatDateCL(d.date)} · ${d.assign}${d.gap ? ` · BRECHA ${d.gap}: ${d.motivo || ''}` : ''}`}
+                                                        className={`flex h-9 flex-1 flex-col items-center justify-center rounded-lg text-[9px] font-bold ${d.assign === 'LIBRE'
+                                                            ? 'bg-slate-800 text-white'
+                                                            : d.assign === 'NOCHE'
+                                                                ? 'bg-indigo-500 text-white'
+                                                                : 'bg-sky-400 text-white'
+                                                            } ${d.gap ? 'ring-2 ring-red-500' : ''}`}
+                                                    >
+                                                        <span>{label}</span>
+                                                        <span className="text-[8px] opacity-80">
+                                                            {d.assign === 'LIBRE' ? 'L' : d.assign === 'NOCHE' ? 'N' : 'D'}
+                                                        </span>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+
+                            {/* Estadísticas */}
+                            <div className="mt-2 flex flex-wrap gap-1.5 text-[10px] font-bold">
+                                <span className="rounded-full bg-sky-100 px-2 py-0.5 text-sky-800">
+                                    Cubre {relevoResult.stats.cubiertosDia}/{relevoResult.stats.necesidadesDia} días
+                                </span>
+                                <span className="rounded-full bg-indigo-100 px-2 py-0.5 text-indigo-800">
+                                    Cubre {relevoResult.stats.cubiertosNoche}/{relevoResult.stats.necesidadesNoche} noches
+                                </span>
+                                <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-emerald-800">
+                                    Racha máx: {relevoResult.stats.rachaMaxima}
+                                </span>
+                                <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-emerald-800">
+                                    Domingos libres: {relevoResult.stats.domingosLibres}/4
+                                </span>
+                                {relevoResult.stats.brechas > 0 && (
+                                    <span className="rounded-full bg-red-100 px-2 py-0.5 text-red-700">
+                                        {relevoResult.stats.brechas} brecha(s)
+                                    </span>
+                                )}
+                            </div>
+
+                            {/* Brechas y motivos */}
+                            {relevoResult.warnings.length > 0 && (
+                                <div className="mt-2 space-y-0.5 rounded-lg bg-white px-3 py-2">
+                                    {relevoResult.warnings.map((w, i) => (
+                                        <p key={i} className="text-[10px] text-amber-800">• {w}</p>
+                                    ))}
+                                    <p className="pt-1 text-[10px] font-semibold text-amber-600">
+                                        Las brechas quedan LIBRES para no violar reglas — cúbrelas con otro
+                                        supervisor mediante cambio de día u horas extra.
+                                    </p>
+                                </div>
+                            )}
+                            <p className="mt-2 text-[10px] text-amber-600">
+                                Horarios: Día {relevoResult.customSchedules.dia} · Noche {relevoResult.customSchedules.noche}
+                                {' '}(tomados de los fijos que cubre) · editable día a día desde la grilla.
                             </p>
                         </div>
                     )}
