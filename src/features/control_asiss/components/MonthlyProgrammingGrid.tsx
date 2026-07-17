@@ -143,6 +143,29 @@ function modalityLabel(s: StaffWithShift, templates: { staff_id: string; setting
     return variant === 'CONTRATURNO' ? 'Normal (Rot)' : 'Contra (Rot)';
 }
 
+function modalityKeyForStaff(
+    s: StaffWithShift,
+    templates: { staff_id: string; settings_json?: { es_relevo?: boolean } }[]
+): ModalidadKey {
+    if (s.shift?.shift_type_code === 'ESPECIAL') {
+        return templates.find((t) => t.staff_id === s.id)?.settings_json?.es_relevo ? 'RELEVO' : 'MANUAL';
+    }
+    if (s.shift?.shift_type_code === '5X2_FIJO') return 'FIJO';
+    if (s.shift?.variant_code === 'CONTRATURNO') return 'NORMAL';
+    return s.shift ? 'CONTRA' : 'NORMAL';
+}
+
+function manualSeedFromTemplate(template?: { off_days_json: number[]; settings_json?: { daily_shifts?: Record<number, 'DIA' | 'NOCHE'> } }) {
+    const libres = Array.from({ length: 14 }, (_, i) =>
+        Boolean(template?.off_days_json.includes(i) || template?.off_days_json.includes(i + 14))
+    );
+    const noches = Array.from({ length: 14 }, (_, i) => {
+        const shifts = template?.settings_json?.daily_shifts || {};
+        return shifts[i] === 'NOCHE' || shifts[i + 14] === 'NOCHE';
+    });
+    return { libres, noches };
+}
+
 const AUTH_SESSION_KEY = 'controlAsiss.programacion.autorizada';
 
 function shiftDateStr(date: string, days: number): string {
@@ -854,13 +877,11 @@ const ModalityEditModal = ({
     const monthStart = `${year}-${mm}-01`;
 
     // Modalidad actual → key (relevo se detecta por la bandera de su plantilla)
-    const currentKey: ModalidadKey = staff.shift?.shift_type_code === 'ESPECIAL'
-        ? (ctx.specialTemplates.find((t) => t.staff_id === staff.id)?.settings_json?.es_relevo ? 'RELEVO' : 'MANUAL')
-        : staff.shift?.shift_type_code === '5X2_FIJO' ? 'FIJO'
-            : staff.shift?.variant_code === 'CONTRATURNO' ? 'NORMAL'
-                : staff.shift ? 'CONTRA' : 'NORMAL';
+    const currentKey: ModalidadKey = modalityKeyForStaff(staff, ctx.specialTemplates);
 
     const [key, setKey] = useState<ModalidadKey>(currentKey);
+    const [replicateSourceId, setReplicateSourceId] = useState('');
+    const [replicateMessage, setReplicateMessage] = useState<string | null>(null);
 
     // Turno especial de relevo: solo supervisores de El Roble / La Reina
     const relevoDisponible = esElegibleRelevo(staff);
@@ -891,6 +912,46 @@ const ModalityEditModal = ({
     }, [staff, allStaff]);
 
     const selected = opciones.find((m) => m.key === key) || MODALIDAD_OPTIONS[1];
+    const replicateCandidates = useMemo(() => {
+        return allStaff
+            .filter((person) =>
+                person.id !== staff.id &&
+                person.status === 'ACTIVO' &&
+                person.terminal_code === staff.terminal_code &&
+                person.shift
+            )
+            .sort((a, b) => {
+                const aSupervisor = a.cargo.toUpperCase().includes('SUPERVISOR') ? 0 : 1;
+                const bSupervisor = b.cargo.toUpperCase().includes('SUPERVISOR') ? 0 : 1;
+                if (aSupervisor !== bSupervisor) return aSupervisor - bSupervisor;
+                return a.nombre.localeCompare(b.nombre);
+            });
+    }, [allStaff, staff]);
+
+    const handleReplicate = () => {
+        const source = replicateCandidates.find((person) => person.id === replicateSourceId);
+        if (!source?.shift) {
+            showWarningToast('Sin origen válido', 'Selecciona una persona con turno asignado para replicar.');
+            return;
+        }
+
+        const sourceTemplate = ctx.specialTemplates.find((t) => t.staff_id === source.id);
+        const sourceKey = modalityKeyForStaff(source, ctx.specialTemplates);
+
+        if (sourceKey === 'RELEVO' && !relevoDisponible) {
+            showWarningToast(
+                'Relevo no replicable aquí',
+                `${source.nombre} usa relevo automático y ${staff.nombre} no es elegible para esa modalidad.`
+            );
+            return;
+        }
+
+        setKey(sourceKey);
+        if (sourceKey === 'MANUAL') {
+            setManual(manualSeedFromTemplate(sourceTemplate));
+        }
+        setReplicateMessage(`Configuración copiada desde ${source.nombre}. Guarda para aplicarla a ${staff.nombre}.`);
+    };
 
     // Simulación de reglas con la modalidad elegida
     const check = useMemo(() => {
@@ -995,6 +1056,43 @@ const ModalityEditModal = ({
                 </div>
 
                 <div className="flex-1 space-y-4 overflow-y-auto p-5">
+                    <div className="rounded-xl border border-sky-200 bg-sky-50 p-4">
+                        <p className="text-xs font-bold uppercase tracking-wide text-sky-700">
+                            Replicar programación desde otra persona
+                        </p>
+                        <p className="mt-1 text-[11px] text-sky-800">
+                            Copia la modalidad oficial de otro trabajador del mismo terminal.
+                            Útil para dejar un inspector con el mismo turno de un supervisor.
+                        </p>
+                        <div className="mt-3 flex gap-2">
+                            <select
+                                value={replicateSourceId}
+                                onChange={(e) => {
+                                    setReplicateSourceId(e.target.value);
+                                    setReplicateMessage(null);
+                                }}
+                                className="flex-1 rounded-lg border border-sky-200 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-sky-500"
+                            >
+                                <option value="">Seleccionar origen…</option>
+                                {replicateCandidates.map((person) => (
+                                    <option key={person.id} value={person.id}>
+                                        {person.nombre} · {modalityLabel(person, ctx.specialTemplates)}
+                                    </option>
+                                ))}
+                            </select>
+                            <button
+                                onClick={handleReplicate}
+                                disabled={!replicateSourceId}
+                                className="rounded-lg bg-sky-700 px-4 py-2 text-sm font-bold text-white transition-colors hover:bg-sky-800 disabled:opacity-40"
+                            >
+                                Replicar
+                            </button>
+                        </div>
+                        {replicateMessage && (
+                            <p className="mt-2 text-[11px] font-semibold text-sky-700">{replicateMessage}</p>
+                        )}
+                    </div>
+
                     {/* Opciones */}
                     <div className="space-y-2">
                         {opciones.map((m) => (
