@@ -478,33 +478,34 @@ export const AttendanceGrid = ({
                     })}
                 </div>
 
-                {/* Desktop View - Grid Table */}
+                {/* Desktop View - Tabla empresarial (mismo ADN que Programación Mensual) */}
                 <div className="hidden md:block overflow-x-auto">
-                    <table className="w-full border-collapse">
-                        {/* Header with day names and dates */}
-                        <thead className="bg-slate-50">
+                    <table className="border-collapse w-full">
+                        {/* Encabezado oscuro con días de la semana */}
+                        <thead>
                             <tr>
-                                <th className="sticky left-0 z-20 bg-slate-100 border-b border-r px-3 py-2 text-left min-w-[220px] shadow-[4px_0_8px_-4px_rgba(0,0,0,0.1)]">
-                                    <span className="text-slate-700 font-semibold text-sm">Personal</span>
+                                <th className="sticky left-0 z-20 min-w-[250px] border-b border-r bg-slate-800 px-3 py-2 text-left text-xs font-bold text-white">
+                                    SEMANA — Trabajador
                                 </th>
                                 {weekDates.map((date) => {
-                                    const dayName = formatDayOfWeek(date);
-                                    const dayNum = formatDayNumber(date);
+                                    const d = new Date(date + 'T12:00:00');
+                                    const dow = d.getDay();
                                     const isTodayDate = isToday(date);
-
                                     return (
                                         <th
                                             key={date}
-                                            className={`border-b px-1 py-2 text-center min-w-[78px] ${isTodayDate ? 'bg-brand-50' : 'bg-slate-50'
-                                                }`}
+                                            className={`min-w-[92px] border-b px-1 py-1.5 text-center ${dow === 0 ? 'bg-red-700 text-white' : dow === 6 ? 'bg-slate-700 text-white' : 'bg-slate-800 text-slate-200'}`}
                                         >
-                                            <div className="text-xs font-medium text-slate-500">{dayName}</div>
-                                            <div className={`text-lg font-bold ${isTodayDate ? 'text-brand-600' : 'text-slate-700'}`}>
-                                                {dayNum}
+                                            <div className="text-[9px] font-semibold uppercase">{formatDayOfWeek(date)}</div>
+                                            <div className={`mx-auto flex h-6 w-6 items-center justify-center rounded-full text-sm font-bold ${isTodayDate ? 'bg-brand-500 text-white' : ''}`}>
+                                                {formatDayNumber(date)}
                                             </div>
                                         </th>
                                     );
                                 })}
+                                <th className="min-w-[86px] border-b border-l-2 border-l-slate-400 bg-slate-800 px-2 py-1.5 text-center text-[9px] font-bold text-slate-200">
+                                    RESUMEN<br />P · A · Libres
+                                </th>
                             </tr>
                         </thead>
 
@@ -515,61 +516,69 @@ export const AttendanceGrid = ({
 
                                 return (
                                     <React.Fragment key={cargo}>
-                                        {/* Cargo header */}
-                                        <tr className={CARGO_COLORS[cargo]}>
-                                            <td
-                                                colSpan={weekDates.length + 1}
-                                                className="sticky left-0 px-3 py-2 font-semibold text-sm text-slate-700 border-b"
-                                            >
+                                        {/* Título de cargo: FIJO al scroll horizontal */}
+                                        <tr>
+                                            <td className="sticky left-0 z-10 border-b border-r bg-blue-100 px-3 py-1 text-[11px] font-bold uppercase tracking-wide text-blue-800">
                                                 {cargo} ({staffInGroup.length})
                                             </td>
+                                            <td colSpan={weekDates.length + 1} className="border-b bg-blue-50" />
                                         </tr>
 
-                                        {/* Staff rows */}
+                                        {/* Filas de personal */}
                                         {staffInGroup.map((s) => {
                                             const isDesvinculado = s.status === 'DESVINCULADO';
                                             const shiftType = s.shift ? shiftTypesMap.get(s.shift.shift_type_code) : null;
+                                            const weekStatuses = weekDates.map((date) => getDayStatus(s, date));
+                                            const sumP = weekStatuses.filter((st) => st.mark?.mark === 'P').length;
+                                            const sumA = weekStatuses.filter((st) => st.mark?.mark === 'A').length;
+                                            const sumL = weekStatuses.filter((st) => st.isOff).length;
 
                                             return (
                                                 <tr
                                                     key={s.id}
-                                                    className={`hover:bg-slate-50/50 transition-colors ${isDesvinculado ? 'bg-slate-50 opacity-60' : ''}`}
+                                                    className={`group transition-colors ${isDesvinculado ? 'bg-slate-50 opacity-60' : ''}`}
                                                 >
-                                                    {/* Staff info cell */}
-                                                    <td className="sticky left-0 z-10 bg-white border-b border-r px-3 py-2 shadow-[4px_0_8px_-4px_rgba(0,0,0,0.1)]">
-                                                        <div className="flex items-center gap-2">
-                                                            <div className="flex-1 min-w-0">
-                                                                <div className={`font-medium text-sm text-slate-800 truncate ${isDesvinculado ? 'line-through' : ''}`}>
+                                                    {/* Ficha del trabajador (fija) */}
+                                                    <td className={`sticky left-0 z-10 border-b border-r px-3 py-1 ${isDesvinculado ? 'bg-slate-50' : 'bg-white'} group-hover:bg-slate-50`}>
+                                                        <div className="flex items-center justify-between gap-2">
+                                                            <div className="min-w-0">
+                                                                <p className={`truncate text-xs font-bold text-slate-800 ${isDesvinculado ? 'line-through' : ''}`}>
                                                                     {s.nombre}
-                                                                </div>
-                                                                <div className="text-xs text-slate-500 truncate">
-                                                                    {s.rut} | {s.horario || 'Sin horario'}
-                                                                    {shiftType && <span className="ml-1 text-brand-600">({shiftType.name})</span>}
+                                                                    {s.admonitionCount && s.admonitionCount > 0 ? (
+                                                                        <span className="ml-1.5 rounded bg-red-100 px-1 text-[9px] font-bold text-red-700" title={`${s.admonitionCount} amonestación(es)`}>
+                                                                            {s.admonitionCount}
+                                                                        </span>
+                                                                    ) : null}
+                                                                </p>
+                                                                <div className="mt-0.5 flex items-center gap-1.5">
+                                                                    <span className="text-[10px] text-slate-400">{s.rut}</span>
+                                                                    <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[9px] font-semibold text-slate-500">
+                                                                        {s.horario || 'S/H'}
+                                                                    </span>
+                                                                    {shiftType && (
+                                                                        <span className="truncate rounded bg-indigo-50 px-1.5 py-0.5 text-[9px] font-semibold text-indigo-600">
+                                                                            {shiftType.name}
+                                                                        </span>
+                                                                    )}
                                                                 </div>
                                                             </div>
                                                             {onOpenShiftConfig && (
                                                                 <button
                                                                     onClick={() => onOpenShiftConfig(s)}
-                                                                    className="p-1.5 hover:bg-slate-100 rounded text-slate-400 hover:text-brand-600 transition-colors"
+                                                                    className="shrink-0 rounded p-1.5 text-slate-300 transition-colors hover:bg-slate-100 hover:text-brand-600"
                                                                     title="Configurar turno y días libres"
                                                                 >
-                                                                    <Icon name="settings" size={16} />
+                                                                    <Icon name="settings" size={14} />
                                                                 </button>
-                                                            )}
-                                                            {s.admonitionCount && s.admonitionCount > 0 && (
-                                                                <span className="px-1.5 py-0.5 text-xs font-medium bg-red-100 text-red-700 rounded">
-                                                                    {s.admonitionCount}
-                                                                </span>
                                                             )}
                                                         </div>
                                                     </td>
 
-                                                    {/* Day cells */}
-                                                    {weekDates.map((date) => {
-                                                        const status = getDayStatus(s, date);
-
+                                                    {/* Celdas de día */}
+                                                    {weekDates.map((date, di) => {
+                                                        const status = weekStatuses[di];
                                                         return (
-                                                            <td key={date} className="border-b p-0.5">
+                                                            <td key={date} className="border-b border-r border-slate-100 p-0.5">
                                                                 <DayCell
                                                                     date={date}
                                                                     isOff={status.isOff}
@@ -588,14 +597,77 @@ export const AttendanceGrid = ({
                                                             </td>
                                                         );
                                                     })}
+
+                                                    {/* Resumen semanal de la persona */}
+                                                    <td className="border-b border-l-2 border-l-slate-400 px-1 py-1 text-center">
+                                                        <div className="flex items-center justify-center gap-1 text-[10px] font-bold">
+                                                            <span className={sumP > 0 ? 'text-emerald-600' : 'text-slate-300'}>{sumP}</span>
+                                                            <span className="text-slate-300">·</span>
+                                                            <span className={sumA > 0 ? 'rounded bg-red-100 px-1 text-red-700' : 'text-slate-300'}>{sumA}</span>
+                                                            <span className="text-slate-300">·</span>
+                                                            <span className="text-slate-500">{sumL}</span>
+                                                        </div>
+                                                    </td>
                                                 </tr>
                                             );
                                         })}
+
+                                        {/* Cuadratura diaria del cargo: Día / Noche / Libres */}
+                                        <tr>
+                                            <td className="sticky left-0 z-10 border-b-2 border-r border-b-slate-300 bg-gradient-to-r from-slate-700 to-slate-600 px-3 py-1.5">
+                                                <p className="text-[10px] font-bold uppercase text-white">Cuadratura</p>
+                                                <div className="mt-0.5 flex gap-1.5 text-[9px] font-semibold">
+                                                    <span className="rounded-full bg-sky-400/90 px-1.5 text-white">Día</span>
+                                                    <span className="rounded-full bg-indigo-400/90 px-1.5 text-white">Noche</span>
+                                                    <span className="rounded-full bg-slate-400/80 px-1.5 text-white">Libres</span>
+                                                </div>
+                                            </td>
+                                            {weekDates.map((date) => {
+                                                let dia = 0, noche = 0, libre = 0;
+                                                for (const s of staffInGroup) {
+                                                    if (s.status === 'DESVINCULADO') continue;
+                                                    const st = getDayStatus(s, date);
+                                                    if (st.isOff) libre++;
+                                                    else if (st.license || st.vacation || st.permission) { /* ausencia */ }
+                                                    else if (st.turno === 'NOCHE') noche++;
+                                                    else dia++;
+                                                }
+                                                return (
+                                                    <td key={date} className="border-b-2 border-r border-slate-100 border-b-slate-300 bg-slate-100/80 px-0.5 py-1 text-center align-middle">
+                                                        <div className="mx-auto flex w-fit flex-col gap-0.5">
+                                                            <span className={`flex min-w-[30px] items-center justify-between gap-0.5 rounded-full px-1.5 text-[9px] font-bold leading-4 ${dia === 0 ? 'bg-red-500 text-white shadow-sm' : 'bg-sky-100 text-sky-800'}`}>
+                                                                <span className="opacity-70">D</span><span>{dia}</span>
+                                                            </span>
+                                                            <span className={`flex min-w-[30px] items-center justify-between gap-0.5 rounded-full px-1.5 text-[9px] font-bold leading-4 ${noche === 0 ? 'bg-red-500 text-white shadow-sm' : 'bg-indigo-100 text-indigo-800'}`}>
+                                                                <span className="opacity-70">N</span><span>{noche}</span>
+                                                            </span>
+                                                            <span className="flex min-w-[30px] items-center justify-between gap-0.5 rounded-full bg-slate-200 px-1.5 text-[9px] font-bold leading-4 text-slate-500">
+                                                                <span className="opacity-70">L</span><span>{libre}</span>
+                                                            </span>
+                                                        </div>
+                                                    </td>
+                                                );
+                                            })}
+                                            <td className="border-b-2 border-l-2 border-b-slate-300 border-l-slate-400 bg-slate-100/80" />
+                                        </tr>
                                     </React.Fragment>
                                 );
                             })}
                         </tbody>
                     </table>
+                </div>
+
+                {/* Leyenda integrada */}
+                <div className="hidden flex-wrap items-center gap-x-4 gap-y-1 border-t bg-slate-50 px-4 py-2 text-[11px] text-slate-500 md:flex">
+                    <span className="flex items-center gap-1"><span className="inline-block h-3 w-6 rounded bg-emerald-100 ring-1 ring-emerald-300 text-center text-[9px] font-bold leading-3 text-emerald-700">P</span> Presente</span>
+                    <span className="flex items-center gap-1"><span className="inline-block h-3 w-6 rounded bg-red-100 ring-1 ring-red-300 text-center text-[9px] font-bold leading-3 text-red-700">A</span> Ausente</span>
+                    <span className="flex items-center gap-1"><span className="inline-block h-3 w-6 rounded bg-slate-200 text-center text-[9px] font-bold leading-3 text-slate-600">L</span> Libre</span>
+                    <span className="flex items-center gap-1"><span className="inline-block h-3 w-6 rounded bg-blue-50 ring-1 ring-blue-200" /> Trabaja día</span>
+                    <span className="flex items-center gap-1"><span className="inline-block h-3 w-6 rounded bg-indigo-50 ring-1 ring-indigo-200" /> Trabaja noche</span>
+                    <span className="flex items-center gap-1"><span className="inline-block h-3 w-8 rounded bg-purple-100 text-center text-[8px] font-bold leading-3 text-purple-700">LIC</span> Licencia</span>
+                    <span className="flex items-center gap-1"><span className="inline-block h-3 w-8 rounded bg-teal-100 text-center text-[8px] font-bold leading-3 text-teal-700">VAC</span> Vacaciones</span>
+                    <span className="flex items-center gap-1"><span className="inline-block h-3 w-8 rounded bg-orange-100 text-center text-[8px] font-bold leading-3 text-orange-700">PER</span> Permiso</span>
+                    <span className="ml-auto">Cuadratura por cargo: trabajando Día · Noche · Libres — rojo = turno sin nadie</span>
                 </div>
             </div>
 

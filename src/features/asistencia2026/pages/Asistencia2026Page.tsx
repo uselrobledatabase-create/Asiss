@@ -26,7 +26,6 @@ import {
 } from '../hooks';
 import { AttendanceGrid } from '../components/AttendanceGrid';
 import { KpiBar } from '../components/KpiBar';
-import { ShiftLegend } from '../components/ShiftLegend';
 import { RutPdfExportModal } from '../components/RutPdfExportModal';
 import { OffboardingRequestModal } from '../components/OffboardingRequestModal';
 import { ShiftConfigModal } from '../components/ShiftConfigModal';
@@ -450,12 +449,7 @@ export const Asistencia2026Page = () => {
                 <KpiBar kpis={kpis} isLoading={isLoading} />
             </div>
 
-            {/* Legend */}
-            <div className="bg-white rounded-lg border p-3">
-                <ShiftLegend />
-            </div>
-
-            {/* Grid */}
+            {/* Grid (leyenda integrada al pie de la tabla) */}
             <AttendanceGrid
                 staff={staff}
                 shiftTypes={shiftTypes}
