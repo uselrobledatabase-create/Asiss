@@ -252,9 +252,13 @@ const ProgrammingGridInner = ({ year, month }: Props) => {
     // Se recalcula automáticamente tras cada modificación (datos reactivos).
     const visibleStaff = useMemo(() => {
         const q = search.trim().toLowerCase();
+        // Los rotativos/relevos cubren día Y noche: aparecen bajo ambos filtros
+        const esRotativo = (s: ExportStaff) =>
+            (s.turno || '').toUpperCase().includes('ROTATIV') ||
+            esRelevo(s, scheduleContext.specialTemplates);
         return staff
             .filter((s) => s.terminal_code === terminalFilter)
-            .filter((s) => turnoFilter === 'TODOS' || turnoDeFicha(s.turno, s.horario) === turnoFilter)
+            .filter((s) => turnoFilter === 'TODOS' || esRotativo(s) || turnoDeFicha(s.turno, s.horario) === turnoFilter)
             .filter((s) => !q || s.nombre.toLowerCase().includes(q) || s.rut.toLowerCase().includes(q))
             .sort((a, b) =>
                 cargoOrder(a.cargo) - cargoOrder(b.cargo) ||
@@ -1096,7 +1100,7 @@ const ModalityEditModal = ({
                                                 return (
                                                     <div
                                                         key={di}
-                                                        title={`${dayNameShort(d.date)} ${formatDateCL(d.date)} · ${d.assign}${d.gap ? ` · BRECHA ${d.gap}: ${d.motivo || ''}` : ''}`}
+                                                        title={`${dayNameShort(d.date)} ${formatDateCL(d.date)} · ${d.assign}${d.apoyo ? ' (apoyo)' : ''}${d.gap ? ` · BRECHA ${d.gap}: ${d.motivo || ''}` : ''}`}
                                                         className={`flex h-9 flex-1 flex-col items-center justify-center rounded-lg text-[9px] font-bold ${d.assign === 'LIBRE'
                                                             ? 'bg-slate-800 text-white'
                                                             : d.assign === 'NOCHE'
@@ -1130,6 +1134,9 @@ const ModalityEditModal = ({
                                 <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-emerald-800">
                                     Domingos libres: {relevoResult.stats.domingosLibres}/4
                                 </span>
+                                <span className={`rounded-full px-2 py-0.5 ${relevoResult.stats.libresPorSemana.every((n) => n === 2) ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}`}>
+                                    Libres/sem: {relevoResult.stats.libresPorSemana.join(' · ')}
+                                </span>
                                 {relevoResult.stats.brechas > 0 && (
                                     <span className="rounded-full bg-red-100 px-2 py-0.5 text-red-700">
                                         {relevoResult.stats.brechas} brecha(s)
@@ -1144,7 +1151,8 @@ const ModalityEditModal = ({
                                         <p key={i} className="text-[10px] text-amber-800">• {w}</p>
                                     ))}
                                     <p className="pt-1 text-[10px] font-semibold text-amber-600">
-                                        Las brechas quedan LIBRES para no violar reglas — cúbrelas con otro
+                                        Cuando no puede cubrir el turno faltante, el relevo se mantiene
+                                        TRABAJANDO si es posible; la brecha restante debes cubrirla con otro
                                         supervisor mediante cambio de día u horas extra.
                                     </p>
                                 </div>

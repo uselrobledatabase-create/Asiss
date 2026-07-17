@@ -93,6 +93,9 @@ export function analyzeCoverage(
     });
 
     // ---------- Alertas de cobertura ----------
+    // La cobertura se evalúa por el TURNO RESUELTO de cada día (no por la
+    // ficha): un rotativo/relevo que cubre la noche un martes cuenta en
+    // NOCHE ese martes. Así se eliminan las falsas alertas.
     const gaps: CoverageGap[] = [];
     let combosAnalyzed = 0;
 
@@ -100,20 +103,24 @@ export function analyzeCoverage(
         const inTerminal = activeStaff.filter((s) => s.terminal_code === code);
         if (inTerminal.length === 0) continue;
 
-        // Combos existentes: cargo + turno con dotación en este terminal
-        const combos = new Map<string, StaffWithShift[]>();
-        for (const s of inTerminal) {
-            const cargo = s.cargo.toUpperCase().trim();
-            const turno = baseTurno.get(s.id)!;
-            const key = `${cargo}|${turno}`;
-            if (!combos.has(key)) combos.set(key, []);
-            combos.get(key)!.push(s);
+        const cargosSet = Array.from(new Set(inTerminal.map((s) => s.cargo.toUpperCase().trim())));
+
+        const combos: { cargo: string; turno: 'DIA' | 'NOCHE'; members: StaffWithShift[] }[] = [];
+        for (const cargo of cargosSet) {
+            const delCargo = inTerminal.filter((s) => s.cargo.toUpperCase().trim() === cargo);
+            for (const turno of ['DIA', 'NOCHE'] as const) {
+                // El combo existe solo si alguien del cargo TRABAJA ese turno
+                // al menos un día del período (dotación dinámica real)
+                const cubre = delCargo.filter((m) =>
+                    resolvedCache.get(m.id)!.some((d) => d.status === 'TRABAJA' && d.turno === turno)
+                );
+                if (cubre.length === 0) continue;
+                combos.push({ cargo, turno, members: delCargo });
+            }
         }
-        combosAnalyzed += combos.size;
+        combosAnalyzed += combos.length;
 
-        for (const [key, members] of combos) {
-            const [cargo, turno] = key.split('|') as [string, 'DIA' | 'NOCHE'];
-
+        for (const { cargo, turno, members } of combos) {
             for (let di = 0; di < dates.length; di++) {
                 const date = dates[di];
                 if (monthOnlyDates && !monthOnlyDates.has(date)) continue;
@@ -124,13 +131,13 @@ export function analyzeCoverage(
 
                 for (const m of members) {
                     const day = resolvedCache.get(m.id)![di];
-                    if (day.status === 'TRABAJA') disponibles++;
+                    if (day.status === 'TRABAJA' && day.turno === turno) disponibles++;
+                    else if (day.status === 'TRABAJA') { /* trabaja el otro turno */ }
                     else if (day.status === 'LIBRE') libres.push(m.nombre);
                     else ausentes.push(`${m.nombre} (${day.status.toLowerCase()})`);
                 }
 
                 if (disponibles === 0) {
-                    const soloLibres = ausentes.length === 0;
                     gaps.push({
                         id: `${date}-${code}-${cargo}-${turno}`,
                         date,
@@ -142,11 +149,7 @@ export function analyzeCoverage(
                         dotacion: members.length,
                         libres,
                         ausentes,
-                        message: soloLibres
-                            ? members.length === 1
-                                ? `${dayNameShort(date)} ${formatDateCL(date)} · ${terminalLabel(code)} · ${cargo} turno ${turno}: la única persona del grupo está LIBRE ese día. Debe quedar al menos 1 — corregir programación.`
-                                : `${dayNameShort(date)} ${formatDateCL(date)} · ${terminalLabel(code)} · ${cargo} turno ${turno}: los ${members.length} del grupo están LIBRES ese día. Debe quedar al menos 1 — corregir programación.`
-                            : `${dayNameShort(date)} ${formatDateCL(date)} · ${terminalLabel(code)} · ${cargo} turno ${turno}: sin cobertura (libres: ${libres.length}, ausentes: ${ausentes.length}). Debe quedar al menos 1 — corregir programación.`,
+                        message: `${dayNameShort(date)} ${formatDateCL(date)} · ${terminalLabel(code)} · ${cargo}: NADIE cubre el turno ${turno} ese día (libres: ${libres.length}${ausentes.length ? ` · ausentes: ${ausentes.length}` : ''}). Debe quedar al menos 1 — corregir programación.`,
                     });
                 } else if (disponibles === 1 && members.length > 1 && ausentes.length > 0) {
                     // Cobertura mínima sostenida solo por 1 persona con ausencias en el grupo

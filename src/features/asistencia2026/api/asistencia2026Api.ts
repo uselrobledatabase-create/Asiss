@@ -81,8 +81,8 @@ export async function fetchStaffWithShifts(
             // Include all day shifts: dia, day, mañana, morning, tarde, afternoon, rotativo, rotating
             query = query.or('turno.ilike.%dia%,turno.ilike.%day%,turno.ilike.%mañana%,turno.ilike.%morning%,turno.ilike.%tarde%,turno.ilike.%afternoon%,turno.ilike.%rotativ%,turno.ilike.%rotating%');
         } else {
-            // Include all night shifts: noche, night
-            query = query.or('turno.ilike.%noche%,turno.ilike.%night%');
+            // Include all night shifts + rotativos (los rotativos cubren día Y noche)
+            query = query.or('turno.ilike.%noche%,turno.ilike.%night%,turno.ilike.%rotativ%,turno.ilike.%rotating%');
         }
     }
 

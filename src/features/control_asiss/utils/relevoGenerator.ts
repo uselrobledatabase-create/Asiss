@@ -2,22 +2,24 @@
  * Control ASISS - Generador automático de programación para
  * SUPERVISOR RELEVO (solo El Roble y La Reina).
  *
- * El relevo debe cubrir SÍ O SÍ los días en que los supervisores fijos
- * están libres: trabaja de DÍA cuando los fijos de día libran, y de
- * NOCHE cuando los fijos de noche libran.
+ * El relevo trabaja una semana NORMAL de 5 días con EXACTAMENTE 2
+ * LIBRES por semana (jamás 3 o 4): sus días de trabajo se ubican con
+ * PRIORIDAD donde los supervisores fijos libran (ahí cubre día o noche
+ * según a quién reemplaza) y el resto de sus días trabaja de apoyo en
+ * su turno por defecto. Los 2 libres semanales se colocan donde NO se
+ * le necesita.
  *
- * REGLAS (en orden de aplicación):
- * 1. Transición NOCHE → DÍA prohibida: tras una noche debe haber un
- *    libre antes de entrar de día. (Día → Noche al día siguiente SÍ se
- *    puede, sin libre de por medio.)
- * 2. Máximo 6 días seguidos de trabajo: jamás un día 7.
- * 3. Mínimo 2 domingos libres al mes, sí o sí.
+ * REGLAS DURAS:
+ * 1. Transición NOCHE → DÍA prohibida sin un libre de por medio
+ *    (DÍA → NOCHE al día siguiente SÍ se puede).
+ * 2. Máximo 6 días seguidos de trabajo (jamás un día 7).
+ * 3. Mínimo 2 domingos libres por ciclo (mes), sí o sí.
  *
- * El plan se calcula sobre el ciclo de 28 días (4 semanas Lun-Dom,
- * alineado al lunes de referencia del motor) y se guarda como plantilla
- * ESPECIAL, por lo que se replica al infinito y queda editable día a
- * día como cualquier otra programación. Cuando cubrir un día violaría
- * una regla, ese día queda LIBRE y se reporta la brecha con su motivo.
+ * Implementación: para cada una de las 4 semanas del ciclo se evalúan
+ * TODAS las combinaciones de par de libres (21 por semana → 21⁴ ≈ 194k
+ * combinaciones) y se elige la de menor penalización: cobertura perdida,
+ * transiciones ilegales, rachas >6 y domingos, todo verificado
+ * CÍCLICAMENTE (el ciclo se repite al infinito).
  */
 
 import { StaffWithShift } from '../../asistencia2026/types';
@@ -29,18 +31,19 @@ export type RelevoAssign = 'LIBRE' | 'DIA' | 'NOCHE';
 
 export interface RelevoDay {
     idx: number;            // 0-27 (0 = lunes semana 1)
-    date: string;           // fecha de referencia del ciclo mostrado
+    date: string;
     assign: RelevoAssign;
-    needDia: boolean;       // todos los fijos de día libran
-    needNoche: boolean;     // todos los fijos de noche libran
-    /** brecha: se necesitaba cubrir pero una regla lo impidió */
+    needDia: boolean;
+    needNoche: boolean;
+    /** true = trabaja de apoyo (nadie libra ese día, pero completa sus 5 días) */
+    apoyo?: boolean;
     gap?: 'DIA' | 'NOCHE' | 'AMBOS';
     motivo?: string;
 }
 
 export interface RelevoResult {
-    days: RelevoDay[];                    // 28 días
-    offDays: number[];                    // índices libres para la plantilla
+    days: RelevoDay[];
+    offDays: number[];
     dailyShifts: Record<number, 'DIA' | 'NOCHE'>;
     customSchedules: { dia: string; noche: string };
     warnings: string[];
@@ -52,6 +55,7 @@ export interface RelevoResult {
         brechas: number;
         domingosLibres: number;
         rachaMaxima: number;
+        libresPorSemana: number[];
     };
     fijosDia: string[];
     fijosNoche: string[];
@@ -66,18 +70,18 @@ export function esElegibleRelevo(staff: Pick<StaffWithShift, 'cargo' | 'terminal
     );
 }
 
-function shiftDate(date: string, days: number): string {
-    const d = new Date(date + 'T12:00:00');
-    d.setDate(d.getDate() + days);
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-}
-
 /** true si la persona ya es un relevo automático (marcado en su plantilla) */
 export function esRelevoAsignado(staff: StaffWithShift, ctx: ScheduleContext): boolean {
     if (staff.shift?.shift_type_code === 'SUPERVISOR_RELEVO') return true;
     if (staff.shift?.shift_type_code !== 'ESPECIAL') return false;
     const tpl = ctx.specialTemplates.find((t) => t.staff_id === staff.id);
     return Boolean(tpl?.settings_json?.es_relevo);
+}
+
+function shiftDate(date: string, days: number): string {
+    const d = new Date(date + 'T12:00:00');
+    d.setDate(d.getDate() + days);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
 /** Fijos del terminal que el relevo debe cubrir (excluye otros relevos) */
@@ -92,7 +96,6 @@ export function findFixedSupervisors(
             s.status === 'ACTIVO' &&
             s.terminal_code === relevo.terminal_code &&
             s.cargo.toUpperCase().includes('SUPERVISOR') &&
-            // Un relevo no cubre a otro relevo
             !esRelevoAsignado(s, ctx)
     );
     return {
@@ -101,15 +104,11 @@ export function findFixedSupervisors(
     };
 }
 
-/** Índices de los 4 domingos del ciclo de 28 días (día 0 = lunes) */
 const SUNDAY_IDX = [6, 13, 20, 27];
-
 const trabaja = (a: RelevoAssign) => a !== 'LIBRE';
 
-/** Racha máxima de trabajo considerando que el ciclo se repite (envolvente) */
 function maxRunCyclic(assigns: RelevoAssign[]): number {
-    if (assigns.every(trabaja)) return Infinity;
-    // Duplicar para capturar rachas que cruzan el borde del ciclo
+    if (assigns.every(trabaja)) return assigns.length * 2;
     const doble = [...assigns, ...assigns];
     let max = 0, run = 0;
     for (const a of doble) {
@@ -117,6 +116,141 @@ function maxRunCyclic(assigns: RelevoAssign[]): number {
         else run = 0;
     }
     return Math.min(max, assigns.length);
+}
+
+/** Pares de libres posibles en una semana (21 combinaciones) */
+const LIBRE_PAIRS: [number, number][] = [];
+for (let a = 0; a < 7; a++) for (let b = a + 1; b < 7; b++) LIBRE_PAIRS.push([a, b]);
+
+interface Needs {
+    dia: boolean[];
+    noche: boolean[];
+}
+
+/**
+ * Construye la asignación de 28 días para una combinación de libres:
+ * - libres fijados por el par de cada semana
+ * - necesidades cubiertas con su turno (conflicto día+noche → elige uno)
+ * - resto: APOYO, privilegiando NOCHE para evitar regalar libres y para
+ *   no provocar transiciones NOCHE → DÍA ilegales.
+ *
+ * Se resuelve con una pasada dinámica sobre el ciclo linealizado desde un
+ * día posterior a un libre; así la restricción NOCHE → DÍA queda satisfecha
+ * sin tener que "parchar" el resultado liberando días extra.
+ */
+function buildAssign(
+    pairs: number[],          // índice de LIBRE_PAIRS por semana (4)
+    needs: Needs,
+    defaultTurno: 'DIA' | 'NOCHE'
+): RelevoAssign[] {
+    const libre = new Array<boolean>(28).fill(false);
+    for (let w = 0; w < 4; w++) {
+        const [a, b] = LIBRE_PAIRS[pairs[w]];
+        libre[w * 7 + a] = true;
+        libre[w * 7 + b] = true;
+    }
+
+    const start = libre.findIndex(Boolean);
+    const startIdx = start === -1 ? 0 : (start + 1) % 28;
+    const order = Array.from({ length: 28 }, (_, offset) => (startIdx + offset) % 28);
+    const states: RelevoAssign[] = ['LIBRE', 'DIA', 'NOCHE'];
+    const INF = Number.POSITIVE_INFINITY;
+
+    const penaltyFor = (idx: number, choice: RelevoAssign): number => {
+        if (choice === 'LIBRE') return libre[idx] ? 0 : INF;
+
+        const needDia = needs.dia[idx];
+        const needNoche = needs.noche[idx];
+        let penalty = 0;
+
+        if (needDia && choice !== 'DIA') penalty += 1000;
+        if (needNoche && choice !== 'NOCHE') penalty += 1000;
+
+        if (!needDia && !needNoche) {
+            // En apoyo neutro preferimos dejarlo TRABAJANDO de NOCHE antes
+            // que regalar un libre o volver a DIA por costumbre.
+            penalty += choice === 'DIA' ? 5 : 0;
+            if (defaultTurno === 'NOCHE' && choice === 'DIA') penalty += 1;
+        } else if (needDia && needNoche && choice === 'DIA') {
+            // Si cubre solo uno de los dos turnos, inclinamos el empate a NOCHE.
+            penalty += 1;
+        }
+
+        return penalty;
+    };
+
+    const canFollow = (prev: RelevoAssign, next: RelevoAssign): boolean =>
+        !(prev === 'NOCHE' && next === 'DIA');
+
+    const dp: Array<Record<RelevoAssign, number>> = [];
+    const parent: Array<Record<RelevoAssign, RelevoAssign | null>> = [];
+
+    for (let step = 0; step < order.length; step++) {
+        const idx = order[step];
+        dp[step] = { LIBRE: INF, DIA: INF, NOCHE: INF };
+        parent[step] = { LIBRE: null, DIA: null, NOCHE: null };
+
+        for (const choice of states) {
+            const choicePenalty = penaltyFor(idx, choice);
+            if (!Number.isFinite(choicePenalty)) continue;
+
+            if (step === 0) {
+                // El ciclo se linealiza después de un libre, así que el primer
+                // día no arrastra transición desde el cierre anterior.
+                dp[step][choice] = choicePenalty;
+                continue;
+            }
+
+            for (const prev of states) {
+                const prevScore = dp[step - 1][prev];
+                if (!Number.isFinite(prevScore) || !canFollow(prev, choice)) continue;
+
+                const score = prevScore + choicePenalty;
+                if (score < dp[step][choice]) {
+                    dp[step][choice] = score;
+                    parent[step][choice] = prev;
+                }
+            }
+        }
+    }
+
+    const assign = new Array<RelevoAssign>(28).fill('LIBRE');
+    let bestFinal: RelevoAssign = 'LIBRE';
+    for (const choice of states) {
+        if (dp[order.length - 1][choice] < dp[order.length - 1][bestFinal]) {
+            bestFinal = choice;
+        }
+    }
+
+    let current: RelevoAssign | null = bestFinal;
+    for (let step = order.length - 1; step >= 0; step--) {
+        const idx = order[step];
+        assign[idx] = current || 'LIBRE';
+        current = parent[step][assign[idx]];
+    }
+
+    return assign;
+}
+
+function scoreAssign(assign: RelevoAssign[], needs: Needs): number {
+    let penalty = 0;
+
+    // Transiciones ilegales (solo posibles con necesidades DIA tras noche)
+    for (let i = 0; i < 28; i++) {
+        if (assign[(i + 27) % 28] === 'NOCHE' && assign[i] === 'DIA') penalty += 100000;
+    }
+    // Racha máxima
+    const run = maxRunCyclic(assign);
+    if (run > 6) penalty += 100000 * (run - 6);
+    // Domingos libres (mínimo 2 por ciclo)
+    const domLibres = SUNDAY_IDX.filter((i) => assign[i] === 'LIBRE').length;
+    if (domLibres < 2) penalty += 100000 * (2 - domLibres);
+    // Cobertura perdida (prioridad de los libres: donde NO se necesita)
+    for (let i = 0; i < 28; i++) {
+        if (needs.dia[i] && assign[i] !== 'DIA') penalty += 500;
+        if (needs.noche[i] && assign[i] !== 'NOCHE') penalty += 500;
+    }
+    return penalty;
 }
 
 export function generateRelevoTemplate(
@@ -129,151 +263,113 @@ export function generateRelevoTemplate(
     const warnings: string[] = [];
 
     if (fijosDia.length === 0 && fijosNoche.length === 0) {
-        warnings.push('No se encontraron supervisores fijos en el terminal: no hay a quién cubrir.');
+        warnings.push('No se encontraron supervisores fijos en el terminal: el relevo trabajará de apoyo en su turno por defecto.');
     }
 
-    // Ancla: lunes con índice 0 del ciclo de 28 días
+    // Ancla: lunes índice 0 del ciclo
     let anchor = aroundDate;
     for (let i = 0; i < 28 && getDayInCycle(anchor) !== 0; i++) {
         anchor = shiftDate(anchor, -1);
     }
 
-    // Patrón base de los fijos SIN ajustes puntuales (las necesidades cíclicas
-    // salen del patrón; los ajustes de días puntuales no son periódicos)
-    const baseCtx: ScheduleContext = {
-        ...ctx,
-        overrides: [],
-    };
+    const baseCtx: ScheduleContext = { ...ctx, overrides: [] };
 
-    // ---- 1. Detectar necesidades por día del ciclo ----
-    const days: RelevoDay[] = [];
+    // ---- Necesidades por día del ciclo ----
+    const dates: string[] = [];
+    const needs: Needs = { dia: new Array(28).fill(false), noche: new Array(28).fill(false) };
     for (let i = 0; i < 28; i++) {
         const date = shiftDate(anchor, i);
-        const needDia =
+        dates.push(date);
+        needs.dia[i] =
             fijosDia.length > 0 &&
             fijosDia.every((s) => resolveDayPattern(s, date, baseCtx).status !== 'TRABAJA');
-        const needNoche =
+        needs.noche[i] =
             fijosNoche.length > 0 &&
             fijosNoche.every((s) => resolveDayPattern(s, date, baseCtx).status !== 'TRABAJA');
-        days.push({ idx: i, date, assign: 'LIBRE', needDia, needNoche });
     }
 
-    // ---- 2. Asignación inicial (consciente de la transición noche→día) ----
-    for (let i = 0; i < 28; i++) {
-        const d = days[i];
-        if (!d.needDia && !d.needNoche) continue;
+    const defaultTurno = turnoDeFicha(relevo.turno, relevo.horario);
 
-        if (d.needDia && d.needNoche) {
-            // Conflicto: ambos fijos libran el mismo día y el relevo es uno solo.
-            // Elegir el turno que continúa mejor la secuencia (evita transiciones).
-            const prev = days[(i + 27) % 28].assign;
-            d.assign = prev === 'NOCHE' ? 'NOCHE' : 'DIA';
-            d.gap = d.assign === 'DIA' ? 'NOCHE' : 'DIA';
-            d.motivo = 'Fijos de día y de noche libran a la vez: el relevo solo puede cubrir un turno.';
-            warnings.push(
-                `${dayNameShort(d.date)} ${formatDateCL(d.date)}: fijos de DÍA y NOCHE libres a la vez — el relevo cubre ${d.assign} y queda brecha de ${d.gap}.`
-            );
-        } else {
-            d.assign = d.needDia ? 'DIA' : 'NOCHE';
-        }
-    }
-
-    // ---- 3. Regla 1: NOCHE → DÍA prohibido sin libre de por medio (cíclico) ----
-    for (let pass = 0; pass < 2; pass++) { // 2 pasadas por el borde envolvente
-        for (let i = 0; i < 28; i++) {
-            const prev = days[(i + 27) % 28];
-            const cur = days[i];
-            if (prev.assign === 'NOCHE' && cur.assign === 'DIA') {
-                if (cur.needNoche) {
-                    // Cambiar a NOCHE resuelve la transición y cubre la otra brecha
-                    cur.assign = 'NOCHE';
-                    cur.gap = 'DIA';
-                    cur.motivo = 'Se asignó NOCHE para evitar la transición noche→día.';
-                } else {
-                    cur.assign = 'LIBRE';
-                    cur.gap = 'DIA';
-                    cur.motivo = 'Transición noche→día prohibida: se necesita un libre después de la noche.';
-                    warnings.push(
-                        `${dayNameShort(cur.date)} ${formatDateCL(cur.date)}: brecha de DÍA — venía de turno NOCHE y la regla exige un libre de por medio.`
-                    );
+    // ---- Búsqueda exhaustiva del mejor par de libres por semana ----
+    let bestPairs = [0, 0, 0, 0];
+    let bestScore = Infinity;
+    let bestAssign: RelevoAssign[] | null = null;
+    const pairs = [0, 0, 0, 0];
+    busqueda:
+    for (pairs[0] = 0; pairs[0] < 21; pairs[0]++)
+        for (pairs[1] = 0; pairs[1] < 21; pairs[1]++)
+            for (pairs[2] = 0; pairs[2] < 21; pairs[2]++)
+                for (pairs[3] = 0; pairs[3] < 21; pairs[3]++) {
+                    const assign = buildAssign(pairs, needs, defaultTurno);
+                    if (maxRunCyclic(assign) > 6) continue;
+                    if (SUNDAY_IDX.filter((i) => assign[i] === 'LIBRE').length < 2) continue;
+                    const score = scoreAssign(assign, needs);
+                    if (score < bestScore) {
+                        bestScore = score;
+                        bestPairs = [...pairs];
+                        bestAssign = assign;
+                        if (score === 0) break busqueda;
+                    }
                 }
-            }
-        }
-    }
 
-    // ---- 4. Regla 2: máximo 6 días seguidos (cíclico) ----
-    let guard = 0;
-    while (maxRunCyclic(days.map((d) => d.assign)) > 6 && guard++ < 28) {
-        // Encontrar la primera racha >6 (en la vista duplicada) y liberar su 7º día
-        const doble = [...days, ...days];
-        let run = 0;
-        for (let i = 0; i < doble.length; i++) {
-            if (trabaja(doble[i].assign)) {
-                run++;
-                if (run === 7) {
-                    const d = days[doble[i].idx];
-                    const dropped = d.assign as 'DIA' | 'NOCHE';
-                    d.assign = 'LIBRE';
-                    d.gap = d.gap === undefined ? dropped : 'AMBOS';
-                    d.motivo = 'Liberado para no superar los 6 días seguidos de trabajo.';
-                    warnings.push(
-                        `${dayNameShort(d.date)} ${formatDateCL(d.date)}: brecha de ${dropped} — se liberó para respetar el máximo de 6 días seguidos.`
-                    );
-                    break;
-                }
-            } else {
-                run = 0;
-            }
-        }
-    }
+    const assign = bestAssign ?? buildAssign(bestPairs, needs, defaultTurno);
 
-    // ---- 5. Regla 3: mínimo 2 domingos libres por ciclo/mes ----
-    const workedSundays = () => SUNDAY_IDX.filter((i) => trabaja(days[i].assign));
-    while (SUNDAY_IDX.length - workedSundays().length < 2) {
-        // Liberar el domingo trabajado cuya cobertura sea menos crítica:
-        // preferir uno con brecha ya existente; si no, el último del ciclo
-        const candidatos = workedSundays();
-        const target = candidatos[candidatos.length - 1];
-        const d = days[target];
-        const dropped = d.assign as 'DIA' | 'NOCHE';
-        d.assign = 'LIBRE';
-        d.gap = d.gap === undefined ? dropped : 'AMBOS';
-        d.motivo = 'Domingo liberado para cumplir los 2 domingos libres obligatorios.';
+    if (
+        maxRunCyclic(assign) > 6 ||
+        SUNDAY_IDX.filter((i) => assign[i] === 'LIBRE').length < 2 ||
+        assign.some((a, i) => assign[(i + 27) % 28] === 'NOCHE' && a === 'DIA')
+    ) {
         warnings.push(
-            `${dayNameShort(d.date)} ${formatDateCL(d.date)}: brecha de ${dropped} — domingo liberado para cumplir los 2 domingos libres del mes.`
+            'No se encontró una combinación perfecta con la estrategia principal; revisa la programación manualmente antes de guardar.'
         );
     }
 
-    // ---- 6. Verificación final de transición (por si las liberaciones abrieron algo) ----
+    // ---- Días y brechas ----
+    const days: RelevoDay[] = [];
     for (let i = 0; i < 28; i++) {
-        const prev = days[(i + 27) % 28];
-        const cur = days[i];
-        if (prev.assign === 'NOCHE' && cur.assign === 'DIA') {
-            cur.assign = 'LIBRE';
-            cur.gap = 'DIA';
-            cur.motivo = 'Transición noche→día prohibida.';
+        const d: RelevoDay = {
+            idx: i,
+            date: dates[i],
+            assign: assign[i],
+            needDia: needs.dia[i],
+            needNoche: needs.noche[i],
+        };
+        if (trabaja(assign[i]) && !needs.dia[i] && !needs.noche[i]) d.apoyo = true;
+
+        const gapDia = needs.dia[i] && assign[i] !== 'DIA';
+        const gapNoche = needs.noche[i] && assign[i] !== 'NOCHE';
+        if (gapDia && gapNoche) d.gap = 'AMBOS';
+        else if (gapDia) d.gap = 'DIA';
+        else if (gapNoche) d.gap = 'NOCHE';
+
+        if (d.gap) {
+            d.motivo = needs.dia[i] && needs.noche[i] && trabaja(assign[i])
+                ? 'Fijos de día y noche libran a la vez: el relevo solo cubre un turno.'
+                : assign[i] === 'NOCHE' && needs.dia[i]
+                    ? 'Se deja al relevo trabajando de noche para respetar la transición NOCHE→DÍA sin regalar un libre extra.'
+                    : assign[i] === 'DIA' && needs.noche[i]
+                        ? 'Se priorizó la cobertura de día; la noche requiere refuerzo adicional.'
+                        : 'La cobertura completa exige refuerzo adicional de otro supervisor.';
+            warnings.push(
+                `${dayNameShort(d.date)} ${formatDateCL(d.date)}: brecha de ${d.gap} — ${d.motivo}`
+            );
         }
+        days.push(d);
     }
 
     // ---- Salida ----
     const offDays = days.filter((d) => d.assign === 'LIBRE').map((d) => d.idx);
     const dailyShifts: Record<number, 'DIA' | 'NOCHE'> = {};
-    for (const d of days) {
-        if (d.assign === 'NOCHE') dailyShifts[d.idx] = 'NOCHE';
-    }
+    for (const d of days) if (d.assign === 'NOCHE') dailyShifts[d.idx] = 'NOCHE';
 
     const customSchedules = {
         dia: fijosDia[0]?.horario || relevo.horario || '08:00-20:00',
         noche: fijosNoche[0]?.horario || '20:00-08:00',
     };
 
-    const necesidadesDia = days.filter((d) => d.needDia).length;
-    const necesidadesNoche = days.filter((d) => d.needNoche).length;
-    const cubiertosDia = days.filter((d) => d.needDia && d.assign === 'DIA').length;
-    const cubiertosNoche = days.filter((d) => d.needNoche && d.assign === 'NOCHE').length;
-    const brechas = days.filter((d) => d.gap).length;
-    const domingosLibres = SUNDAY_IDX.filter((i) => days[i].assign === 'LIBRE').length;
-    const rachaMaxima = maxRunCyclic(days.map((d) => d.assign));
+    const libresPorSemana = [0, 1, 2, 3].map(
+        (w) => days.slice(w * 7, w * 7 + 7).filter((d) => d.assign === 'LIBRE').length
+    );
 
     return {
         days,
@@ -282,13 +378,14 @@ export function generateRelevoTemplate(
         customSchedules,
         warnings,
         stats: {
-            necesidadesDia,
-            necesidadesNoche,
-            cubiertosDia,
-            cubiertosNoche,
-            brechas,
-            domingosLibres,
-            rachaMaxima: rachaMaxima === Infinity ? 28 : rachaMaxima,
+            necesidadesDia: needs.dia.filter(Boolean).length,
+            necesidadesNoche: needs.noche.filter(Boolean).length,
+            cubiertosDia: days.filter((d) => d.needDia && d.assign === 'DIA').length,
+            cubiertosNoche: days.filter((d) => d.needNoche && d.assign === 'NOCHE').length,
+            brechas: days.filter((d) => d.gap).length,
+            domingosLibres: SUNDAY_IDX.filter((i) => assign[i] === 'LIBRE').length,
+            rachaMaxima: maxRunCyclic(assign),
+            libresPorSemana,
         },
         fijosDia: fijosDia.map((s) => s.nombre),
         fijosNoche: fijosNoche.map((s) => s.nombre),
