@@ -241,15 +241,26 @@ export const fetchStaffCaps = async (scopeCode?: string): Promise<StaffCap[]> =>
 // STAFF COUNTS
 // ==========================================
 
+export interface StaffCountsDetailPerson {
+    nombre: string;
+    cargo: string;
+    terminal_code: string;
+}
+
 export const fetchStaffCounts = async (
     terminalContext: TerminalContext
-): Promise<{ byCargo: StaffCountByCargo[]; byTerminal: StaffCountByTerminal[]; total: number }> => {
+): Promise<{
+    byCargo: StaffCountByCargo[];
+    byTerminal: StaffCountByTerminal[];
+    total: number;
+    detail: { licencias: StaffCountsDetailPerson[]; suspendidos: StaffCountsDetailPerson[] };
+}> => {
     const terminals = resolveTerminalsForContext(terminalContext);
 
     // Fetch active staff with IDs for license lookup
     const { data: staffData, error: staffError } = await supabase
         .from('staff')
-        .select('id, cargo, terminal_code, suspended')
+        .select('id, nombre, cargo, terminal_code, suspended')
         .eq('status', 'ACTIVO')
         .in('terminal_code', terminals);
 
@@ -270,6 +281,7 @@ export const fetchStaffCounts = async (
                     count: 0,
                 })),
                 total: 0,
+                detail: { licencias: [], suspendidos: [] },
             };
         }
 
@@ -343,10 +355,21 @@ export const fetchStaffCounts = async (
         count: terminalCountMap.get(t) || 0,
     }));
 
+    // Detalle nominal: quiénes están con licencia hoy y quiénes suspendidos
+    const detail = {
+        licencias: (staffData || [])
+            .filter((s) => staffWithLicenses.has(s.id))
+            .map((s) => ({ nombre: s.nombre, cargo: s.cargo, terminal_code: s.terminal_code })),
+        suspendidos: (staffData || [])
+            .filter((s) => s.suspended)
+            .map((s) => ({ nombre: s.nombre, cargo: s.cargo, terminal_code: s.terminal_code })),
+    };
+
     return {
         byCargo,
         byTerminal,
         total: staffData?.length || 0,
+        detail,
     };
 };
 

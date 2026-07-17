@@ -313,16 +313,44 @@ export function generateRelevoTemplate(
 
     const defaultTurno = turnoDeFicha(relevo.turno, relevo.horario);
 
-    // ---- Búsqueda exhaustiva del mejor par de libres por semana ----
+    // ---- Búsqueda del mejor par de libres por semana, con PODA ----
+    // Por semana se preseleccionan los pares más prometedores (pierden
+    // menos cobertura, incluyen domingo, quedan bien repartidos), y se
+    // combinan solo esos: 12⁴ ≈ 20k evaluaciones (~100 ms) en vez de 21⁴.
+    const candidatesPorSemana: number[][] = [0, 1, 2, 3].map((w) => {
+        const scored = LIBRE_PAIRS.map(([a, b], pi) => {
+            const ia = w * 7 + a;
+            const ib = w * 7 + b;
+            let local = 0;
+            // Perder cobertura al liberar un día con necesidad es caro
+            if (needs.dia[ia] || needs.noche[ia]) local += 500;
+            if (needs.dia[ib] || needs.noche[ib]) local += 500;
+            // Preferir que uno de los libres caiga en domingo (regla de domingos)
+            if (a !== 6 && b !== 6) local += 3;
+            // Preferir libres repartidos en la semana (corta rachas)
+            local += Math.abs(b - a) <= 1 ? 2 : 0;
+            return { pi, local };
+        }).sort((x, y) => x.local - y.local);
+        // Top 12 + garantizar que haya pares con domingo entre los candidatos
+        const top = scored.slice(0, 12).map((s) => s.pi);
+        for (const s of scored) {
+            if (top.length >= 15) break;
+            const [a, b] = LIBRE_PAIRS[s.pi];
+            if ((a === 6 || b === 6) && !top.includes(s.pi)) top.push(s.pi);
+        }
+        return top;
+    });
+
     let bestPairs = [0, 0, 0, 0];
     let bestScore = Infinity;
     let bestAssign: RelevoAssign[] | null = null;
     const pairs = [0, 0, 0, 0];
     busqueda:
-    for (pairs[0] = 0; pairs[0] < 21; pairs[0]++)
-        for (pairs[1] = 0; pairs[1] < 21; pairs[1]++)
-            for (pairs[2] = 0; pairs[2] < 21; pairs[2]++)
-                for (pairs[3] = 0; pairs[3] < 21; pairs[3]++) {
+    for (const p0 of candidatesPorSemana[0])
+        for (const p1 of candidatesPorSemana[1])
+            for (const p2 of candidatesPorSemana[2])
+                for (const p3 of candidatesPorSemana[3]) {
+                    pairs[0] = p0; pairs[1] = p1; pairs[2] = p2; pairs[3] = p3;
                     const assign = buildAssign(pairs, needs, defaultTurno);
                     if (maxRunCyclic(assign) > 6) continue;
                     if (SUNDAY_IDX.filter((i) => assign[i] === 'LIBRE').length < 2) continue;

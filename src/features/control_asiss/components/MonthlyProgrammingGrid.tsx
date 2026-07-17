@@ -62,7 +62,7 @@ const cargoOrder = (cargo: string): number => {
 // MODALIDADES (el juego siempre es de 2 semanas)
 // ==========================================
 
-type ModalidadKey = 'FIJO' | 'NORMAL' | 'CONTRA' | 'MANUAL' | 'RELEVO';
+type ModalidadKey = 'FIJO' | 'NORMAL' | 'CONTRA' | 'NORMAL_VS' | 'CONTRA_VS' | 'MANUAL' | 'RELEVO';
 
 /** Turno especial de cobertura para supervisores de El Roble y La Reina */
 const RELEVO_OPTION = {
@@ -104,6 +104,20 @@ const MODALIDAD_OPTIONS: {
             variant: 'PRINCIPAL',
         },
         {
+            key: 'NORMAL_VS',
+            label: 'Turno Normal V+S',
+            desc: 'Sem A: Vie+Sáb libres · Sem B: Mié+Dom libres (se repite cada 2 semanas)',
+            code: '5X2_ROTATIVO',
+            variant: 'CONTRATURNO',
+        },
+        {
+            key: 'CONTRA_VS',
+            label: 'Contraturno V+S',
+            desc: 'Sem A: Mié+Dom libres · Sem B: Vie+Sáb libres — complementa al Normal V+S: siempre hay alguien',
+            code: '5X2_ROTATIVO',
+            variant: 'PRINCIPAL',
+        },
+        {
             key: 'MANUAL',
             label: 'Manual (2 semanas)',
             desc: 'Marca en el calendario los días libres del juego de 2 semanas; se replica al infinito',
@@ -139,8 +153,8 @@ function modalityLabel(s: StaffWithShift, templates: { staff_id: string; setting
     if (code === 'ESPECIAL') return esRelevo(s, templates) ? 'Relevo Auto' : 'Manual 2 sem';
     if (code === 'SUPERVISOR_RELEVO') return 'Relevo';
     if (code === '5X2_SUPER') return variant === 'CONTRATURNO' ? 'Turno Normal' : 'Contraturno';
-    // Legacy 5X2_ROTATIVO
-    return variant === 'CONTRATURNO' ? 'Normal (Rot)' : 'Contra (Rot)';
+    // Juego Viernes+Sábado (5X2_ROTATIVO)
+    return variant === 'CONTRATURNO' ? 'Normal V+S' : 'Contra V+S';
 }
 
 function modalityKeyForStaff(
@@ -151,6 +165,9 @@ function modalityKeyForStaff(
         return templates.find((t) => t.staff_id === s.id)?.settings_json?.es_relevo ? 'RELEVO' : 'MANUAL';
     }
     if (s.shift?.shift_type_code === '5X2_FIJO') return 'FIJO';
+    if (s.shift?.shift_type_code === '5X2_ROTATIVO') {
+        return s.shift?.variant_code === 'CONTRATURNO' ? 'NORMAL_VS' : 'CONTRA_VS';
+    }
     if (s.shift?.variant_code === 'CONTRATURNO') return 'NORMAL';
     return s.shift ? 'CONTRA' : 'NORMAL';
 }
@@ -902,13 +919,16 @@ const ModalityEditModal = ({
     // Recomendación (solo entre Normal y Contraturno)
     const recommendation = useMemo(() => {
         const rec = buildShiftRecommendation(staff, allStaff);
-        const superCombos = rec.combos.filter((c) => c.shiftType === '5X2_SUPER');
-        if (superCombos.length === 0) return null;
-        const weakest = superCombos[0];
-        return {
-            key: (weakest.variant === 'CONTRATURNO' ? 'NORMAL' : 'CONTRA') as ModalidadKey,
-            count: weakest.count,
-        };
+        // Considerar ambos juegos: J+V (SUPER) y V+S (ROTATIVO)
+        const combos = rec.combos.filter(
+            (c) => c.shiftType === '5X2_SUPER' || c.shiftType === '5X2_ROTATIVO'
+        );
+        if (combos.length === 0) return null;
+        const weakest = combos[0]; // ya vienen ordenados del más débil al más cubierto
+        const key: ModalidadKey = weakest.shiftType === '5X2_SUPER'
+            ? (weakest.variant === 'CONTRATURNO' ? 'NORMAL' : 'CONTRA')
+            : (weakest.variant === 'CONTRATURNO' ? 'NORMAL_VS' : 'CONTRA_VS');
+        return { key, count: weakest.count };
     }, [staff, allStaff]);
 
     const selected = opciones.find((m) => m.key === key) || MODALIDAD_OPTIONS[1];
@@ -1064,14 +1084,14 @@ const ModalityEditModal = ({
                             Copia la modalidad oficial de otro trabajador del mismo terminal.
                             Útil para dejar un inspector con el mismo turno de un supervisor.
                         </p>
-                        <div className="mt-3 flex gap-2">
+                        <div className="mt-3 space-y-2">
                             <select
                                 value={replicateSourceId}
                                 onChange={(e) => {
                                     setReplicateSourceId(e.target.value);
                                     setReplicateMessage(null);
                                 }}
-                                className="flex-1 rounded-lg border border-sky-200 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-sky-500"
+                                className="w-full rounded-lg border border-sky-200 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-sky-500"
                             >
                                 <option value="">Seleccionar origen…</option>
                                 {replicateCandidates.map((person) => (
@@ -1083,7 +1103,7 @@ const ModalityEditModal = ({
                             <button
                                 onClick={handleReplicate}
                                 disabled={!replicateSourceId}
-                                className="rounded-lg bg-sky-700 px-4 py-2 text-sm font-bold text-white transition-colors hover:bg-sky-800 disabled:opacity-40"
+                                className="w-full rounded-lg bg-sky-700 px-4 py-2.5 text-sm font-bold text-white transition-colors hover:bg-sky-800 disabled:opacity-40"
                             >
                                 Replicar
                             </button>
