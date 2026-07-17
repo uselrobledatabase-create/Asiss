@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useEffect } from 'react';
 import { TerminalContext } from '../../shared/types/terminal';
+import { broadcastActivity } from '../../shared/services/activityFeed';
 import {
     fetchNoMarcaciones,
     fetchSinCredenciales,
@@ -125,7 +126,16 @@ export const useCreateNoMarcacion = () => {
     return useMutation({
         mutationFn: ({ values, createdBy }: { values: NoMarcacionFormValues; createdBy: string }) =>
             createNoMarcacion(values, createdBy),
-        onSuccess: () => qc.invalidateQueries({ queryKey: attendanceKeys.all }),
+        onSuccess: (_data, { values, createdBy }) => {
+            qc.invalidateQueries({ queryKey: attendanceKeys.all });
+            broadcastActivity({
+                actor: createdBy,
+                accion: 'registró NO MARCACIÓN para',
+                objetivo: values.nombre,
+                seccion: 'Asistencia',
+                detalle: values.date.split('-').reverse().join('-'),
+            });
+        },
     });
 };
 
@@ -134,7 +144,16 @@ export const useCreateSinCredencial = () => {
     return useMutation({
         mutationFn: ({ values, createdBy }: { values: SinCredencialFormValues; createdBy: string }) =>
             createSinCredencial(values, createdBy),
-        onSuccess: () => qc.invalidateQueries({ queryKey: attendanceKeys.all }),
+        onSuccess: (_data, { values, createdBy }) => {
+            qc.invalidateQueries({ queryKey: attendanceKeys.all });
+            broadcastActivity({
+                actor: createdBy,
+                accion: 'registró SIN CREDENCIAL para',
+                objetivo: values.nombre,
+                seccion: 'Asistencia',
+                detalle: values.date.split('-').reverse().join('-'),
+            });
+        },
     });
 };
 
@@ -143,7 +162,16 @@ export const useCreateCambioDia = () => {
     return useMutation({
         mutationFn: ({ values, createdBy }: { values: CambioDiaFormValues; createdBy: string }) =>
             createCambioDia(values, createdBy),
-        onSuccess: () => qc.invalidateQueries({ queryKey: attendanceKeys.all }),
+        onSuccess: (_data, { values, createdBy }) => {
+            qc.invalidateQueries({ queryKey: attendanceKeys.all });
+            broadcastActivity({
+                actor: createdBy,
+                accion: 'registró CAMBIO DE DÍA para',
+                objetivo: values.nombre,
+                seccion: 'Asistencia',
+                detalle: values.day_on_date ? `trabaja el ${values.day_on_date.split('-').reverse().join('-')}` : undefined,
+            });
+        },
     });
 };
 
@@ -152,7 +180,15 @@ export const useCreateAutorizacion = () => {
     return useMutation({
         mutationFn: ({ values, createdBy }: { values: AutorizacionFormValues; createdBy: string }) =>
             createAutorizacion(values, createdBy),
-        onSuccess: () => qc.invalidateQueries({ queryKey: attendanceKeys.all }),
+        onSuccess: (_data, { values, createdBy }) => {
+            qc.invalidateQueries({ queryKey: attendanceKeys.all });
+            broadcastActivity({
+                actor: createdBy,
+                accion: 'registró AUTORIZACIÓN para',
+                objetivo: values.nombre,
+                seccion: 'Asistencia',
+            });
+        },
     });
 };
 
@@ -161,7 +197,16 @@ export const useCreateVacacion = () => {
     return useMutation({
         mutationFn: ({ values, createdBy }: { values: VacacionFormValues; createdBy: string }) =>
             createVacacion(values, createdBy),
-        onSuccess: () => qc.invalidateQueries({ queryKey: attendanceKeys.all }),
+        onSuccess: (_data, { values, createdBy }) => {
+            qc.invalidateQueries({ queryKey: attendanceKeys.all });
+            broadcastActivity({
+                actor: createdBy,
+                accion: 'registró VACACIONES para',
+                objetivo: values.nombre,
+                seccion: 'Asistencia',
+                detalle: `${values.start_date.split('-').reverse().join('-')} al ${values.end_date.split('-').reverse().join('-')}`,
+            });
+        },
     });
 };
 

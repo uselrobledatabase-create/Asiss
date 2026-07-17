@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { assertAuthorizedSupervisor } from '../../shared/utils/authorizedSupervisors';
 import { useTerminalStore } from '../../shared/state/terminalStore';
 import { useSessionStore } from '../../shared/state/sessionStore';
+import { broadcastActivity } from '../../shared/services/activityFeed';
 import {
     fetchTasks,
     fetchTaskById,
@@ -79,8 +80,14 @@ export const useCreateTask = () => {
     return useMutation({
         mutationFn: (values: TaskFormValues) =>
             createTask(values, requireTaskManager(session?.supervisorName || '', 'crear tareas')),
-        onSuccess: () => {
+        onSuccess: (_data, values) => {
             queryClient.invalidateQueries({ queryKey: taskKeys.all });
+            broadcastActivity({
+                actor: session?.supervisorName || 'Alguien',
+                accion: 'asignó la TAREA',
+                objetivo: `"${values.title}"`,
+                seccion: 'Tareas',
+            });
         },
     });
 };

@@ -7,6 +7,7 @@
 import React, { useMemo, useState } from 'react';
 import { DayCell } from './DayCell';
 import { DayActionPanel } from './DayActionPanel';
+import { broadcastActivity } from '../../../shared/services/activityFeed';
 import { CARGO_COLORS } from '../utils/colors';
 import {
     StaffWithShift,
@@ -390,10 +391,19 @@ export const AttendanceGrid = ({
             date: massMarkDate,
             createdBy: session.supervisorName,
         });
+        broadcastActivity({
+            actor: session.supervisorName,
+            accion: 'marcó PRESENTES MASIVOS a',
+            objetivo: `${staffToMark.length} persona(s)`,
+            seccion: 'Asistencia',
+            detalle: massMarkDate.split('-').reverse().join('-'),
+        });
         setMassMarkOpen(false);
     };
 
     // Action handlers
+    const fmtCL = (d: string) => d.split('-').reverse().join('-');
+
     const handleMarkPresent = () => {
         if (!selectedCell || !session) return;
         createMarkMutation.mutate({
@@ -403,6 +413,13 @@ export const AttendanceGrid = ({
                 mark: 'P',
             },
             createdBy: session.supervisorName,
+        });
+        broadcastActivity({
+            actor: session.supervisorName,
+            accion: 'puso PRESENTE a',
+            objetivo: selectedCell.staff.nombre,
+            seccion: 'Asistencia',
+            detalle: fmtCL(selectedCell.date),
         });
         setSelectedCell(null);
     };
@@ -418,6 +435,13 @@ export const AttendanceGrid = ({
             },
             createdBy: session.supervisorName,
         });
+        broadcastActivity({
+            actor: session.supervisorName,
+            accion: 'puso AUSENTE a',
+            objetivo: selectedCell.staff.nombre,
+            seccion: 'Asistencia',
+            detalle: `${fmtCL(selectedCell.date)}${note ? ` · ${note}` : ''}`,
+        });
         setSelectedCell(null);
     };
 
@@ -431,6 +455,13 @@ export const AttendanceGrid = ({
                 note,
             },
             createdBy: session.supervisorName,
+        });
+        broadcastActivity({
+            actor: session.supervisorName,
+            accion: 'registró LICENCIA para',
+            objetivo: selectedCell.staff.nombre,
+            seccion: 'Asistencia',
+            detalle: `${fmtCL(startDate)} al ${fmtCL(endDate)}`,
         });
         setSelectedCell(null);
     };
@@ -446,6 +477,13 @@ export const AttendanceGrid = ({
                 note,
             },
             createdBy: session.supervisorName,
+        });
+        broadcastActivity({
+            actor: session.supervisorName,
+            accion: 'registró PERMISO para',
+            objetivo: selectedCell.staff.nombre,
+            seccion: 'Asistencia',
+            detalle: `${fmtCL(startDate)} al ${fmtCL(endDate)}`,
         });
         setSelectedCell(null);
     };
@@ -463,6 +501,13 @@ export const AttendanceGrid = ({
             startDate,
             endDate,
             createdBy: session.supervisorName,
+        });
+        broadcastActivity({
+            actor: session.supervisorName,
+            accion: 'registró VACACIONES para',
+            objetivo: selectedCell.staff.nombre,
+            seccion: 'Asistencia',
+            detalle: `${fmtCL(startDate)} al ${fmtCL(endDate)}`,
         });
         setSelectedCell(null);
     };

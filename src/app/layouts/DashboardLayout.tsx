@@ -3,6 +3,7 @@ import { Outlet } from 'react-router-dom';
 import { Sidebar } from '../../shared/components/layout/Sidebar';
 import { AppHeader } from '../../shared/components/layout/AppHeader';
 import { AsisCommand } from '../../features/asis_command/components/AsisCommand';
+import { ActivityFeedListener } from '../../shared/components/common/ActivityFeedListener';
 
 export const DashboardLayout = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -23,6 +24,8 @@ export const DashboardLayout = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-slate-100 to-slate-50">
+      {/* Actividad en línea de otros usuarios (tiempo real, todas las secciones) */}
+      <ActivityFeedListener />
       <div className="flex">
         {/* Sidebar */}
         <Sidebar

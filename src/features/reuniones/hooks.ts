@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { assertAuthorizedSupervisor } from '../../shared/utils/authorizedSupervisors';
 import { useTerminalStore } from '../../shared/state/terminalStore';
 import { useSessionStore } from '../../shared/state/sessionStore';
+import { broadcastActivity } from '../../shared/services/activityFeed';
 import {
     fetchMeetings,
     fetchMeetingById,
@@ -71,8 +72,14 @@ export const useCreateMeeting = () => {
     return useMutation({
         mutationFn: (values: MeetingFormValues) =>
             createMeeting(values, requireMeetingManager(session?.supervisorName || '', 'crear reuniones')),
-        onSuccess: () => {
+        onSuccess: (_data, values) => {
             queryClient.invalidateQueries({ queryKey: meetingKeys.all });
+            broadcastActivity({
+                actor: session?.supervisorName || 'Alguien',
+                accion: 'agendó la REUNIÓN',
+                objetivo: `"${values.title}"`,
+                seccion: 'Reuniones',
+            });
         },
     });
 };

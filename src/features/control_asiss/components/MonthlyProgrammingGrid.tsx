@@ -21,13 +21,20 @@ import { Icon } from '../../../shared/components/common/Icon';
 import { StaffWithShift, ShiftTypeCode, VariantCode } from '../../asistencia2026/types';
 import { useUpsertSpecialTemplate } from '../../asistencia2026/hooks';
 import { showSuccessToast, showWarningToast, showErrorToast } from '../../../shared/state/toastStore';
+import { broadcastActivity } from '../../../shared/services/activityFeed';
+import { useSessionStore } from '../../../shared/state/sessionStore';
+
+/** Nombre del supervisor logeado para el feed de actividad */
+function sessionActor(): string {
+    return useSessionStore.getState().session?.supervisorName || 'Alguien';
+}
 import {
     useControlAsissExportData,
     useUpsertShiftControl,
     useUpsertOverrideControl,
     useDeleteOverrideControl,
 } from '../hooks';
-import { ExportStaff } from '../api';
+import { ExportStaff, deleteAllOverridesForStaff } from '../api';
 import { getExtendedMonthRange, dayNameShort, formatDateCL, monthName } from '../utils/scheduleEngine';
 import { turnoDeFicha } from '../utils/coverageAnalysis';
 import {
@@ -510,18 +517,22 @@ const ProgrammingGridInner = ({ year, month }: Props) => {
 // Píldora de cuadratura
 // ==========================================
 
+const COUNTER_META: Record<'dia' | 'noche' | 'libre', { letter: string; title: string; cls: string }> = {
+    dia: { letter: 'D', title: 'Trabajando turno Día', cls: 'bg-sky-100 text-sky-800' },
+    noche: { letter: 'N', title: 'Trabajando turno Noche', cls: 'bg-indigo-100 text-indigo-800' },
+    libre: { letter: 'L', title: 'Libres', cls: 'bg-slate-200 text-slate-500' },
+};
+
 const CounterPill = ({ value, tone }: { value: number; tone: 'dia' | 'noche' | 'libre' }) => {
-    const zeroMatters = tone !== 'libre';
-    const cls = value === 0 && zeroMatters
-        ? 'bg-red-500 text-white shadow-sm'
-        : tone === 'dia'
-            ? 'bg-sky-100 text-sky-800'
-            : tone === 'noche'
-                ? 'bg-indigo-100 text-indigo-800'
-                : 'bg-slate-200 text-slate-500';
+    const meta = COUNTER_META[tone];
+    const caido = value === 0 && tone !== 'libre';
     return (
-        <span className={`min-w-[22px] rounded-full px-1 text-center text-[9px] font-bold leading-4 ${cls}`}>
-            {value}
+        <span
+            title={`${meta.title}: ${value}${caido ? ' — DÍA CAÍDO' : ''}`}
+            className={`flex min-w-[30px] items-center justify-between gap-0.5 rounded-full px-1.5 text-[9px] font-bold leading-4 ${caido ? 'bg-red-500 text-white shadow-sm' : meta.cls}`}
+        >
+            <span className="opacity-70">{meta.letter}</span>
+            <span>{value}</span>
         </span>
     );
 };
@@ -644,6 +655,13 @@ const DayEditModal = ({
                     'Juego de 2 semanas actualizado',
                     `${staff.nombre}: el ${dayNameShort(date)} queda ${type === 'OFF' ? 'LIBRE' : 'TRABAJANDO'} y se replica cada 2 semanas al infinito.`
                 );
+                broadcastActivity({
+                    actor: sessionActor(),
+                    accion: `modificó el juego de 2 semanas de`,
+                    objetivo: staff.nombre,
+                    seccion: 'Control ASISS · Programación',
+                    detalle: `${dayNameShort(date)} ${type === 'OFF' ? 'LIBRE' : 'TRABAJA'} · replicado al infinito`,
+                });
             } else if (type === null) {
                 await removeOverride.mutateAsync({ staffId: staff.id, date });
                 showSuccessToast('Ajuste eliminado', `${staff.nombre} vuelve a su patrón normal el ${formatDateCL(date)}.`);
@@ -658,6 +676,13 @@ const DayEditModal = ({
                     'Cambio de día aplicado',
                     `${staff.nombre} · ${dayNameShort(date)} ${formatDateCL(date)}: ${type === 'OFF' ? 'LIBRE' : `TRABAJA ${turno === 'NOCHE' ? 'Noche' : 'Día'}${horario.trim() ? ` (${horario.trim()})` : ''}`}.`
                 );
+                broadcastActivity({
+                    actor: sessionActor(),
+                    accion: `hizo un cambio de día a`,
+                    objetivo: staff.nombre,
+                    seccion: 'Control ASISS · Programación',
+                    detalle: `${dayNameShort(date)} ${formatDateCL(date)} → ${type === 'OFF' ? 'LIBRE' : `TRABAJA ${turno === 'NOCHE' ? 'Noche' : 'Día'}`}`,
+                });
             }
             onClose();
             if (check.warnings.length > 0) {
@@ -865,6 +890,11 @@ const ModalityEditModal = ({
 
     const handleSave = async () => {
         try {
+            // CLAVE: limpiar los ajustes puntuales anteriores (celdas
+            // forzadas). Si no, taparían el patrón nuevo y la modalidad
+            // elegida "no se vería" en la grilla.
+            await deleteAllOverridesForStaff(staff.id);
+
             if (key === 'MANUAL') {
                 const tpl = twoWeekToTemplate(manual.libres, manual.noches);
                 await upsertTemplate.mutateAsync({
@@ -882,8 +912,14 @@ const ModalityEditModal = ({
             onClose();
             showSuccessToast(
                 'Modalidad guardada',
-                `${staff.nombre} queda en ${selected.label}. La tabla se reordena automáticamente.`
+                `${staff.nombre} queda en ${selected.label}. Se limpiaron los ajustes puntuales anteriores y la tabla se reordenó.`
             );
+            broadcastActivity({
+                actor: sessionActor(),
+                accion: `cambió la programación a ${selected.label} para`,
+                objetivo: staff.nombre,
+                seccion: 'Control ASISS · Programación',
+            });
             if (check.warnings.length > 0) {
                 showWarningToast('Situación a revisar', check.warnings.join(' '));
             }

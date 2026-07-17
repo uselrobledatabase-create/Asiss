@@ -9,6 +9,22 @@ import { StaffShift, StaffWithShift } from '../asistencia2026/types';
 
 export type ExportStaff = StaffWithShift & { suspended: boolean };
 
+/**
+ * Elimina TODOS los ajustes puntuales de una persona. Se usa al asignar
+ * una modalidad de turno: los ajustes viejos (celdas forzadas) taparían
+ * el patrón nuevo y parecería que "no cambia nada".
+ */
+export async function deleteAllOverridesForStaff(staffId: string): Promise<void> {
+    if (!isSupabaseConfigured()) throw new Error('Supabase not configured');
+
+    const { error } = await supabase
+        .from('staff_shift_overrides')
+        .delete()
+        .eq('staff_id', staffId);
+
+    if (error) throw error;
+}
+
 /** Elimina un ajuste puntual (override) de un día, volviendo al patrón normal */
 export async function deleteOverride(staffId: string, date: string): Promise<void> {
     if (!isSupabaseConfigured()) throw new Error('Supabase not configured');
