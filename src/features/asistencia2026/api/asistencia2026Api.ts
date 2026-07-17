@@ -15,6 +15,7 @@ import {
     AttendanceMark,
     AttendanceLicense,
     AttendancePermission,
+    AttendanceAuthorization,
     OffboardingRequest,
     StaffWithShift,
     AttendanceMarkFormValues,
@@ -594,7 +595,7 @@ export async function fetchIncidencesForRange(
     noMarcaciones: NoMarcacion[];
     sinCredenciales: SinCredencial[];
     cambiosDia: CambioDia[];
-    autorizaciones: any[];
+    autorizaciones: AttendanceAuthorization[];
 }> {
     if (!isSupabaseConfigured()) {
         return { noMarcaciones: [], sinCredenciales: [], cambiosDia: [], autorizaciones: [] };
@@ -631,7 +632,10 @@ export async function fetchIncidencesForRange(
         noMarcaciones: (nm.data || []) as NoMarcacion[],
         sinCredenciales: (sc.data || []) as SinCredencial[],
         cambiosDia: (cd.data || []) as CambioDia[],
-        autorizaciones: (aut.data || []),
+        autorizaciones: (aut.data || []).map((row: any) => ({
+            rut: row.rut,
+            date: row.authorization_date,
+        })),
     };
 }
 

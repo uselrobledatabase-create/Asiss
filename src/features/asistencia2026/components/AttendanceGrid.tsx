@@ -25,11 +25,9 @@ import {
     formatDayNumber,
     formatDayOfWeek,
     isToday,
-    isOffDay,
-    isDateInRange,
-    getTurnoFromHorario,
-    getSpecialShiftDetails,
+    getFallbackShiftType,
 } from '../utils/shiftEngine';
+import { resolveAttendanceDayStatus } from '../utils/attendanceDayStatus';
 import { useSessionStore } from '../../../shared/state/sessionStore';
 import { isAuthorizedSupervisor } from '../../../shared/utils/authorizedSupervisors';
 import {
@@ -40,65 +38,6 @@ import {
     useBulkMarkPresent,
 } from '../hooks';
 import { Icon } from '../../../shared/components/common/Icon';
-
-/**
- * Fallback shift patterns when DB doesn't have shift_types data
- */
-function getFallbackShiftType(code: ShiftTypeCode): ShiftType | undefined {
-    const fallbacks: Record<ShiftTypeCode, ShiftType> = {
-        '5X2_FIJO': {
-            id: '1',
-            code: '5X2_FIJO',
-            name: '5x2 Fijo',
-            pattern_json: { type: 'fixed', description: 'Lun-Vie trabaja', offDays: [6, 0] },
-            created_at: '',
-        },
-        '5X2_ROTATIVO': {
-            id: '2',
-            code: '5X2_ROTATIVO',
-            name: '5x2 Rotativo',
-            pattern_json: {
-                type: 'rotating',
-                description: 'Rotativo 2 semanas',
-                cycle: 2,
-                weeks: [{ offDays: [3, 0] }, { offDays: [5, 6] }],
-            },
-            created_at: '',
-        },
-        '5X2_SUPER': {
-            id: '3',
-            code: '5X2_SUPER',
-            name: '5x2 Super',
-            pattern_json: {
-                type: 'rotating',
-                description: 'Super 2 semanas',
-                cycle: 2,
-                weeks: [{ offDays: [3, 0] }, { offDays: [4, 5] }],
-            },
-            created_at: '',
-        },
-        'ESPECIAL': {
-            id: '4',
-            code: 'ESPECIAL',
-            name: 'Especial',
-            pattern_json: { type: 'manual', description: 'Manual 28 dias', cycleDays: 28 },
-            created_at: '',
-        },
-        'SUPERVISOR_RELEVO': {
-            id: '5',
-            code: 'SUPERVISOR_RELEVO',
-            name: 'Supervisor Relevo',
-            pattern_json: {
-                type: 'rotating',
-                description: 'Sem1: Mié+Dom (2 libres), Sem2: Mié+Vie+Sáb (3 libres)',
-                cycle: 2,
-                weeks: [{ offDays: [3, 0] }, { offDays: [3, 5, 6] }],
-            },
-            created_at: '',
-        },
-    };
-    return fallbacks[code];
-}
 
 interface IncidenceMap {
     noMarcaciones: { rut: string; date: string }[];
@@ -213,146 +152,31 @@ export const AttendanceGrid = ({
     }, [overrides]);
 
     // Helpers
-    const getLicenseForDate = (staffId: string, date: string) => {
-        return licenses.find(
-            (l) => l.staff_id === staffId && isDateInRange(date, l.start_date, l.end_date)
-        );
-    };
+    const dayStatusContext = useMemo(
+        () => ({
+            marksMap,
+            shiftTypesMap,
+            specialTemplatesMap,
+            overridesMap,
+            licenses,
+            vacations,
+            permissions,
+            incidences,
+        }),
+        [
+            marksMap,
+            shiftTypesMap,
+            specialTemplatesMap,
+            overridesMap,
+            licenses,
+            vacations,
+            permissions,
+            incidences,
+        ]
+    );
 
-    const getVacationForDate = (staffId: string, date: string) => {
-        return vacations.find(
-            (v) => v.staff_id === staffId && isDateInRange(date, v.start_date, v.end_date)
-        );
-    };
-
-    const getPermissionForDate = (staffId: string, date: string) => {
-        return permissions.find(
-            (p) => p.staff_id === staffId && isDateInRange(date, p.start_date, p.end_date)
-        );
-    };
-
-    const getIncidencesForDate = (rut: string, date: string): IncidenceCode[] => {
-        const codes: IncidenceCode[] = [];
-        if (incidences.noMarcaciones.some((i) => i.rut === rut && i.date === date)) codes.push('NM');
-        if (incidences.sinCredenciales.some((i) => i.rut === rut && i.date === date)) codes.push('NC');
-        if (incidences.cambiosDia.some((i) => i.rut === rut && i.date === date)) {
-            codes.push('CD');
-            console.log('🔄 CAMBIO DÍA detectado:', rut, date);
-        }
-        if (incidences.autorizaciones.some((i) => i.rut === rut && i.date === date)) codes.push('AUT');
-        return codes;
-    };
-
-    /**
-     * Get day status for a staff member on a given date
-     * Calculates off days based on shift pattern (5x2, etc.)
-     */
-    const getDayStatus = (s: StaffWithShift, date: string) => {
-        const mark = marksMap.get(`${s.id}-${date}`);
-        const license = getLicenseForDate(s.id, date);
-        const vacation = getVacationForDate(s.id, date);
-        const permission = getPermissionForDate(s.id, date);
-        const override = overridesMap.get(`${s.id}-${date}`);
-        const inc = getIncidencesForDate(s.rut, date);
-
-        // Calculate off day based on shift pattern
-        let isOff = false;
-        let horario = s.horario;
-        let turno = getTurnoFromHorario(s.horario);
-        const dayOfWeek = new Date(date + 'T12:00:00').getDay();
-
-        if (s.shift) {
-            // Get pattern from DB or use fallback
-            let shiftType = shiftTypesMap.get(s.shift.shift_type_code);
-
-            // Fallback patterns if DB doesn't have data
-            if (!shiftType?.pattern_json) {
-                shiftType = getFallbackShiftType(s.shift.shift_type_code);
-            }
-
-            if (shiftType?.pattern_json) {
-                // Get special template for manual (ESPECIAL) shift types
-                const specialTemplate = specialTemplatesMap.get(s.id);
-                isOff = isOffDay(date, s.shift.shift_type_code, s.shift.variant_code, shiftType.pattern_json, specialTemplate, override);
-
-                // Debug log for first date only (to avoid spam)
-                if (date === weekDates[0]) {
-                    console.log('getDayStatus -', s.nombre, 'shift:', s.shift.shift_type_code, 'variant:', s.shift.variant_code, 'pattern:', shiftType.pattern_json.type, 'isOff:', isOff);
-                }
-            } else {
-                // Last resort fallback: Sat/Sun off
-                isOff = dayOfWeek === 0 || dayOfWeek === 6;
-                if (date === weekDates[0]) {
-                    console.log('getDayStatus -', s.nombre, 'NO PATTERN FOUND, using default Sat/Sun');
-                }
-            }
-
-            // [NEW] Override Turno (D/N) manually if 'ESPECIAL'
-            if (s.shift.shift_type_code === 'ESPECIAL') {
-                const specialTemplate = specialTemplatesMap.get(s.id);
-                if (specialTemplate) {
-                    const details = getSpecialShiftDetails(date, specialTemplate);
-                    if (details.type) {
-                        turno = details.type;
-
-                        // [NEW] Apply custom schedule times
-                        const schedules = specialTemplate.settings_json?.custom_schedules;
-                        if (schedules) {
-                            if (turno === 'DIA' && schedules.dia) {
-                                horario = schedules.dia;
-                            } else if (turno === 'NOCHE' && schedules.noche) {
-                                horario = schedules.noche;
-                            }
-                        }
-                    }
-
-                    // Apply Early Exit
-                    if (details.earlyExit && !isOff) {
-                        const match = s.horario?.match(/^(\d{1,2}:\d{2})/);
-                        // If original schedule has a start time, use it. Otherwise default to 08:00
-                        const startTime = match ? match[1] : '08:00';
-                        horario = `${startTime}-${details.earlyExit}`;
-
-                        // Mark as reducido/modified to highlight in UI (amber color)
-                        return {
-                            mark,
-                            license,
-                            vacation,
-                            permission,
-                            isOff,
-                            horario,
-                            turno,
-                            reducido: true, // Auto-enable styling for early exit
-                            incidencies: inc,
-                        };
-                    }
-                }
-            }
-        } else {
-            // No shift assigned - use default 5x2 (Sat/Sun off)
-            isOff = dayOfWeek === 0 || dayOfWeek === 6; // Sunday or Saturday
-        }
-
-        // Ajuste manual con turno/horario propio (cobertura día/noche puntual
-        // registrada desde Control ASISS — ej: supervisores rotativos)
-        if (!isOff && override?.override_type === 'WORK' && override.meta_json) {
-            const meta = override.meta_json as { turno?: 'DIA' | 'NOCHE'; horario?: string };
-            if (meta.turno === 'DIA' || meta.turno === 'NOCHE') turno = meta.turno;
-            if (typeof meta.horario === 'string' && meta.horario) horario = meta.horario;
-        }
-
-        return {
-            mark,
-            license,
-            vacation,
-            permission,
-            isOff,
-            horario,
-            turno,
-            reducido: false, // Ley 40 removed
-            incidencies: inc,
-        };
-    };
+    const getDayStatus = (s: StaffWithShift, date: string) =>
+        resolveAttendanceDayStatus(s, date, dayStatusContext);
 
     // ---- Presentes masivos con fecha seleccionable ----
     const localDateStr = (offsetDays: number = 0): string => {
@@ -783,7 +607,7 @@ export const AttendanceGrid = ({
                 date={selectedCell?.date ?? ''}
                 currentMark={selectedCell ? marksMap.get(`${selectedCell.staff.id}-${selectedCell.date}`)?.mark : undefined}
                 currentNote={selectedCell ? marksMap.get(`${selectedCell.staff.id}-${selectedCell.date}`)?.note ?? undefined : undefined}
-                incidencies={selectedCell ? getIncidencesForDate(selectedCell.staff.rut, selectedCell.date) : []}
+                incidencies={selectedCell ? getDayStatus(selectedCell.staff, selectedCell.date).incidencies : []}
                 onMarkPresent={handleMarkPresent}
                 onMarkAbsent={handleMarkAbsent}
                 onRegisterLicense={handleRegisterLicense}

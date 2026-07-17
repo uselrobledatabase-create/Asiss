@@ -477,11 +477,6 @@ export const Asistencia2026Page = () => {
                 isOpen={isPdfModalOpen}
                 onClose={() => setIsPdfModalOpen(false)}
                 staff={staff}
-                marks={marks}
-                licenses={licenses}
-                permissions={permissions}
-                vacations={vacations}
-                incidences={incidences || { noMarcaciones: [], sinCredenciales: [], cambiosDia: [], autorizaciones: [] }}
                 year={year}
                 month={month}
             />

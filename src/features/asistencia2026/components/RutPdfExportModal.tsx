@@ -5,33 +5,34 @@
  */
 
 import { useState, useMemo } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { jsPDF } from 'jspdf';
 import { Icon } from '../../../shared/components/common/Icon';
 import {
     StaffWithShift,
-    AttendanceMark,
-    AttendanceLicense,
-    AttendancePermission,
     ShiftType,
-    AttendanceIncidences
+    AttendanceIncidences,
 } from '../types';
 import {
     getMonthDates,
     getMonthName,
-    isOffDay,
-    getSpecialShiftDetails,
 } from '../utils/shiftEngine';
-import { useShiftTypes, useAllSpecialTemplates } from '../hooks';
+import {
+    useShiftTypes,
+    useAllSpecialTemplates,
+    useOverridesForWeek,
+    useMarksForWeek,
+    useLicensesForWeek,
+    usePermissionsForWeek,
+    useVacationsForWeek,
+} from '../hooks';
+import { fetchIncidencesForRange } from '../api/asistencia2026Api';
+import { resolveAttendanceDayStatus } from '../utils/attendanceDayStatus';
 
 interface RutPdfExportModalProps {
     isOpen: boolean;
     onClose: () => void;
     staff: StaffWithShift[];
-    marks: AttendanceMark[];
-    licenses: AttendanceLicense[];
-    permissions: AttendancePermission[];
-    vacations: { staff_id: string; start_date: string; end_date: string }[];
-    incidences: AttendanceIncidences;
     year: number;
     month: number;
 }
@@ -40,11 +41,6 @@ export const RutPdfExportModal = ({
     isOpen,
     onClose,
     staff,
-    marks,
-    licenses,
-    permissions,
-    vacations,
-    incidences,
     year,
     month,
 }: RutPdfExportModalProps) => {
@@ -55,10 +51,6 @@ export const RutPdfExportModal = ({
 
     const { data: shiftTypes = [] } = useShiftTypes();
 
-    // Get special templates for staff with ESPECIAL shifts
-    const staffIds = useMemo(() => staff.map(s => s.id), [staff]);
-    const { data: specialTemplates = [] } = useAllSpecialTemplates(staffIds);
-
     const shiftTypesMap = useMemo(() => {
         const map = new Map<string, ShiftType>();
         for (const st of shiftTypes) {
@@ -66,6 +58,13 @@ export const RutPdfExportModal = ({
         }
         return map;
     }, [shiftTypes]);
+
+    const selectedStaff = staff.find((s) => s.rut === selectedRut);
+    const selectedStaffIds = useMemo(
+        () => (selectedStaff ? [selectedStaff.id] : []),
+        [selectedStaff]
+    );
+    const { data: specialTemplates = [] } = useAllSpecialTemplates(selectedStaffIds);
 
     const specialTemplatesMap = useMemo(() => {
         const map = new Map<string, any>();
@@ -75,12 +74,110 @@ export const RutPdfExportModal = ({
         return map;
     }, [specialTemplates]);
 
-    const selectedStaff = staff.find((s) => s.rut === selectedRut);
-
     const months = [
         'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
         'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
     ];
+
+    const monthGrid = useMemo(() => {
+        const monthDates = getMonthDates(selectedYear, selectedMonth);
+        const fmt = (d: Date) => {
+            const y = d.getFullYear();
+            const m = String(d.getMonth() + 1).padStart(2, '0');
+            const dd = String(d.getDate()).padStart(2, '0');
+            return `${y}-${m}-${dd}`;
+        };
+
+        const firstDate = new Date(monthDates[0] + 'T12:00:00');
+        const lastDate = new Date(monthDates[monthDates.length - 1] + 'T12:00:00');
+        const leadOffset = (firstDate.getDay() + 6) % 7;
+        const trailOffset = 6 - ((lastDate.getDay() + 6) % 7);
+        const gridStart = new Date(firstDate);
+        gridStart.setDate(firstDate.getDate() - leadOffset);
+        const gridEnd = new Date(lastDate);
+        gridEnd.setDate(lastDate.getDate() + trailOffset);
+
+        const weeks: string[][] = [];
+        let currentWeek: string[] = [];
+        for (const d = new Date(gridStart); d <= gridEnd; d.setDate(d.getDate() + 1)) {
+            currentWeek.push(fmt(d));
+            if (currentWeek.length === 7) {
+                weeks.push(currentWeek);
+                currentWeek = [];
+            }
+        }
+
+        return {
+            monthDates,
+            weeks,
+            startDate: fmt(gridStart),
+            endDate: fmt(gridEnd),
+        };
+    }, [selectedMonth, selectedYear]);
+
+    const { data: monthMarks = [], isLoading: loadingMarks } = useMarksForWeek(
+        selectedStaffIds,
+        monthGrid.startDate,
+        monthGrid.endDate
+    );
+    const { data: monthLicenses = [], isLoading: loadingLicenses } = useLicensesForWeek(
+        selectedStaffIds,
+        monthGrid.startDate,
+        monthGrid.endDate
+    );
+    const { data: monthPermissions = [], isLoading: loadingPermissions } = usePermissionsForWeek(
+        selectedStaffIds,
+        monthGrid.startDate,
+        monthGrid.endDate
+    );
+    const { data: monthVacations = [], isLoading: loadingVacations } = useVacationsForWeek(
+        selectedStaffIds,
+        monthGrid.startDate,
+        monthGrid.endDate
+    );
+    const { data: monthOverrides = [], isLoading: loadingOverrides } = useOverridesForWeek(
+        selectedStaffIds,
+        monthGrid.startDate,
+        monthGrid.endDate
+    );
+    const {
+        data: monthIncidences = { noMarcaciones: [], sinCredenciales: [], cambiosDia: [], autorizaciones: [] },
+        isLoading: loadingIncidences,
+    } = useQuery<AttendanceIncidences>({
+        queryKey: ['asistencia2026', 'pdfIncidences', selectedStaff?.terminal_code || '', monthGrid.startDate, monthGrid.endDate],
+        queryFn: async () => {
+            if (!selectedStaff) {
+                return { noMarcaciones: [], sinCredenciales: [], cambiosDia: [], autorizaciones: [] };
+            }
+            return fetchIncidencesForRange([selectedStaff.terminal_code], monthGrid.startDate, monthGrid.endDate);
+        },
+        enabled: isOpen && Boolean(selectedStaff),
+    });
+
+    const marksMap = useMemo(() => {
+        const map = new Map<string, any>();
+        for (const item of monthMarks) {
+            map.set(`${item.staff_id}-${item.mark_date}`, item);
+        }
+        return map;
+    }, [monthMarks]);
+
+    const overridesMap = useMemo(() => {
+        const map = new Map<string, any>();
+        for (const item of monthOverrides) {
+            map.set(`${item.staff_id}-${item.override_date}`, item);
+        }
+        return map;
+    }, [monthOverrides]);
+
+    const monthDataLoading = Boolean(selectedStaff) && (
+        loadingMarks ||
+        loadingLicenses ||
+        loadingPermissions ||
+        loadingVacations ||
+        loadingOverrides ||
+        loadingIncidences
+    );
 
     if (!isOpen) return null;
 
@@ -190,39 +287,7 @@ export const RutPdfExportModal = ({
             field('HORARIO BASE', selectedStaff.horario || 'N/A', margin + usableW * 0.88);
 
             // ============ DATA PREP ============
-            const monthDates = getMonthDates(selectedYear, selectedMonth);
-
-            // Build a full Monday->Sunday grid. Instead of blank padding cells,
-            // fill the leading/trailing slots with the REAL dates of the previous
-            // and next month, so every displayed week is complete (Lun a Dom).
-            const fmt = (d: Date) => {
-                const y = d.getFullYear();
-                const m = String(d.getMonth() + 1).padStart(2, '0');
-                const dd = String(d.getDate()).padStart(2, '0');
-                return `${y}-${m}-${dd}`;
-            };
-            const firstDate = new Date(monthDates[0] + 'T12:00:00');
-            const lastDate = new Date(monthDates[monthDates.length - 1] + 'T12:00:00');
-            const leadOffset = (firstDate.getDay() + 6) % 7;            // days back to Monday
-            const trailOffset = 6 - ((lastDate.getDay() + 6) % 7);      // days forward to Sunday
-            const gridStart = new Date(firstDate);
-            gridStart.setDate(firstDate.getDate() - leadOffset);
-            const gridEnd = new Date(lastDate);
-            gridEnd.setDate(lastDate.getDate() + trailOffset);
-
-            const weeks: string[][] = [];
-            let currentWeek: string[] = [];
-            for (const d = new Date(gridStart); d <= gridEnd; d.setDate(d.getDate() + 1)) {
-                currentWeek.push(fmt(d));
-                if (currentWeek.length === 7) { weeks.push(currentWeek); currentWeek = []; }
-            }
-
-            const incidentsMap = {
-                noMark: new Set(incidences.noMarcaciones.filter(i => i.rut === selectedStaff.rut).map(i => i.date)),
-                noCred: new Set(incidences.sinCredenciales.filter(i => i.rut === selectedStaff.rut).map(i => i.date)),
-                dayChange: new Map(incidences.cambiosDia.filter(i => i.rut === selectedStaff.rut).map(i => [i.date, i])),
-                auth: new Set(incidences.autorizaciones.filter(i => i.rut === selectedStaff.rut).map(i => i.date)),
-            };
+            const { monthDates, weeks } = monthGrid;
 
             interface DayInfo {
                 inMonth: boolean;    // false = date belongs to prev/next month
@@ -234,9 +299,19 @@ export const RutPdfExportModal = ({
                 category: keyof typeof CAT;
             }
 
+            const dayStatusContext = {
+                marksMap,
+                shiftTypesMap,
+                specialTemplatesMap,
+                overridesMap,
+                licenses: monthLicenses,
+                vacations: monthVacations,
+                permissions: monthPermissions,
+                incidences: monthIncidences,
+            };
+
             const weeksData: DayInfo[][] = [];
             const stats = { trabajo: 0, libre: 0, ausencia: 0, licencia: 0, vacaciones: 0, permiso: 0 };
-            const todayStr = new Date().toISOString().split('T')[0];
 
             for (const week of weeks) {
                 const rowData: DayInfo[] = [];
@@ -245,92 +320,52 @@ export const RutPdfExportModal = ({
                     const dayNum = date.getDate();
                     const dateLabel = dateStr.split('-').reverse().join('-');
                     const inMonth = date.getMonth() === selectedMonth && date.getFullYear() === selectedYear;
-
-                    // --- shift / off-day ---
-                    let isOff = false;
-                    let displayHorario = '';
-                    const shiftPattern = shiftType?.pattern_json;
-
-                    if (selectedStaff.shift) {
-                        if (shiftPattern) {
-                            const specialTemplate = specialTemplatesMap.get(selectedStaff.id);
-                            isOff = isOffDay(
-                                dateStr,
-                                selectedStaff.shift.shift_type_code,
-                                selectedStaff.shift.variant_code,
-                                shiftPattern,
-                                specialTemplate
-                            );
-                        }
-                    } else {
-                        const dayOfWeek = date.getDay();
-                        isOff = dayOfWeek === 0 || dayOfWeek === 6;
-                    }
-
-                    if (!isOff) {
-                        displayHorario = selectedStaff.horario || '10:00-20:00';
-                        if (selectedStaff.shift?.shift_type_code === 'ESPECIAL') {
-                            const specialTemplate = specialTemplatesMap.get(selectedStaff.id);
-                            if (specialTemplate) {
-                                const details = getSpecialShiftDetails(dateStr, specialTemplate);
-                                const schedules = specialTemplate.settings_json?.custom_schedules;
-                                if (details.type && schedules) {
-                                    if (details.type === 'DIA' && schedules.dia) displayHorario = schedules.dia;
-                                    else if (details.type === 'NOCHE' && schedules.noche) displayHorario = schedules.noche;
-                                }
-                                if (details.earlyExit) {
-                                    const match = displayHorario?.match(/^(\d{1,2}:\d{2})/);
-                                    const startTime = match ? match[1] : '08:00';
-                                    displayHorario = `${startTime}-${details.earlyExit}`;
-                                }
-                            }
-                        }
-                    }
-                    const horarioFmt = displayHorario
-                        ? displayHorario.split('-').map(s => s.trim()).join(' - ')
+                    const resolved = resolveAttendanceDayStatus(selectedStaff, dateStr, dayStatusContext);
+                    const dayChange = monthIncidences.cambiosDia.find(
+                        (item) => item.rut === selectedStaff.rut && item.date === dateStr
+                    );
+                    const horarioFmt = !resolved.mark && !resolved.license && !resolved.vacation && !resolved.permission && !resolved.isOff
+                        ? resolved.horario.split('-').map(s => s.trim()).join(' - ')
                         : '';
-
-                    // --- status resolution ---
-                    const dayChange = incidentsMap.dayChange.get(dateStr);
-                    const hasLicense = licenses.some(l => l.staff_id === selectedStaff.id && dateStr >= l.start_date && dateStr <= l.end_date);
-                    const hasVacation = vacations.some(v => v.staff_id === selectedStaff.id && dateStr >= v.start_date && dateStr <= v.end_date);
-                    const hasPerm = permissions.some(p => p.staff_id === selectedStaff.id && dateStr >= p.start_date && dateStr <= p.end_date);
-                    const hasNoMark = incidentsMap.noMark.has(dateStr);
-                    const hasNoCred = incidentsMap.noCred.has(dateStr);
-                    const hasAuth = incidentsMap.auth.has(dateStr);
-                    const mark = marks.find(m => m.staff_id === selectedStaff.id && m.mark_date === dateStr);
 
                     let category: keyof typeof CAT = 'trabajo';
                     let status = '';
                     let note = '';
-                    let showHorario = !isOff;
-
-                    if (dayChange) {
-                        category = 'cambio';
-                        status = 'CAMBIO DE DÍA';
-                        note = dayChange.day_on_date
-                            ? `» ${new Date(dayChange.day_on_date + 'T12:00:00').toLocaleDateString('es-CL', { weekday: 'short', day: '2-digit' })}`
-                            : '';
-                    } else if (hasLicense) {
-                        category = 'licencia'; status = 'LICENCIA'; showHorario = false;
-                    } else if (hasVacation) {
-                        category = 'vacaciones'; status = 'VACACIONES'; showHorario = false;
-                    } else if (hasPerm) {
-                        category = 'permiso'; status = 'PERMISO'; showHorario = false;
-                    } else if (hasNoMark) {
-                        category = 'nomarca'; status = 'NO MARCACIÓN';
-                    } else if (hasNoCred) {
-                        category = 'sincred'; status = 'SIN CREDENCIAL';
-                    } else if (isOff) {
-                        category = 'libre'; status = 'LIBRE';
+                    if (resolved.license) {
+                        category = 'licencia';
+                        status = 'LICENCIA';
+                    } else if (resolved.vacation) {
+                        category = 'vacaciones';
+                        status = 'VACACIONES';
+                    } else if (resolved.permission) {
+                        category = 'permiso';
+                        status = 'PERMISO';
+                    } else if (resolved.mark?.mark === 'P') {
+                        category = 'presente';
+                        status = 'PRESENTE';
+                    } else if (resolved.mark?.mark === 'A') {
+                        category = 'ausente';
+                        status = 'AUSENTE';
+                    } else if (resolved.isOff) {
+                        category = 'libre';
+                        status = 'LIBRE';
                     } else {
-                        if (mark?.mark === 'P') { category = 'presente'; status = 'PRESENTE'; }
-                        else if (mark?.mark === 'A') { category = 'ausente'; status = 'AUSENTE'; }
-                        else if (dateStr < todayStr) { category = 'ausente'; status = 'AUSENTE'; }
-                        else { category = 'trabajo'; status = 'PROGRAMADO'; }
+                        category = resolved.turno === 'NOCHE' ? 'trabajo' : 'trabajo';
+                        status = 'PROGRAMADO';
                     }
 
-                    if (hasAuth) note = note ? `${note} · AUTORIZADO` : 'AUTORIZADO';
+                    const incidenceNotes: string[] = [];
+                    if (resolved.incidencies.includes('NM')) incidenceNotes.push('NM');
+                    if (resolved.incidencies.includes('NC')) incidenceNotes.push('NC');
+                    if (resolved.incidencies.includes('AUT')) incidenceNotes.push('AUT');
+                    if (dayChange?.day_on_date) {
+                        incidenceNotes.push(
+                            `CD→${new Date(dayChange.day_on_date + 'T12:00:00').toLocaleDateString('es-CL', { weekday: 'short', day: '2-digit' })}`
+                        );
+                    } else if (resolved.incidencies.includes('CD')) {
+                        incidenceNotes.push('CD');
+                    }
+                    note = incidenceNotes.join(' · ');
 
                     // Summary counters reflect ONLY the current month (adjacent-month
                     // days are shown for context but excluded from the totals).
@@ -347,7 +382,7 @@ export const RutPdfExportModal = ({
                         inMonth,
                         dayNum,
                         dateLabel,
-                        horario: showHorario ? horarioFmt : '',
+                        horario: horarioFmt,
                         status,
                         note,
                         category,
@@ -564,9 +599,9 @@ export const RutPdfExportModal = ({
                                 Vista Previa de Datos
                             </div>
                             <div className="grid grid-cols-2 gap-y-2 text-xs">
-                                <div><span className="font-bold">Incidencias:</span> {incidences.noMarcaciones.filter(i => i.rut === selectedStaff.rut).length}</div>
-                                <div><span className="font-bold">Licencias:</span> {licenses.filter(l => l.staff_id === selectedStaff.id).length}</div>
-                                <div><span className="font-bold">Marcas:</span> {marks.filter(m => m.staff_id === selectedStaff.id).length}</div>
+                                <div><span className="font-bold">Incidencias:</span> {monthIncidences.noMarcaciones.filter(i => i.rut === selectedStaff.rut).length + monthIncidences.sinCredenciales.filter(i => i.rut === selectedStaff.rut).length + monthIncidences.cambiosDia.filter(i => i.rut === selectedStaff.rut).length}</div>
+                                <div><span className="font-bold">Licencias:</span> {monthLicenses.filter(l => l.staff_id === selectedStaff.id).length}</div>
+                                <div><span className="font-bold">Marcas:</span> {monthMarks.filter(m => m.staff_id === selectedStaff.id).length}</div>
                             </div>
                         </div>
                     )}
@@ -582,7 +617,7 @@ export const RutPdfExportModal = ({
                     </button>
                     <button
                         onClick={generatePdf}
-                        disabled={!selectedRut || isGenerating}
+                        disabled={!selectedRut || isGenerating || monthDataLoading}
                         className="px-5 py-2.5 text-sm font-bold text-white bg-slate-900 hover:bg-slate-800 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed shadow-lg transition-all flex items-center gap-2"
                     >
                         {isGenerating ? (
