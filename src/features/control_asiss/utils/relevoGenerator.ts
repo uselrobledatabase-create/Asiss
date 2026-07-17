@@ -23,7 +23,7 @@
  */
 
 import { StaffWithShift } from '../../asistencia2026/types';
-import { getDayInCycle } from '../../asistencia2026/utils/shiftEngine';
+import { getDayInCycle, getTurnoFromHorario } from '../../asistencia2026/utils/shiftEngine';
 import { ScheduleContext, resolveDayPattern, formatDateCL, dayNameShort } from './scheduleEngine';
 import { turnoDeFicha } from './coverageAnalysis';
 
@@ -33,6 +33,7 @@ export interface RelevoDay {
     idx: number;            // 0-27 (0 = lunes semana 1)
     date: string;
     assign: RelevoAssign;
+    horario: string;
     needDia: boolean;
     needNoche: boolean;
     /** true = trabaja de apoyo (nadie libra ese día, pero completa sus 5 días) */
@@ -116,6 +117,28 @@ function maxRunCyclic(assigns: RelevoAssign[]): number {
         else run = 0;
     }
     return Math.min(max, assigns.length);
+}
+
+function normalizeSchedule(horario: string | undefined, turno: 'DIA' | 'NOCHE'): string {
+    const times = (horario || '').match(/\d{1,2}:\d{2}/g);
+    if (times && times.length >= 2) {
+        return `${times[0]}-${times[1]}`;
+    }
+    return turno === 'NOCHE' ? '22:00-08:00' : '10:00-20:00';
+}
+
+function pickRepresentativeSchedule(
+    staff: StaffWithShift[],
+    turno: 'DIA' | 'NOCHE',
+    fallback?: string
+): string {
+    const exactMatch = staff.find((s) => s.horario && getTurnoFromHorario(s.horario) === turno);
+    if (exactMatch?.horario) return normalizeSchedule(exactMatch.horario, turno);
+
+    const withHorario = staff.find((s) => s.horario && s.horario.trim().length > 0);
+    if (withHorario?.horario) return normalizeSchedule(withHorario.horario, turno);
+
+    return normalizeSchedule(fallback, turno);
 }
 
 /** Pares de libres posibles en una semana (21 combinaciones) */
@@ -314,6 +337,11 @@ export function generateRelevoTemplate(
 
     const assign = bestAssign ?? buildAssign(bestPairs, needs, defaultTurno);
 
+    const customSchedules = {
+        dia: pickRepresentativeSchedule(fijosDia, 'DIA', relevo.horario),
+        noche: pickRepresentativeSchedule(fijosNoche, 'NOCHE', relevo.horario),
+    };
+
     if (
         maxRunCyclic(assign) > 6 ||
         SUNDAY_IDX.filter((i) => assign[i] === 'LIBRE').length < 2 ||
@@ -331,6 +359,12 @@ export function generateRelevoTemplate(
             idx: i,
             date: dates[i],
             assign: assign[i],
+            horario:
+                assign[i] === 'LIBRE'
+                    ? ''
+                    : assign[i] === 'NOCHE'
+                        ? customSchedules.noche
+                        : customSchedules.dia,
             needDia: needs.dia[i],
             needNoche: needs.noche[i],
         };
@@ -361,11 +395,6 @@ export function generateRelevoTemplate(
     const offDays = days.filter((d) => d.assign === 'LIBRE').map((d) => d.idx);
     const dailyShifts: Record<number, 'DIA' | 'NOCHE'> = {};
     for (const d of days) if (d.assign === 'NOCHE') dailyShifts[d.idx] = 'NOCHE';
-
-    const customSchedules = {
-        dia: fijosDia[0]?.horario || relevo.horario || '08:00-20:00',
-        noche: fijosNoche[0]?.horario || '20:00-08:00',
-    };
 
     const libresPorSemana = [0, 1, 2, 3].map(
         (w) => days.slice(w * 7, w * 7 + 7).filter((d) => d.assign === 'LIBRE').length

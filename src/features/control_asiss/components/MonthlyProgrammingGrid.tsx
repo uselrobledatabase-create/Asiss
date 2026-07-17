@@ -1100,7 +1100,7 @@ const ModalityEditModal = ({
                                                 return (
                                                     <div
                                                         key={di}
-                                                        title={`${dayNameShort(d.date)} ${formatDateCL(d.date)} · ${d.assign}${d.apoyo ? ' (apoyo)' : ''}${d.gap ? ` · BRECHA ${d.gap}: ${d.motivo || ''}` : ''}`}
+                                                        title={`${dayNameShort(d.date)} ${formatDateCL(d.date)} · ${d.assign}${d.horario ? ` ${d.horario}` : ''}${d.apoyo ? ' (apoyo)' : ''}${d.gap ? ` · BRECHA ${d.gap}: ${d.motivo || ''}` : ''}`}
                                                         className={`flex h-9 flex-1 flex-col items-center justify-center rounded-lg text-[9px] font-bold ${d.assign === 'LIBRE'
                                                             ? 'bg-slate-800 text-white'
                                                             : d.assign === 'NOCHE'
