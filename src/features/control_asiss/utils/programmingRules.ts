@@ -257,6 +257,48 @@ export function seedFourWeekTemplate(
     return { offDays, dailyShifts };
 }
 
+/**
+ * Patrón base de 2 SEMANAS (14 días, Lun-Dom × 2) del trabajador,
+ * alineado al lunes de referencia del ciclo. El juego siempre es cada
+ * dos semanas: semana 1 = semana 3, semana 2 = semana 4, al infinito.
+ */
+export function seedTwoWeekPattern(
+    staff: StaffWithShift,
+    ctx: ScheduleContext,
+    aroundDate: string
+): { libres: boolean[]; noches: boolean[] } {
+    const seed = seedFourWeekTemplate(staff, ctx, aroundDate);
+    const libres = Array.from({ length: 14 }, (_, i) => seed.offDays.includes(i));
+    const noches = Array.from({ length: 14 }, (_, i) => seed.dailyShifts[i] === 'NOCHE');
+    return { libres, noches };
+}
+
+/**
+ * Convierte un juego editado de 2 semanas en la plantilla de 28 días
+ * (duplicando semana 1→3 y semana 2→4) para que se replique al infinito.
+ */
+export function twoWeekToTemplate(
+    libres: boolean[],
+    noches: boolean[]
+): { offDays: number[]; dailyShifts: Record<number, 'DIA' | 'NOCHE'> } {
+    const offDays: number[] = [];
+    const dailyShifts: Record<number, 'DIA' | 'NOCHE'> = {};
+    for (let i = 0; i < 14; i++) {
+        if (libres[i]) {
+            offDays.push(i, i + 14);
+        } else if (noches[i]) {
+            dailyShifts[i] = 'NOCHE';
+            dailyShifts[i + 14] = 'NOCHE';
+        }
+    }
+    return { offDays: offDays.sort((a, b) => a - b), dailyShifts };
+}
+
+/** Posición 0-13 de una fecha dentro del juego de 2 semanas (0 = lunes sem 1) */
+export function twoWeekIndex(date: string): number {
+    return getDayInCycle(date) % 14;
+}
+
 // ==========================================
 // SUGERENCIAS DE COBERTURA PARA BRECHAS
 // ==========================================

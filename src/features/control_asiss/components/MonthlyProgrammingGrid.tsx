@@ -1,23 +1,26 @@
 /**
  * Control ASISS - Grilla de Programación Mensual (editable)
  *
- * Vista mensual masiva del TURNO del personal (solo horarios y LIBRE,
- * aquí no se pasa asistencia). Activos y suspendidos, separada por
- * terminal, ordenada por cargo, con filtros y cuadratura diaria por
- * grupo de cargo (Día / Noche / Libres) para detectar días caídos.
+ * El juego de turnos SIEMPRE es cada 2 semanas (sem 1 = sem 3, sem 2 =
+ * sem 4, replicado al infinito). Modalidades disponibles:
+ *  - Lunes a Viernes (5x2 Fijo)
+ *  - Turno Normal:   Sem A Jue+Vie libres · Sem B Mié+Dom libres
+ *  - Contraturno:    Sem A Mié+Dom libres · Sem B Jue+Vie libres
+ *    (complementarios: siempre hay alguien)
+ *  - Manual (2 semanas): se marcan los libres en el calendario y el
+ *    juego se replica al infinito
  *
- * ACCESO: la subsección completa se desbloquea UNA VEZ con la clave de
- * autorización; desde ahí se tiene autoridad para editar todo.
- *
- * REGLAS ABSOLUTAS validadas antes de guardar: máx. 6 días seguidos,
- * mínimo 2 domingos libres al mes, y jamás trabajar un domingo de
- * descanso. Los cambios se reflejan de inmediato en Asistencia.
+ * Orden dentro de cada cargo: Fijos → Normal → Contraturno → Manuales,
+ * reordenado automáticamente tras cada modificación.
+ * Cuadratura diaria por cargo según el filtro de turno activo.
+ * Alertas con diseño propio (toasts), nada de alert() del navegador.
  */
 
 import { Fragment, useMemo, useState } from 'react';
 import { Icon } from '../../../shared/components/common/Icon';
 import { StaffWithShift, ShiftTypeCode, VariantCode } from '../../asistencia2026/types';
 import { useUpsertSpecialTemplate } from '../../asistencia2026/hooks';
+import { showSuccessToast, showWarningToast, showErrorToast } from '../../../shared/state/toastStore';
 import {
     useControlAsissExportData,
     useUpsertShiftControl,
@@ -32,7 +35,9 @@ import {
     checkRules,
     checkDayOverride,
     validarClaveTurnos,
-    seedFourWeekTemplate,
+    seedTwoWeekPattern,
+    twoWeekToTemplate,
+    twoWeekIndex,
     DayPlan,
     RuleCheck,
 } from '../utils/programmingRules';
@@ -45,12 +50,72 @@ const cargoOrder = (cargo: string): number => {
     return idx === -1 ? CARGO_SORT.length : idx;
 };
 
-const MODALIDADES: { code: ShiftTypeCode; label: string; desc: string }[] = [
-    { code: '5X2_SUPER', label: '5x2 Super', desc: 'Sem 1: Mié+Dom · Sem 2: Jue+Vie libre' },
-    { code: '5X2_ROTATIVO', label: '5x2 Rotativo', desc: 'Sem 1: Mié+Dom · Sem 2: Vie+Sáb libre' },
-    { code: '5X2_FIJO', label: '5x2 Fijo', desc: 'Lun-Vie trabaja · Sáb+Dom libre (casos especiales)' },
-    { code: 'SUPERVISOR_RELEVO', label: 'Supervisor Relevo', desc: 'Sem 1: Mié+Dom · Sem 2: Mié+Vie+Sáb libre' },
-];
+// ==========================================
+// MODALIDADES (el juego siempre es de 2 semanas)
+// ==========================================
+
+type ModalidadKey = 'FIJO' | 'NORMAL' | 'CONTRA' | 'MANUAL';
+
+const MODALIDAD_OPTIONS: {
+    key: ModalidadKey;
+    label: string;
+    desc: string;
+    code: ShiftTypeCode;
+    variant: VariantCode;
+}[] = [
+        {
+            key: 'FIJO',
+            label: 'Lunes a Viernes',
+            desc: '5x2 Fijo · Sábado y Domingo siempre libres (casos especiales)',
+            code: '5X2_FIJO',
+            variant: 'PRINCIPAL',
+        },
+        {
+            key: 'NORMAL',
+            label: 'Turno Normal',
+            desc: 'Sem A: Jue+Vie libres · Sem B: Mié+Dom libres (se repite cada 2 semanas)',
+            code: '5X2_SUPER',
+            variant: 'CONTRATURNO',
+        },
+        {
+            key: 'CONTRA',
+            label: 'Contraturno',
+            desc: 'Sem A: Mié+Dom libres · Sem B: Jue+Vie libres — complementa al Normal: siempre hay alguien',
+            code: '5X2_SUPER',
+            variant: 'PRINCIPAL',
+        },
+        {
+            key: 'MANUAL',
+            label: 'Manual (2 semanas)',
+            desc: 'Marca en el calendario los días libres del juego de 2 semanas; se replica al infinito',
+            code: 'ESPECIAL',
+            variant: 'ESPECIAL',
+        },
+    ];
+
+/** Orden dentro del cargo: Fijos → Normal → Contraturno → Relevo → Sin turno → Manuales */
+function modalityRank(s: StaffWithShift): number {
+    const code = s.shift?.shift_type_code;
+    const variant = s.shift?.variant_code;
+    if (!code) return 4;
+    if (code === '5X2_FIJO') return 0;
+    if (code === 'ESPECIAL') return 5;
+    if (code === 'SUPERVISOR_RELEVO') return 3;
+    // Rotativos de 2 semanas: Normal (CONTRATURNO) antes que Contraturno (PRINCIPAL)
+    return variant === 'CONTRATURNO' ? 1 : 2;
+}
+
+function modalityLabel(s: StaffWithShift): string {
+    const code = s.shift?.shift_type_code;
+    const variant = s.shift?.variant_code;
+    if (!code) return 'Sin turno';
+    if (code === '5X2_FIJO') return 'Lun-Vie';
+    if (code === 'ESPECIAL') return 'Manual 2 sem';
+    if (code === 'SUPERVISOR_RELEVO') return 'Relevo';
+    if (code === '5X2_SUPER') return variant === 'CONTRATURNO' ? 'Turno Normal' : 'Contraturno';
+    // Legacy 5X2_ROTATIVO
+    return variant === 'CONTRATURNO' ? 'Normal (Rot)' : 'Contra (Rot)';
+}
 
 const AUTH_SESSION_KEY = 'controlAsiss.programacion.autorizada';
 
@@ -68,7 +133,6 @@ interface Props {
 }
 
 export const MonthlyProgrammingGrid = ({ year, month }: Props) => {
-    // ===== Puerta de autorización (una sola vez por sesión) =====
     const [authorized, setAuthorized] = useState(
         () => sessionStorage.getItem(AUTH_SESSION_KEY) === '1'
     );
@@ -93,6 +157,7 @@ const AuthGate = ({ onAuthorized }: { onAuthorized: () => void }) => {
 
     const handleSubmit = () => {
         if (validarClaveTurnos(clave)) {
+            showSuccessToast('Edición autorizada', 'Ya tienes autoridad para modificar la programación.');
             onAuthorized();
         } else {
             setError(true);
@@ -139,11 +204,7 @@ const AuthGate = ({ onAuthorized }: { onAuthorized: () => void }) => {
 // ==========================================
 
 const ProgrammingGridInner = ({ year, month }: Props) => {
-    const mm = String(month + 1).padStart(2, '0');
-    const monthStart = `${year}-${mm}-01`;
-
-    // Semanas completas Lun-Dom: parte el lunes de la semana del día 1 y
-    // termina el domingo de la semana del último día
+    // Semanas completas Lun-Dom
     const ext = useMemo(() => getExtendedMonthRange(year, month), [year, month]);
     const monthDates = ext.dates;
     const inMonth = (d: string) => new Date(d + 'T12:00:00').getMonth() === month;
@@ -154,9 +215,6 @@ const ProgrammingGridInner = ({ year, month }: Props) => {
         shiftDateStr(ext.endDate, 6)
     );
 
-    const upsertShift = useUpsertShiftControl();
-    const upsertTemplate = useUpsertSpecialTemplate();
-
     const [terminalFilter, setTerminalFilter] = useState<string>('EL_ROBLE');
     const [turnoFilter, setTurnoFilter] = useState<'TODOS' | 'DIA' | 'NOCHE'>('TODOS');
     const [search, setSearch] = useState('');
@@ -164,16 +222,21 @@ const ProgrammingGridInner = ({ year, month }: Props) => {
     const [dayEdit, setDayEdit] = useState<{ staff: ExportStaff; date: string } | null>(null);
     const [modalityEdit, setModalityEdit] = useState<ExportStaff | null>(null);
 
+    // Orden: cargo → modalidad (Fijo, Normal, Contra, Manual) → nombre.
+    // Se recalcula automáticamente tras cada modificación (datos reactivos).
     const visibleStaff = useMemo(() => {
         const q = search.trim().toLowerCase();
         return staff
             .filter((s) => s.terminal_code === terminalFilter)
             .filter((s) => turnoFilter === 'TODOS' || turnoDeFicha(s.turno, s.horario) === turnoFilter)
             .filter((s) => !q || s.nombre.toLowerCase().includes(q) || s.rut.toLowerCase().includes(q))
-            .sort((a, b) => cargoOrder(a.cargo) - cargoOrder(b.cargo) || a.nombre.localeCompare(b.nombre));
+            .sort((a, b) =>
+                cargoOrder(a.cargo) - cargoOrder(b.cargo) ||
+                modalityRank(a) - modalityRank(b) ||
+                a.nombre.localeCompare(b.nombre)
+            );
     }, [staff, terminalFilter, turnoFilter, search]);
 
-    // Grupos por cargo (en orden)
     const groups = useMemo(() => {
         const list: { cargo: string; members: ExportStaff[] }[] = [];
         for (const s of visibleStaff) {
@@ -185,7 +248,6 @@ const ProgrammingGridInner = ({ year, month }: Props) => {
         return list;
     }, [visibleStaff]);
 
-    // Planes + validación por persona
     const plans = useMemo(() => {
         const map = new Map<string, { plan: DayPlan[]; rules: RuleCheck }>();
         for (const s of visibleStaff) {
@@ -197,8 +259,11 @@ const ProgrammingGridInner = ({ year, month }: Props) => {
         return map;
     }, [visibleStaff, scheduleContext, monthDates, year, month]);
 
-    /** Cuadratura del grupo por día: [trabajando día, trabajando noche, libres] */
-    const groupCounters = (members: ExportStaff[], dateIdx: number): [number, number, number] => {
+    // Contadores según el filtro de turno activo (evita rojos confusos)
+    const showDia = turnoFilter !== 'NOCHE';
+    const showNoche = turnoFilter !== 'DIA';
+
+    const groupCounters = (members: ExportStaff[], dateIdx: number): { dia: number; noche: number; libre: number } => {
         let dia = 0, noche = 0, libre = 0;
         for (const m of members) {
             const p = plans.get(m.id)?.plan[dateIdx];
@@ -207,38 +272,7 @@ const ProgrammingGridInner = ({ year, month }: Props) => {
             else if (p.turno === 'NOCHE') noche++;
             else dia++;
         }
-        return [dia, noche, libre];
-    };
-
-    /** Alternar ciclo de duplicidad: 2 semanas ↔ 4 semanas (mensual) */
-    const handleToggleCycle = async (s: ExportStaff) => {
-        if (s.shift?.shift_type_code === 'ESPECIAL') {
-            // Volver a ciclo quincenal: elegir modalidad rotativa
-            setModalityEdit(s);
-            return;
-        }
-        const ok = confirm(
-            `${s.nombre}\n\nCambiar a ciclo MENSUAL (4 semanas, Lun-Dom):\n` +
-            'se copia su patrón actual a una plantilla de 4 semanas que se ' +
-            'duplica igual hacia adelante, y podrás ajustar cada día a mano.\n\n¿Continuar?'
-        );
-        if (!ok) return;
-        try {
-            const seed = seedFourWeekTemplate(s, scheduleContext, monthStart);
-            await upsertTemplate.mutateAsync({
-                staffId: s.id,
-                offDays: seed.offDays,
-                settings: { daily_shifts: seed.dailyShifts },
-            });
-            await upsertShift.mutateAsync({
-                staff_id: s.id,
-                shift_type_code: 'ESPECIAL',
-                variant_code: 'ESPECIAL',
-                start_date: s.shift?.start_date || undefined,
-            });
-        } catch (e) {
-            alert(e instanceof Error ? e.message : 'Error al cambiar el ciclo.');
-        }
+        return { dia, noche, libre };
     };
 
     return (
@@ -303,7 +337,7 @@ const ProgrammingGridInner = ({ year, month }: Props) => {
                         <table className="border-collapse">
                             <thead>
                                 <tr>
-                                    <th className="sticky left-0 z-20 min-w-[240px] border-b border-r bg-slate-800 px-3 py-2 text-left text-xs font-bold text-white">
+                                    <th className="sticky left-0 z-20 min-w-[250px] border-b border-r bg-slate-800 px-3 py-2 text-left text-xs font-bold text-white">
                                         {monthName(month).toUpperCase()} {year} — Turno / Trabajador
                                     </th>
                                     {monthDates.map((d) => {
@@ -334,7 +368,7 @@ const ProgrammingGridInner = ({ year, month }: Props) => {
                                 )}
                                 {groups.map((group) => (
                                     <Fragment key={group.cargo}>
-                                        {/* Título de cargo: FIJO al scroll horizontal */}
+                                        {/* Título de cargo (fijo al scroll) */}
                                         <tr>
                                             <td className="sticky left-0 z-10 border-b border-r bg-blue-100 px-3 py-1 text-[11px] font-bold uppercase tracking-wide text-blue-800">
                                                 {group.cargo} ({group.members.length})
@@ -342,23 +376,21 @@ const ProgrammingGridInner = ({ year, month }: Props) => {
                                             <td colSpan={monthDates.length + 1} className="border-b bg-blue-50" />
                                         </tr>
 
-                                        {/* Personas del grupo */}
                                         {group.members.map((s) => {
                                             const entry = plans.get(s.id);
                                             if (!entry) return null;
                                             const { plan, rules } = entry;
                                             const trabaja = plan.filter((p) => p.status === 'TRABAJA').length;
                                             const libres = plan.filter((p) => p.status === 'LIBRE').length;
-                                            const esMensual = s.shift?.shift_type_code === 'ESPECIAL';
-                                            const modalidad = s.shift
-                                                ? esMensual
-                                                    ? 'Plantilla mensual'
-                                                    : `${MODALIDADES.find((m) => m.code === s.shift!.shift_type_code)?.label || s.shift.shift_type_code}${s.shift.variant_code === 'CONTRATURNO' ? ' · Contra' : ''}`
-                                                : 'Sin turno';
+                                            const rank = modalityRank(s);
+                                            const badgeCls = rank === 0 ? 'bg-slate-200 text-slate-700'
+                                                : rank === 1 ? 'bg-blue-100 text-blue-700'
+                                                    : rank === 2 ? 'bg-cyan-100 text-cyan-700'
+                                                        : rank === 5 ? 'bg-purple-100 text-purple-700'
+                                                            : 'bg-slate-100 text-slate-500';
 
                                             return (
                                                 <tr key={s.id} className="group">
-                                                    {/* Persona + modalidad + ciclo */}
                                                     <td className={`sticky left-0 z-10 border-b border-r px-3 py-1 ${s.suspended ? 'bg-amber-50' : 'bg-white'} group-hover:bg-slate-50`}>
                                                         <div className="flex items-center justify-between gap-2">
                                                             <div className="min-w-0">
@@ -366,32 +398,14 @@ const ProgrammingGridInner = ({ year, month }: Props) => {
                                                                     {s.nombre}
                                                                     {s.suspended && <span className="ml-1.5 rounded bg-amber-200 px-1 text-[9px] font-bold text-amber-800">SUSP</span>}
                                                                 </p>
-                                                                <div className="mt-0.5 flex items-center gap-1">
-                                                                    <button
-                                                                        onClick={() => setModalityEdit(s)}
-                                                                        className="flex items-center gap-1 rounded bg-indigo-50 px-1.5 py-0.5 text-[10px] font-semibold text-indigo-700 transition-colors hover:bg-indigo-100"
-                                                                        title="Cambiar modalidad de turno"
-                                                                    >
-                                                                        <Icon name="settings" size={10} />
-                                                                        {modalidad}
-                                                                        {s.shift?.start_date && s.shift.start_date > monthStart && (
-                                                                            <span className="text-indigo-400">· desde {formatDateCL(s.shift.start_date).slice(0, 5)}</span>
-                                                                        )}
-                                                                    </button>
-                                                                    <button
-                                                                        onClick={() => handleToggleCycle(s)}
-                                                                        disabled={upsertTemplate.isPending || upsertShift.isPending}
-                                                                        className={`rounded px-1.5 py-0.5 text-[10px] font-bold transition-colors ${esMensual
-                                                                            ? 'bg-purple-100 text-purple-700 hover:bg-purple-200'
-                                                                            : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
-                                                                            }`}
-                                                                        title={esMensual
-                                                                            ? 'Ciclo mensual (4 semanas Lun-Dom que se duplican). Clic para volver al ciclo quincenal.'
-                                                                            : 'Duplicidad quincenal: semana 1 = semana 3, semana 2 = semana 4. Clic para cambiar a ciclo mensual de 4 semanas.'}
-                                                                    >
-                                                                        {esMensual ? '↻ 4 sem' : '↻ 2 sem'}
-                                                                    </button>
-                                                                </div>
+                                                                <button
+                                                                    onClick={() => setModalityEdit(s)}
+                                                                    className={`mt-0.5 flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-semibold transition-all hover:ring-1 hover:ring-slate-400 ${badgeCls}`}
+                                                                    title="Cambiar modalidad de turno"
+                                                                >
+                                                                    <Icon name="settings" size={10} />
+                                                                    {modalityLabel(s)}
+                                                                </button>
                                                             </div>
                                                             {rules.warnings.length > 0 && (
                                                                 <span title={rules.warnings.join(' ')}>
@@ -401,14 +415,12 @@ const ProgrammingGridInner = ({ year, month }: Props) => {
                                                         </div>
                                                     </td>
 
-                                                    {/* Días */}
                                                     {plan.map((p) => (
                                                         <td key={p.date} className={`border-b p-0.5 ${isMonday(p.date) ? 'border-l-2 border-l-slate-400' : ''} ${!inMonth(p.date) ? 'opacity-50' : ''}`}>
                                                             <DayCellBtn plan={p} onClick={() => setDayEdit({ staff: s, date: p.date })} />
                                                         </td>
                                                     ))}
 
-                                                    {/* Resumen */}
                                                     <td className="border-b border-l-2 border-l-slate-400 px-1 py-1 text-center">
                                                         <div className="flex items-center justify-center gap-1 text-[10px] font-bold">
                                                             <span className="text-slate-700">{trabaja}</span>
@@ -428,25 +440,29 @@ const ProgrammingGridInner = ({ year, month }: Props) => {
                                             );
                                         })}
 
-                                        {/* Cuadratura del grupo: Día / Noche / Libres por fecha */}
+                                        {/* Cuadratura del grupo (según filtro de turno) */}
                                         <tr>
-                                            <td className="sticky left-0 z-10 border-b-2 border-r border-b-slate-300 bg-slate-100 px-3 py-1">
-                                                <p className="text-[10px] font-bold uppercase text-slate-600">Cuadratura {group.cargo.split(' ')[0]}</p>
-                                                <p className="text-[9px] text-slate-400">Día · Noche · Libres</p>
+                                            <td className="sticky left-0 z-10 border-b-2 border-r border-b-slate-300 bg-gradient-to-r from-slate-700 to-slate-600 px-3 py-1.5">
+                                                <p className="text-[10px] font-bold uppercase text-white">Cuadratura</p>
+                                                <div className="mt-0.5 flex gap-1.5 text-[9px] font-semibold">
+                                                    {showDia && <span className="rounded-full bg-sky-400/90 px-1.5 text-white">Día</span>}
+                                                    {showNoche && <span className="rounded-full bg-indigo-400/90 px-1.5 text-white">Noche</span>}
+                                                    <span className="rounded-full bg-slate-400/80 px-1.5 text-white">Libres</span>
+                                                </div>
                                             </td>
                                             {monthDates.map((d, di) => {
-                                                const [dia, noche, libre] = groupCounters(group.members, di);
+                                                const c = groupCounters(group.members, di);
                                                 return (
-                                                    <td key={d} className={`border-b-2 border-b-slate-300 bg-slate-50 px-0.5 py-0.5 text-center ${isMonday(d) ? 'border-l-2 border-l-slate-400' : ''}`}>
-                                                        <div className="flex flex-col leading-tight">
-                                                            <span className={`text-[9px] font-bold ${dia === 0 ? 'rounded bg-red-500 text-white' : 'text-blue-700'}`}>{dia}</span>
-                                                            <span className={`text-[9px] font-bold ${noche === 0 ? 'rounded bg-red-500 text-white' : 'text-indigo-700'}`}>{noche}</span>
-                                                            <span className="text-[9px] font-semibold text-slate-400">{libre}</span>
+                                                    <td key={d} className={`border-b-2 border-b-slate-300 bg-slate-100/80 px-0.5 py-1 text-center align-middle ${isMonday(d) ? 'border-l-2 border-l-slate-400' : ''} ${!inMonth(d) ? 'opacity-50' : ''}`}>
+                                                        <div className="mx-auto flex w-fit flex-col gap-0.5">
+                                                            {showDia && <CounterPill value={c.dia} tone="dia" />}
+                                                            {showNoche && <CounterPill value={c.noche} tone="noche" />}
+                                                            <CounterPill value={c.libre} tone="libre" />
                                                         </div>
                                                     </td>
                                                 );
                                             })}
-                                            <td className="border-b-2 border-b-slate-300 border-l-2 border-l-slate-400 bg-slate-50" />
+                                            <td className="border-b-2 border-b-slate-300 border-l-2 border-l-slate-400 bg-slate-100/80" />
                                         </tr>
                                     </Fragment>
                                 ))}
@@ -460,14 +476,12 @@ const ProgrammingGridInner = ({ year, month }: Props) => {
                         <span className="flex items-center gap-1"><span className="inline-block h-3 w-5 rounded bg-indigo-50 ring-1 ring-indigo-200" /> Trabaja noche</span>
                         <span className="flex items-center gap-1"><span className="inline-block h-3 w-5 rounded bg-slate-800" /> Libre</span>
                         <span className="flex items-center gap-1"><span className="inline-block h-3 w-5 rounded bg-slate-100 ring-1 ring-slate-200" /> — antes del inicio</span>
-                        <span className="flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-full bg-amber-500" /> ajuste manual</span>
-                        <span className="flex items-center gap-1"><span className="inline-block rounded bg-red-500 px-1 text-[9px] font-bold text-white">0</span> día caído (sin nadie)</span>
-                        <span className="ml-auto">Cuadratura por cargo: trabajando Día · trabajando Noche · Libres — línea gruesa separa semanas Lun-Dom</span>
+                        <span className="flex items-center gap-1"><span className="inline-block h-3 w-6 rounded-full bg-red-500 text-center text-[9px] font-bold leading-3 text-white">0</span> día caído</span>
+                        <span className="ml-auto">Orden por cargo: Fijos → Normal → Contraturno → Manuales · línea gruesa separa semanas Lun-Dom</span>
                     </div>
                 </div>
             )}
 
-            {/* Editores (ya autorizados con la clave de entrada) */}
             {dayEdit && (
                 <DayEditModal
                     staff={dayEdit.staff}
@@ -489,6 +503,26 @@ const ProgrammingGridInner = ({ year, month }: Props) => {
                 />
             )}
         </div>
+    );
+};
+
+// ==========================================
+// Píldora de cuadratura
+// ==========================================
+
+const CounterPill = ({ value, tone }: { value: number; tone: 'dia' | 'noche' | 'libre' }) => {
+    const zeroMatters = tone !== 'libre';
+    const cls = value === 0 && zeroMatters
+        ? 'bg-red-500 text-white shadow-sm'
+        : tone === 'dia'
+            ? 'bg-sky-100 text-sky-800'
+            : tone === 'noche'
+                ? 'bg-indigo-100 text-indigo-800'
+                : 'bg-slate-200 text-slate-500';
+    return (
+        <span className={`min-w-[22px] rounded-full px-1 text-center text-[9px] font-bold leading-4 ${cls}`}>
+            {value}
+        </span>
     );
 };
 
@@ -535,9 +569,9 @@ const DayCellBtn = ({ plan, onClick }: { plan: DayPlan; onClick: () => void }) =
 };
 
 // ==========================================
-// Modal: cambio de día — acción directa, sin confirmación extra.
-// Forzar TRABAJA permite elegir turno DIA/NOCHE y horario propio
-// (supervisores rotativos que cubren día o noche de otro terminal).
+// Modal: cambio de día — acción directa.
+// "Repetir cada 2 semanas" convierte el cambio en parte del juego
+// (semana 1 y 2 replicadas al infinito).
 // ==========================================
 
 const DayEditModal = ({
@@ -548,18 +582,20 @@ const DayEditModal = ({
 }) => {
     const upsertOverride = useUpsertOverrideControl();
     const removeOverride = useDeleteOverrideControl();
+    const upsertTemplate = useUpsertSpecialTemplate();
+    const upsertShift = useUpsertShiftControl();
 
     const currentOverride = ctx.overrides.find(
         (o) => o.staff_id === staff.id && o.override_date === date
     );
 
-    // Sub-form de TRABAJA: turno + horario del día
     const currentMeta = (currentOverride?.meta_json || {}) as { turno?: 'DIA' | 'NOCHE'; horario?: string };
     const [turno, setTurno] = useState<'DIA' | 'NOCHE'>(
         currentMeta.turno || turnoDeFicha(staff.turno, staff.horario)
     );
     const [horario, setHorario] = useState(currentMeta.horario || staff.horario || '');
     const [showWork, setShowWork] = useState(false);
+    const [repetir, setRepetir] = useState(false);
 
     const isSunday = new Date(date + 'T12:00:00').getDay() === 0;
     const workCheck = useMemo(
@@ -567,17 +603,50 @@ const DayEditModal = ({
         [staff, ctx, year, month, date]
     );
     const sundayRest = isSunday && workCheck.blocked !== null;
-    const busy = upsertOverride.isPending || removeOverride.isPending;
+    const busy = upsertOverride.isPending || removeOverride.isPending || upsertTemplate.isPending || upsertShift.isPending;
 
-    /** Aplica de inmediato y alerta situaciones (sin bloquear) */
+    /** Cambio repetitivo: modifica el juego de 2 semanas y lo replica al infinito */
+    const applyRepeating = async (type: 'OFF' | 'WORK') => {
+        const base = seedTwoWeekPattern(staff, ctx, date);
+        const idx = twoWeekIndex(date);
+        base.libres[idx] = type === 'OFF';
+        if (type === 'WORK') base.noches[idx] = turno === 'NOCHE';
+
+        const tpl = twoWeekToTemplate(base.libres, base.noches);
+        await upsertTemplate.mutateAsync({
+            staffId: staff.id,
+            offDays: tpl.offDays,
+            settings: { daily_shifts: tpl.dailyShifts },
+        });
+        if (staff.shift?.shift_type_code !== 'ESPECIAL') {
+            await upsertShift.mutateAsync({
+                staff_id: staff.id,
+                shift_type_code: 'ESPECIAL',
+                variant_code: 'ESPECIAL',
+                start_date: staff.shift?.start_date || undefined,
+            });
+        }
+        // El ajuste puntual de ese día ya no aplica: el patrón manda
+        if (currentOverride) {
+            await removeOverride.mutateAsync({ staffId: staff.id, date });
+        }
+    };
+
     const apply = async (type: 'OFF' | 'WORK' | null) => {
         if (busy) return;
         try {
             const check = checkDayOverride(staff, ctx, year, month, date, type);
-            if (type === 'WORK' && check.blocked) return; // único bloqueo duro
+            if (type === 'WORK' && check.blocked) return;
 
-            if (type === null) {
+            if (type !== null && repetir) {
+                await applyRepeating(type);
+                showSuccessToast(
+                    'Juego de 2 semanas actualizado',
+                    `${staff.nombre}: el ${dayNameShort(date)} queda ${type === 'OFF' ? 'LIBRE' : 'TRABAJANDO'} y se replica cada 2 semanas al infinito.`
+                );
+            } else if (type === null) {
                 await removeOverride.mutateAsync({ staffId: staff.id, date });
+                showSuccessToast('Ajuste eliminado', `${staff.nombre} vuelve a su patrón normal el ${formatDateCL(date)}.`);
             } else {
                 await upsertOverride.mutateAsync({
                     staffId: staff.id,
@@ -585,13 +654,17 @@ const DayEditModal = ({
                     type,
                     meta: type === 'WORK' ? { turno, horario: horario.trim() || undefined } : undefined,
                 });
+                showSuccessToast(
+                    'Cambio de día aplicado',
+                    `${staff.nombre} · ${dayNameShort(date)} ${formatDateCL(date)}: ${type === 'OFF' ? 'LIBRE' : `TRABAJA ${turno === 'NOCHE' ? 'Noche' : 'Día'}${horario.trim() ? ` (${horario.trim()})` : ''}`}.`
+                );
             }
             onClose();
             if (check.warnings.length > 0) {
-                setTimeout(() => alert(`Cambio aplicado a ${staff.nombre}.\n\n${check.warnings.join('\n')}`), 50);
+                showWarningToast('Situación a revisar', check.warnings.join(' '));
             }
         } catch (e) {
-            alert(e instanceof Error ? e.message : 'Error al guardar el cambio.');
+            showErrorToast('No se pudo guardar', e instanceof Error ? e.message : 'Error al guardar el cambio.');
         }
     };
 
@@ -613,7 +686,25 @@ const DayEditModal = ({
                 </div>
 
                 <div className="space-y-3 p-5">
-                    {/* FORZAR TRABAJA (con turno/horario) */}
+                    {/* Repetir cada 2 semanas */}
+                    <button
+                        onClick={() => setRepetir((v) => !v)}
+                        className={`flex w-full items-center justify-between rounded-xl border-2 px-4 py-2.5 transition-all ${repetir ? 'border-purple-500 bg-purple-50' : 'border-slate-200 hover:border-slate-300'}`}
+                    >
+                        <div className="text-left">
+                            <p className="text-sm font-bold text-slate-800">Repetir cada 2 semanas</p>
+                            <p className="text-xs text-slate-500">
+                                {repetir
+                                    ? 'El cambio modifica el juego de 2 semanas y se replica al infinito'
+                                    : 'Apagado: el cambio aplica solo a este día puntual'}
+                            </p>
+                        </div>
+                        <span className={`flex h-5 w-9 items-center rounded-full p-0.5 transition-colors ${repetir ? 'bg-purple-500' : 'bg-slate-300'}`}>
+                            <span className={`h-4 w-4 rounded-full bg-white shadow transition-transform ${repetir ? 'translate-x-4' : ''}`} />
+                        </span>
+                    </button>
+
+                    {/* FORZAR TRABAJA */}
                     {sundayRest ? (
                         <div className="rounded-xl border-2 border-red-200 bg-red-50 px-4 py-2.5">
                             <p className="text-sm font-bold text-red-800">Forzar TRABAJA — BLOQUEADO</p>
@@ -621,10 +712,7 @@ const DayEditModal = ({
                         </div>
                     ) : (
                         <div className={`rounded-xl border-2 transition-all ${showWork ? 'border-blue-500 bg-blue-50' : 'border-slate-200'}`}>
-                            <button
-                                onClick={() => setShowWork((v) => !v)}
-                                className="w-full px-4 py-2.5 text-left"
-                            >
+                            <button onClick={() => setShowWork((v) => !v)} className="w-full px-4 py-2.5 text-left">
                                 <p className="text-sm font-bold text-slate-800">Forzar TRABAJA</p>
                                 <p className="text-xs text-slate-500">Elige turno y horario del día (cubre día o noche de cualquier terminal)</p>
                             </button>
@@ -660,24 +748,26 @@ const DayEditModal = ({
                                         className="flex w-full items-center justify-center gap-2 rounded-lg bg-blue-600 py-2.5 text-sm font-bold text-white hover:bg-blue-700 disabled:opacity-50"
                                     >
                                         {busy ? <Icon name="loader" size={14} className="animate-spin" /> : <Icon name="check" size={14} />}
-                                        Forzar TRABAJA {turno === 'NOCHE' ? '(Noche)' : '(Día)'}{horario.trim() ? ` · ${horario.trim()}` : ''}
+                                        Forzar TRABAJA {turno === 'NOCHE' ? '(Noche)' : '(Día)'}{repetir ? ' · cada 2 semanas' : ''}
                                     </button>
                                 </div>
                             )}
                         </div>
                     )}
 
-                    {/* FORZAR LIBRE: directo */}
+                    {/* FORZAR LIBRE */}
                     <button
                         onClick={() => apply('OFF')}
                         disabled={busy}
                         className="w-full rounded-xl border-2 border-slate-200 px-4 py-2.5 text-left transition-all hover:border-slate-500 hover:bg-slate-50 disabled:opacity-50"
                     >
-                        <p className="text-sm font-bold text-slate-800">Forzar LIBRE</p>
-                        <p className="text-xs text-slate-500">Se aplica al instante — puedes mover este libre a otro día de la semana</p>
+                        <p className="text-sm font-bold text-slate-800">Forzar LIBRE{repetir ? ' · cada 2 semanas' : ''}</p>
+                        <p className="text-xs text-slate-500">
+                            {repetir ? 'Este día queda libre en el juego, replicado al infinito' : 'Se aplica al instante — solo este día puntual'}
+                        </p>
                     </button>
 
-                    {/* QUITAR AJUSTE: directo */}
+                    {/* QUITAR AJUSTE */}
                     {currentOverride && (
                         <button
                             onClick={() => apply(null)}
@@ -688,11 +778,6 @@ const DayEditModal = ({
                             <p className="text-xs text-slate-500">Volver al patrón normal del turno</p>
                         </button>
                     )}
-
-                    <p className="text-[11px] text-slate-400">
-                        Las situaciones (racha &gt;6 días, domingos libres bajo el mínimo) se ALERTAN
-                        después de aplicar — puedes compensarlas dentro del período.
-                    </p>
                 </div>
             </div>
         </div>
@@ -700,8 +785,10 @@ const DayEditModal = ({
 };
 
 // ==========================================
-// Modal: cambio de modalidad (la clave ya fue ingresada al entrar)
+// Modal: modalidad de turno (4 opciones + editor manual de 2 semanas)
 // ==========================================
+
+const DIAS_SEMANA = ['L', 'M', 'X', 'J', 'V', 'S', 'D'];
 
 const ModalityEditModal = ({
     staff, year, month, ctx, allStaff, onClose,
@@ -712,56 +799,100 @@ const ModalityEditModal = ({
     onClose: () => void;
 }) => {
     const upsertShift = useUpsertShiftControl();
+    const upsertTemplate = useUpsertSpecialTemplate();
 
-    const [type, setType] = useState<ShiftTypeCode>(
-        staff.shift?.shift_type_code === 'ESPECIAL' ? '5X2_SUPER' : (staff.shift?.shift_type_code || '5X2_SUPER')
-    );
-    const [variant, setVariant] = useState<VariantCode>(
-        staff.shift?.variant_code === 'ESPECIAL' ? 'PRINCIPAL' : (staff.shift?.variant_code || 'PRINCIPAL')
-    );
-    // La fecha de inicio SOLO se define para personal NUEVO (sin turno
-    // asignado) y pasa UNA sola vez. Para personal existente se conserva
-    // la original: cambiar la modalidad no borra la programación pasada.
+    const mm = String(month + 1).padStart(2, '0');
+    const monthStart = `${year}-${mm}-01`;
+
+    // Modalidad actual → key
+    const currentKey: ModalidadKey = staff.shift?.shift_type_code === 'ESPECIAL' ? 'MANUAL'
+        : staff.shift?.shift_type_code === '5X2_FIJO' ? 'FIJO'
+            : staff.shift?.variant_code === 'CONTRATURNO' ? 'NORMAL'
+                : staff.shift ? 'CONTRA' : 'NORMAL';
+
+    const [key, setKey] = useState<ModalidadKey>(currentKey);
+
+    // Editor manual: juego de 2 semanas sembrado del patrón actual
+    const [manual, setManual] = useState(() => seedTwoWeekPattern(staff, ctx, monthStart));
+
     const esPersonalNuevo = !staff.shift;
     const [startDate, setStartDate] = useState(staff.shift?.start_date || '');
 
-    const recommendation = useMemo(
-        () => buildShiftRecommendation(staff, allStaff),
-        [staff, allStaff]
-    );
-
-    const check = useMemo(() => {
-        const simulated: StaffWithShift = {
-            ...staff,
-            shift: {
-                id: staff.shift?.id || 'sim',
-                staff_id: staff.id,
-                shift_type_code: type,
-                variant_code: variant,
-                start_date: startDate || '2026-01-01',
-                created_at: '',
-            },
+    // Recomendación (solo entre Normal y Contraturno)
+    const recommendation = useMemo(() => {
+        const rec = buildShiftRecommendation(staff, allStaff);
+        const superCombos = rec.combos.filter((c) => c.shiftType === '5X2_SUPER');
+        if (superCombos.length === 0) return null;
+        const weakest = superCombos[0];
+        return {
+            key: (weakest.variant === 'CONTRATURNO' ? 'NORMAL' : 'CONTRA') as ModalidadKey,
+            count: weakest.count,
         };
-        return checkRules(simulated, ctx, year, month);
-    }, [staff, type, variant, startDate, ctx, year, month]);
+    }, [staff, allStaff]);
 
-    const handleConfirm = async () => {
+    const selected = MODALIDAD_OPTIONS.find((m) => m.key === key)!;
+
+    // Simulación de reglas con la modalidad elegida
+    const check = useMemo(() => {
+        const simulatedShift = {
+            id: staff.shift?.id || 'sim',
+            staff_id: staff.id,
+            shift_type_code: selected.code,
+            variant_code: selected.variant,
+            start_date: (esPersonalNuevo ? startDate : staff.shift?.start_date) || '2026-01-01',
+            created_at: '',
+        };
+        const simStaff: StaffWithShift = { ...staff, shift: simulatedShift };
+
+        if (key === 'MANUAL') {
+            const tpl = twoWeekToTemplate(manual.libres, manual.noches);
+            const simCtx = {
+                ...ctx,
+                specialTemplates: [
+                    ...ctx.specialTemplates.filter((t) => t.staff_id !== staff.id),
+                    {
+                        id: 'sim-tpl', staff_id: staff.id, cycle_days: 28,
+                        off_days_json: tpl.offDays,
+                        settings_json: { daily_shifts: tpl.dailyShifts },
+                        updated_at: '',
+                    },
+                ],
+            };
+            return checkRules(simStaff, simCtx, year, month);
+        }
+        return checkRules(simStaff, ctx, year, month);
+    }, [staff, key, selected, manual, startDate, esPersonalNuevo, ctx, year, month]);
+
+    const handleSave = async () => {
         try {
+            if (key === 'MANUAL') {
+                const tpl = twoWeekToTemplate(manual.libres, manual.noches);
+                await upsertTemplate.mutateAsync({
+                    staffId: staff.id,
+                    offDays: tpl.offDays,
+                    settings: { daily_shifts: tpl.dailyShifts },
+                });
+            }
             await upsertShift.mutateAsync({
                 staff_id: staff.id,
-                shift_type_code: type,
-                variant_code: variant,
-                // Personal existente: SIEMPRE conserva su fecha de inicio original
+                shift_type_code: selected.code,
+                variant_code: selected.variant,
                 start_date: esPersonalNuevo ? (startDate || undefined) : (staff.shift?.start_date || undefined),
             });
             onClose();
+            showSuccessToast(
+                'Modalidad guardada',
+                `${staff.nombre} queda en ${selected.label}. La tabla se reordena automáticamente.`
+            );
             if (check.warnings.length > 0) {
-                setTimeout(() => alert(`Modalidad guardada para ${staff.nombre}.\n\n${check.warnings.join('\n')}`), 50);
+                showWarningToast('Situación a revisar', check.warnings.join(' '));
             }
         } catch (e) {
-            alert(e instanceof Error ? e.message : 'Error al guardar la modalidad.');
+            showErrorToast('No se pudo guardar', e instanceof Error ? e.message : 'Error al guardar la modalidad.');
         }
     };
+
+    const busy = upsertShift.isPending || upsertTemplate.isPending;
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm" onClick={onClose}>
@@ -769,8 +900,10 @@ const ModalityEditModal = ({
                 <div className="bg-slate-800 px-5 py-4">
                     <div className="flex items-center justify-between">
                         <div>
-                            <h3 className="font-bold text-white">Modalidad de Turno (ciclo 2 semanas)</h3>
-                            <p className="text-xs text-slate-300">{staff.nombre} · {staff.cargo}</p>
+                            <h3 className="font-bold text-white">Modalidad de Turno</h3>
+                            <p className="text-xs text-slate-300">
+                                {staff.nombre} · {staff.cargo} · el juego siempre se repite cada 2 semanas
+                            </p>
                         </div>
                         <button onClick={onClose} className="rounded-lg p-1.5 text-slate-400 hover:bg-white/10 hover:text-white">
                             <Icon name="x" size={18} />
@@ -779,61 +912,84 @@ const ModalityEditModal = ({
                 </div>
 
                 <div className="flex-1 space-y-4 overflow-y-auto p-5">
-                    {staff.shift?.shift_type_code === 'ESPECIAL' && (
-                        <p className="rounded-xl border border-purple-200 bg-purple-50 px-4 py-2.5 text-xs text-purple-800">
-                            Esta persona está en <b>ciclo mensual (plantilla 4 semanas)</b>. Al guardar una
-                            modalidad aquí vuelve al <b>ciclo quincenal</b> (sem 1 = sem 3, sem 2 = sem 4).
-                        </p>
-                    )}
-
-                    {recommendation.recommended && (
-                        <button
-                            onClick={() => {
-                                setType(recommendation.recommended!.shiftType);
-                                setVariant(recommendation.recommended!.variant);
-                            }}
-                            className="flex w-full items-center justify-between rounded-xl border-2 border-indigo-300 bg-indigo-50 px-4 py-2.5 text-left transition-colors hover:bg-indigo-100"
-                        >
-                            <div>
-                                <p className="flex items-center gap-1.5 text-xs font-bold text-indigo-800">
-                                    <Icon name="sparkles" size={13} />
-                                    Recomendado (más descubierto): {recommendation.recommended.label}
-                                </p>
-                                <p className="text-[11px] text-indigo-600">
-                                    {recommendation.recommended.count} persona(s) en el grupo · clic para aplicar
-                                </p>
-                            </div>
-                            <Icon name="chevron-right" size={16} className="text-indigo-400" />
-                        </button>
-                    )}
-
-                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                        {MODALIDADES.map((m) => (
+                    {/* Opciones */}
+                    <div className="space-y-2">
+                        {MODALIDAD_OPTIONS.map((m) => (
                             <button
-                                key={m.code}
-                                onClick={() => setType(m.code)}
-                                className={`rounded-xl border-2 p-3 text-left transition-all ${type === m.code ? 'border-blue-500 bg-blue-50' : 'border-slate-200 hover:border-slate-300'}`}
+                                key={m.key}
+                                onClick={() => setKey(m.key)}
+                                className={`w-full rounded-xl border-2 p-3 text-left transition-all ${key === m.key ? 'border-blue-500 bg-blue-50' : 'border-slate-200 hover:border-slate-300'}`}
                             >
-                                <p className="text-sm font-bold text-slate-800">{m.label}</p>
-                                <p className="text-[11px] text-slate-500">{m.desc}</p>
+                                <div className="flex items-center justify-between">
+                                    <p className="text-sm font-bold text-slate-800">{m.label}</p>
+                                    <div className="flex items-center gap-1.5">
+                                        {recommendation?.key === m.key && (
+                                            <span className="flex items-center gap-1 rounded-full bg-indigo-600 px-2 py-0.5 text-[10px] font-bold text-white">
+                                                <Icon name="sparkles" size={10} />
+                                                Recomendado ({recommendation.count} en el grupo)
+                                            </span>
+                                        )}
+                                        {currentKey === m.key && (
+                                            <span className="rounded-full bg-slate-200 px-2 py-0.5 text-[10px] font-bold text-slate-600">Actual</span>
+                                        )}
+                                    </div>
+                                </div>
+                                <p className="mt-0.5 text-[11px] text-slate-500">{m.desc}</p>
                             </button>
                         ))}
                     </div>
 
-                    {(type === '5X2_ROTATIVO' || type === '5X2_SUPER') && (
-                        <div className="flex gap-2">
-                            {(['PRINCIPAL', 'CONTRATURNO'] as VariantCode[]).map((v) => (
-                                <button
-                                    key={v}
-                                    onClick={() => setVariant(v)}
-                                    className={`flex-1 rounded-lg border-2 px-3 py-2 text-sm font-semibold transition-all ${variant === v ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-slate-200 text-slate-600'}`}
-                                >
-                                    {v === 'PRINCIPAL' ? 'Turno Normal' : 'Contraturno'}
-                                </button>
-                            ))}
+                    {/* Editor manual del juego de 2 semanas */}
+                    {key === 'MANUAL' && (
+                        <div className="rounded-xl border border-purple-200 bg-purple-50 p-4">
+                            <p className="mb-1 text-xs font-bold uppercase tracking-wide text-purple-700">
+                                Juego de 2 semanas (Lun → Dom) — toca los días que salen LIBRES
+                            </p>
+                            <p className="mb-3 text-[11px] text-purple-600">
+                                Semana 1 y Semana 2 se replican al infinito (sem 1 = sem 3, sem 2 = sem 4…).
+                            </p>
+                            <div className="space-y-2">
+                                {[0, 1].map((week) => (
+                                    <div key={week} className="flex items-center gap-2">
+                                        <span className="w-12 text-[10px] font-bold text-purple-700">Sem {week + 1}</span>
+                                        <div className="flex flex-1 gap-1">
+                                            {DIAS_SEMANA.map((label, di) => {
+                                                const idx = week * 7 + di;
+                                                const libre = manual.libres[idx];
+                                                const noche = manual.noches[idx];
+                                                return (
+                                                    <button
+                                                        key={idx}
+                                                        onClick={() => setManual((prev) => {
+                                                            const libres = [...prev.libres];
+                                                            libres[idx] = !libres[idx];
+                                                            return { ...prev, libres };
+                                                        })}
+                                                        className={`flex h-10 flex-1 flex-col items-center justify-center rounded-lg text-[10px] font-bold transition-all ${libre
+                                                            ? 'bg-slate-800 text-white shadow ring-1 ring-slate-900'
+                                                            : noche
+                                                                ? 'bg-indigo-100 text-indigo-800 ring-1 ring-indigo-300 hover:bg-indigo-200'
+                                                                : 'bg-white text-slate-700 ring-1 ring-purple-200 hover:bg-purple-100'
+                                                            }`}
+                                                        title={libre ? 'LIBRE — clic para trabajar' : 'Trabaja — clic para dejar libre'}
+                                                    >
+                                                        <span>{label}</span>
+                                                        <span className="text-[8px] opacity-70">{libre ? 'LIBRE' : noche ? 'N' : 'D'}</span>
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                            <p className="mt-2 text-[10px] text-purple-500">
+                                Libres marcados: {manual.libres.filter(Boolean).length} de 14 · los días de trabajo
+                                conservan su turno D/N actual (ajustable día a día desde la grilla).
+                            </p>
                         </div>
                     )}
 
+                    {/* Fecha de inicio: SOLO personal nuevo, una sola vez */}
                     {esPersonalNuevo ? (
                         <div>
                             <label className="mb-1 block text-xs font-bold uppercase tracking-wide text-slate-500">
@@ -845,17 +1001,16 @@ const ModalityEditModal = ({
                                 onChange={(e) => setStartDate(e.target.value)}
                                 className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500"
                             />
-                            <p className="mt-1 text-[11px] text-slate-400">
-                                Se define UNA sola vez, al ingresar la persona.
-                            </p>
+                            <p className="mt-1 text-[11px] text-slate-400">Se define UNA sola vez, al ingresar la persona.</p>
                         </div>
                     ) : (
                         <p className="rounded-lg bg-slate-50 px-3 py-2 text-[11px] text-slate-500">
                             La programación histórica se conserva: cambiar la modalidad NO borra
-                            la asistencia hacia atrás{staff.shift?.start_date ? ` (fecha de inicio original: ${formatDateCL(staff.shift.start_date)})` : ''}.
+                            la asistencia hacia atrás{staff.shift?.start_date ? ` (inicio original: ${formatDateCL(staff.shift.start_date)})` : ''}.
                         </p>
                     )}
 
+                    {/* Validación */}
                     {check.warnings.length === 0 ? (
                         <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-xs text-emerald-800">
                             <p className="font-bold">✓ La modalidad cumple las reglas del mes</p>
@@ -874,11 +1029,11 @@ const ModalityEditModal = ({
                         Cancelar
                     </button>
                     <button
-                        onClick={handleConfirm}
-                        disabled={upsertShift.isPending}
+                        onClick={handleSave}
+                        disabled={busy}
                         className="flex items-center gap-2 rounded-lg bg-blue-600 px-5 py-2 text-sm font-bold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-40"
                     >
-                        {upsertShift.isPending && <Icon name="loader" size={14} className="animate-spin" />}
+                        {busy && <Icon name="loader" size={14} className="animate-spin" />}
                         Guardar modalidad
                     </button>
                 </div>
