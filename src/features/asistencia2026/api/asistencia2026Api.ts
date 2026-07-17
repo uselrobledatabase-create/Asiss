@@ -318,6 +318,17 @@ export async function upsertOverride(
     return data;
 }
 
+export async function deleteAllOverridesForStaff(staffId: string): Promise<void> {
+    if (!isSupabaseConfigured()) throw new Error('Supabase not configured');
+
+    const { error } = await supabase
+        .from('staff_shift_overrides')
+        .delete()
+        .eq('staff_id', staffId);
+
+    if (error) throw error;
+}
+
 // ==========================================
 // ATTENDANCE MARKS
 // ==========================================

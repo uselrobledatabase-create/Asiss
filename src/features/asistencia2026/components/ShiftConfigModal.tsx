@@ -9,6 +9,7 @@ import { useShiftTypes, useStaffShift, useUpsertStaffShift, useSpecialTemplate, 
 import { StaffWithShift, ShiftTypeCode, VariantCode, ShiftType, SpecialTemplateSettings } from '../types';
 import { TerminalContext } from '../../../shared/types/terminal';
 import { buildShiftRecommendation } from '../utils/shiftRecommendation';
+import { deleteAllOverridesForStaff } from '../api/asistencia2026Api';
 
 const ALL_TERMINALS_CTX: TerminalContext = { mode: 'ALL' };
 
@@ -95,6 +96,10 @@ export const ShiftConfigModal = ({ isOpen, onClose, staff, onSuccess }: ShiftCon
         return buildShiftRecommendation(staff, allStaff);
     }, [staff, allStaff]);
 
+    const [replicateSourceId, setReplicateSourceId] = useState<string>('');
+    const { data: replicateShift } = useStaffShift(replicateSourceId || null);
+    const { data: replicateTemplate } = useSpecialTemplate(replicateSourceId || null);
+
     // Ensure ESPECIAL is always available, even if not in DB
     const shiftTypes = useMemo(() => {
         const types = dbShiftTypes.length > 0 ? [...dbShiftTypes] : [...FALLBACK_SHIFT_TYPES];
@@ -135,6 +140,7 @@ export const ShiftConfigModal = ({ isOpen, onClose, staff, onSuccess }: ShiftCon
 
     const [error, setError] = useState<string | null>(null);
     const [success, setSuccess] = useState(false);
+    const [copyMessage, setCopyMessage] = useState<string | null>(null);
 
     // Initialize from current shift
     useEffect(() => {
@@ -196,14 +202,97 @@ export const ShiftConfigModal = ({ isOpen, onClose, staff, onSuccess }: ShiftCon
 
         setError(null);
         setSuccess(false);
+        setCopyMessage(null);
+        setReplicateSourceId('');
         setActiveTab('OFF_DAYS');
     }, [currentShift, currentTemplate, staff?.id]);
 
     if (!isOpen || !staff) return null;
 
+    const replicateCandidates = useMemo(() => {
+        if (!staff) return [];
+
+        const sameTerminal = allStaff.filter(
+            (person) =>
+                person.id !== staff.id &&
+                person.terminal_code === staff.terminal_code &&
+                person.shift
+        );
+
+        return sameTerminal.sort((a, b) => {
+            const aSupervisor = a.cargo.toUpperCase().includes('SUPERVISOR') ? 0 : 1;
+            const bSupervisor = b.cargo.toUpperCase().includes('SUPERVISOR') ? 0 : 1;
+            if (aSupervisor !== bSupervisor) return aSupervisor - bSupervisor;
+            return a.nombre.localeCompare(b.nombre);
+        });
+    }, [allStaff, staff]);
+
+    const replicateSource = useMemo(
+        () => replicateCandidates.find((person) => person.id === replicateSourceId) || null,
+        [replicateCandidates, replicateSourceId]
+    );
+
+    const applyTemplateSettings = (template: typeof currentTemplate) => {
+        if (!template) {
+            setSpecialOffDays([]);
+            setDailyShifts({});
+            setEarlyExitEnabled(false);
+            setEarlyExitDays([5]);
+            setEarlyExitTime('14:00');
+            setCustomDiaTime('');
+            setCustomNocheTime('');
+            return;
+        }
+
+        setSpecialOffDays(template.off_days_json || []);
+        const settings = template.settings_json;
+        setDailyShifts(settings?.daily_shifts || {});
+
+        if (settings?.early_exit) {
+            setEarlyExitEnabled(settings.early_exit.enabled);
+            if (settings.early_exit.days) {
+                setEarlyExitDays(settings.early_exit.days);
+            } else if (typeof settings.early_exit.day_of_week === 'number') {
+                setEarlyExitDays([settings.early_exit.day_of_week]);
+            } else {
+                setEarlyExitDays([5]);
+            }
+            setEarlyExitTime(settings.early_exit.time || '14:00');
+        } else {
+            setEarlyExitEnabled(false);
+            setEarlyExitDays([5]);
+            setEarlyExitTime('14:00');
+        }
+
+        setCustomDiaTime(settings?.custom_schedules?.dia || '');
+        setCustomNocheTime(settings?.custom_schedules?.noche || '');
+    };
+
+    const handleReplicateConfig = () => {
+        setError(null);
+        setSuccess(false);
+        setCopyMessage(null);
+
+        if (!replicateSourceId || !replicateSource) {
+            setError('Selecciona a la persona desde la que deseas replicar el turno.');
+            return;
+        }
+        if (!replicateShift) {
+            setError(`"${replicateSource.nombre}" no tiene un turno oficial asignado para replicar.`);
+            return;
+        }
+
+        setSelectedType(replicateShift.shift_type_code);
+        setSelectedVariant(replicateShift.variant_code);
+        applyTemplateSettings(replicateShift.shift_type_code === 'ESPECIAL' ? replicateTemplate : null);
+        setActiveTab(replicateShift.shift_type_code === 'ESPECIAL' ? 'OFF_DAYS' : 'SHIFT_TYPE');
+        setCopyMessage(`Configuración copiada desde ${replicateSource.nombre}. Guarda para aplicarla a ${staff.nombre}.`);
+    };
+
     const handleSave = async () => {
         setError(null);
         setSuccess(false);
+        setCopyMessage(null);
 
         try {
             console.log('Saving shift:', {
@@ -212,11 +301,13 @@ export const ShiftConfigModal = ({ isOpen, onClose, staff, onSuccess }: ShiftCon
                 variant_code: selectedVariant,
             });
 
+            await deleteAllOverridesForStaff(staff.id);
+
             await upsertShiftMutation.mutateAsync({
                 staff_id: staff.id,
                 shift_type_code: selectedType,
                 variant_code: selectedVariant,
-                start_date: '2026-01-01',
+                start_date: currentShift?.start_date || replicateShift?.start_date || '2026-01-01',
             });
 
             // If ESPECIAL, also save the template with settings
@@ -319,6 +410,12 @@ export const ShiftConfigModal = ({ isOpen, onClose, staff, onSuccess }: ShiftCon
                         <div className="text-sm text-emerald-700 font-medium">¡Turno guardado correctamente!</div>
                     </div>
                 )}
+                {copyMessage && (
+                    <div className="mx-4 mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg flex items-center gap-2 shrink-0">
+                        <Icon name="clipboard" size={18} className="text-blue-600" />
+                        <div className="text-sm text-blue-700 font-medium">{copyMessage}</div>
+                    </div>
+                )}
 
                 {/* Content */}
                 <div className="p-4 space-y-6 overflow-y-auto">
@@ -332,6 +429,51 @@ export const ShiftConfigModal = ({ isOpen, onClose, staff, onSuccess }: ShiftCon
                             </div>
                         </div>
                     )}
+
+                    {/* ===== Replicar Configuración ===== */}
+                    <div className="rounded-xl border border-sky-200 bg-sky-50 overflow-hidden">
+                        <div className="flex items-center gap-2 border-b border-sky-100 bg-white/70 px-4 py-2.5">
+                            <Icon name="clipboard" size={16} className="text-sky-700" />
+                            <span className="text-sm font-bold text-sky-900">Replicar Turno Desde Otra Persona</span>
+                        </div>
+                        <div className="space-y-3 p-4">
+                            <p className="text-xs text-sky-800">
+                                Copia el patrón oficial completo de otro trabajador del mismo terminal:
+                                tipo de turno, variante y plantilla especial. Sirve para dejar un inspector
+                                con exactamente los mismos turnos de un supervisor. No copia marcas ni incidencias.
+                            </p>
+                            <select
+                                value={replicateSourceId}
+                                onChange={(e) => {
+                                    setReplicateSourceId(e.target.value);
+                                    setCopyMessage(null);
+                                    setError(null);
+                                }}
+                                className="w-full rounded-lg border border-sky-200 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-sky-500"
+                            >
+                                <option value="">Seleccionar persona origen…</option>
+                                {replicateCandidates.map((person) => (
+                                    <option key={person.id} value={person.id}>
+                                        {person.nombre} · {person.cargo} · {person.horario || 'Sin horario'}
+                                    </option>
+                                ))}
+                            </select>
+                            {replicateSource && (
+                                <div className="rounded-lg border border-sky-200 bg-white px-3 py-2 text-xs text-slate-700">
+                                    <div><b>Origen:</b> {replicateSource.nombre}</div>
+                                    <div><b>Cargo:</b> {replicateSource.cargo}</div>
+                                    <div><b>Turno base:</b> {replicateShift ? `${shiftTypes.find((t) => t.code === replicateShift.shift_type_code)?.name || replicateShift.shift_type_code} · ${replicateShift.variant_code}` : 'Sin turno'}</div>
+                                </div>
+                            )}
+                            <button
+                                onClick={handleReplicateConfig}
+                                disabled={!replicateSourceId}
+                                className="w-full rounded-lg bg-sky-700 px-4 py-2.5 text-sm font-bold text-white transition-colors hover:bg-sky-800 disabled:cursor-not-allowed disabled:opacity-40"
+                            >
+                                Replicar Configuración
+                            </button>
+                        </div>
+                    </div>
 
                     {/* ===== Recomendación Inteligente de Cobertura ===== */}
                     {recommendation && recommendation.recommended && (
