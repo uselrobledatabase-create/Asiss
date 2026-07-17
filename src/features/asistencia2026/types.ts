@@ -47,6 +47,10 @@ export interface SpecialTemplateSettings {
     // Map day index (0-27) to 'DIA' or 'NOCHE'. Default is 'DIA' if not present.
     daily_shifts?: Record<number, 'DIA' | 'NOCHE'>;
 
+    // Plantilla generada por el modo Supervisor Relevo Automático
+    // (la BD no acepta variant_code RELEVO, así que se marca aquí)
+    es_relevo?: boolean;
+
     // Recurring early exit rules
     early_exit?: {
         enabled: boolean;

@@ -72,10 +72,19 @@ function shiftDate(date: string, days: number): string {
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
-/** Fijos del terminal que el relevo debe cubrir (excluye otros relevos/especiales) */
+/** true si la persona ya es un relevo automático (marcado en su plantilla) */
+export function esRelevoAsignado(staff: StaffWithShift, ctx: ScheduleContext): boolean {
+    if (staff.shift?.shift_type_code === 'SUPERVISOR_RELEVO') return true;
+    if (staff.shift?.shift_type_code !== 'ESPECIAL') return false;
+    const tpl = ctx.specialTemplates.find((t) => t.staff_id === staff.id);
+    return Boolean(tpl?.settings_json?.es_relevo);
+}
+
+/** Fijos del terminal que el relevo debe cubrir (excluye otros relevos) */
 export function findFixedSupervisors(
     relevo: StaffWithShift,
-    allStaff: StaffWithShift[]
+    allStaff: StaffWithShift[],
+    ctx: ScheduleContext
 ): { fijosDia: StaffWithShift[]; fijosNoche: StaffWithShift[] } {
     const peers = allStaff.filter(
         (s) =>
@@ -83,9 +92,8 @@ export function findFixedSupervisors(
             s.status === 'ACTIVO' &&
             s.terminal_code === relevo.terminal_code &&
             s.cargo.toUpperCase().includes('SUPERVISOR') &&
-            // Un relevo no cubre a otro relevo ni a plantillas especiales
-            s.shift?.shift_type_code !== 'SUPERVISOR_RELEVO' &&
-            !(s.shift?.shift_type_code === 'ESPECIAL' && s.shift?.variant_code === 'RELEVO')
+            // Un relevo no cubre a otro relevo
+            !esRelevoAsignado(s, ctx)
     );
     return {
         fijosDia: peers.filter((s) => turnoDeFicha(s.turno, s.horario) === 'DIA'),
@@ -117,7 +125,7 @@ export function generateRelevoTemplate(
     ctx: ScheduleContext,
     aroundDate: string
 ): RelevoResult {
-    const { fijosDia, fijosNoche } = findFixedSupervisors(relevo, allStaff);
+    const { fijosDia, fijosNoche } = findFixedSupervisors(relevo, allStaff, ctx);
     const warnings: string[] = [];
 
     if (fijosDia.length === 0 && fijosNoche.length === 0) {

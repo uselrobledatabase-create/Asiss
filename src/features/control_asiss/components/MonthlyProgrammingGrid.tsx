@@ -70,7 +70,9 @@ const RELEVO_OPTION = {
     label: 'Relevo Automático (Supervisores)',
     desc: 'Genera la programación automática para cubrir SÍ O SÍ los libres de los supervisores fijos de día y de noche, respetando todas las reglas',
     code: 'ESPECIAL' as ShiftTypeCode,
-    variant: 'RELEVO' as VariantCode,
+    // La BD solo acepta variantes estándar: el relevo se marca con
+    // es_relevo en la plantilla, no en variant_code
+    variant: 'ESPECIAL' as VariantCode,
 };
 
 const MODALIDAD_OPTIONS: {
@@ -111,23 +113,30 @@ const MODALIDAD_OPTIONS: {
     ];
 
 /** Orden dentro del cargo: Fijos → Normal → Contraturno → Relevo → Sin turno → Manuales */
-function modalityRank(s: StaffWithShift): number {
+/** ¿Es relevo automático? (marcado con es_relevo en su plantilla) */
+function esRelevo(s: StaffWithShift, templates: { staff_id: string; settings_json?: { es_relevo?: boolean } }[]): boolean {
+    if (s.shift?.shift_type_code === 'SUPERVISOR_RELEVO') return true;
+    if (s.shift?.shift_type_code !== 'ESPECIAL') return false;
+    return Boolean(templates.find((t) => t.staff_id === s.id)?.settings_json?.es_relevo);
+}
+
+function modalityRank(s: StaffWithShift, templates: { staff_id: string; settings_json?: { es_relevo?: boolean } }[]): number {
     const code = s.shift?.shift_type_code;
     const variant = s.shift?.variant_code;
     if (!code) return 4;
     if (code === '5X2_FIJO') return 0;
-    if (code === 'ESPECIAL') return variant === 'RELEVO' ? 3 : 5;
+    if (code === 'ESPECIAL') return esRelevo(s, templates) ? 3 : 5;
     if (code === 'SUPERVISOR_RELEVO') return 3;
     // Rotativos de 2 semanas: Normal (CONTRATURNO) antes que Contraturno (PRINCIPAL)
     return variant === 'CONTRATURNO' ? 1 : 2;
 }
 
-function modalityLabel(s: StaffWithShift): string {
+function modalityLabel(s: StaffWithShift, templates: { staff_id: string; settings_json?: { es_relevo?: boolean } }[]): string {
     const code = s.shift?.shift_type_code;
     const variant = s.shift?.variant_code;
     if (!code) return 'Sin turno';
     if (code === '5X2_FIJO') return 'Lun-Vie';
-    if (code === 'ESPECIAL') return variant === 'RELEVO' ? 'Relevo Auto' : 'Manual 2 sem';
+    if (code === 'ESPECIAL') return esRelevo(s, templates) ? 'Relevo Auto' : 'Manual 2 sem';
     if (code === 'SUPERVISOR_RELEVO') return 'Relevo';
     if (code === '5X2_SUPER') return variant === 'CONTRATURNO' ? 'Turno Normal' : 'Contraturno';
     // Legacy 5X2_ROTATIVO
@@ -249,10 +258,10 @@ const ProgrammingGridInner = ({ year, month }: Props) => {
             .filter((s) => !q || s.nombre.toLowerCase().includes(q) || s.rut.toLowerCase().includes(q))
             .sort((a, b) =>
                 cargoOrder(a.cargo) - cargoOrder(b.cargo) ||
-                modalityRank(a) - modalityRank(b) ||
+                modalityRank(a, scheduleContext.specialTemplates) - modalityRank(b, scheduleContext.specialTemplates) ||
                 a.nombre.localeCompare(b.nombre)
             );
-    }, [staff, terminalFilter, turnoFilter, search]);
+    }, [staff, terminalFilter, turnoFilter, search, scheduleContext.specialTemplates]);
 
     const groups = useMemo(() => {
         const list: { cargo: string; members: ExportStaff[] }[] = [];
@@ -399,7 +408,7 @@ const ProgrammingGridInner = ({ year, month }: Props) => {
                                             const { plan, rules } = entry;
                                             const trabaja = plan.filter((p) => p.status === 'TRABAJA').length;
                                             const libres = plan.filter((p) => p.status === 'LIBRE').length;
-                                            const rank = modalityRank(s);
+                                            const rank = modalityRank(s, scheduleContext.specialTemplates);
                                             const badgeCls = rank === 0 ? 'bg-slate-200 text-slate-700'
                                                 : rank === 1 ? 'bg-blue-100 text-blue-700'
                                                     : rank === 2 ? 'bg-cyan-100 text-cyan-700'
@@ -422,7 +431,7 @@ const ProgrammingGridInner = ({ year, month }: Props) => {
                                                                     title="Cambiar modalidad de turno"
                                                                 >
                                                                     <Icon name="settings" size={10} />
-                                                                    {modalityLabel(s)}
+                                                                    {modalityLabel(s, scheduleContext.specialTemplates)}
                                                                 </button>
                                                             </div>
                                                             {rules.warnings.length > 0 && (
@@ -840,9 +849,9 @@ const ModalityEditModal = ({
     const mm = String(month + 1).padStart(2, '0');
     const monthStart = `${year}-${mm}-01`;
 
-    // Modalidad actual → key
+    // Modalidad actual → key (relevo se detecta por la bandera de su plantilla)
     const currentKey: ModalidadKey = staff.shift?.shift_type_code === 'ESPECIAL'
-        ? (staff.shift?.variant_code === 'RELEVO' ? 'RELEVO' : 'MANUAL')
+        ? (ctx.specialTemplates.find((t) => t.staff_id === staff.id)?.settings_json?.es_relevo ? 'RELEVO' : 'MANUAL')
         : staff.shift?.shift_type_code === '5X2_FIJO' ? 'FIJO'
             : staff.shift?.variant_code === 'CONTRATURNO' ? 'NORMAL'
                 : staff.shift ? 'CONTRA' : 'NORMAL';
@@ -933,6 +942,7 @@ const ModalityEditModal = ({
                     settings: {
                         daily_shifts: relevoResult.dailyShifts,
                         custom_schedules: relevoResult.customSchedules,
+                        es_relevo: true,
                     },
                 });
             }
